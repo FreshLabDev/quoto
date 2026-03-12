@@ -141,6 +141,6 @@ async def pick_best_quote(chat_id: int) -> tuple[Message | None, ScoreBreakdown]
             best_breakdown = breakdown
             best_msg = msg
 
-    log.debug(f"{chat_id} | 🏆 Цитата дня: {best_msg.id} ({best_msg.text}) с оценкой {best_total}")
+    log.debug(f"{chat_id} | 🏆 Цитата дня: {best_msg.text} ({best_msg.id}) с оценкой {best_total}")
     return best_msg, best_breakdown
 

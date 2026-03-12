@@ -107,7 +107,7 @@ async def private_handler(message: types.Message, command: CommandObject = None)
                 f"📊 <b>Подробности цитаты #{detail['id']}</b>\n\n"
                 f"💬 <i>«{detail['text']}»</i>\n"
                 f"— <b>{detail['author_name']}</b>\n\n"
-                f"🏠 {detail['group_name']}{' · ' + str(detail['reaction_count']) + '❤️' if detail['reaction_count'] > 0 else ''} · {date_str}\n\n"
+                f"{detail['group_name']}{' · ' + str(detail['reaction_count']) + '❤️' if detail['reaction_count'] > 0 else ''} · {date_str}\n\n"
                 f"<b>Итого: {detail['score'] * 10:.1f}/10</b>\n"
                 f"<code>{'Реакции':<10} {bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10 ({w_r}%)\n"
                 f"<code>{'ИИ':<10} {bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 ({w_a}%)\n"
