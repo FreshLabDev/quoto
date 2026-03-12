@@ -1,0 +1,8 @@
+pip-tools
+aiogram
+pydantic-settings
+python-dotenv
+asyncpg
+sqlalchemy
+httpx
+apscheduler
