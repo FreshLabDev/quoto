@@ -1,14 +1,14 @@
 import logging
+import zoneinfo
+from datetime import datetime, timezone as tz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aiogram import Bot
-from sqlalchemy import select
-from datetime import datetime, timezone as tz
-import zoneinfo
+from sqlalchemy import select, update, func, delete
 
 from .config import settings, setup_logging
 from .db import SessionLocal
-from .models import Group, Quote
+from .models import Group, Quote, Message
 from . import scoring
 
 log = setup_logging(logging.getLogger(__name__))
@@ -44,7 +44,6 @@ async def _process_group(bot: Bot, group: Group) -> None:
 
     author_name = best_msg.author.name if best_msg.author else "Аноним"
 
-    # Дата на русском
     months = [
         "", "Января", "Февраля", "Марта", "Апреля", "Мая", "Июня",
         "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря",
@@ -52,10 +51,9 @@ async def _process_group(bot: Bot, group: Group) -> None:
     now = datetime.now(zoneinfo.ZoneInfo(settings.TIMEZONE))
     date_str = f"{now.day} {months[now.month]}"
 
-    # Строка с реакциями
     reactions_str = f"{breakdown.reaction_count}❤️" if breakdown.reaction_count else ""
 
-    # Собираем инфо-строку: ⭐⭐⭐⭐☆ · 2❤️ · 21 Февраля
+    # ⭐⭐⭐⭐☆ · 2❤️ · 21 Февраля
     info_parts = [breakdown.stars]
     if reactions_str:
         info_parts.append(reactions_str)
@@ -67,7 +65,6 @@ async def _process_group(bot: Bot, group: Group) -> None:
         f"💬 <i>«{best_msg.text}»</i>\n"
         f"— <b>{author_name}</b>\n\n"
         f"{info_line}\n\n"
-        f"<a href='https://t.me/{settings.BOT_USERNAME}?start=quote_{quote_id}'>Подробнее</a> — #quto"
     )
 
     try:
@@ -87,13 +84,13 @@ async def _process_group(bot: Bot, group: Group) -> None:
             await session.commit()
             await session.refresh(quote)
             quote_id = quote.id
+            text += f"<a href='https://t.me/{settings.BOT_USERNAME}?start=quote_{quote_id}'>Подробнее</a> — #quto"
 
         sent = await bot.send_message(
             chat_id=group.chat_id, text=text
         )
 
         async with SessionLocal() as session:
-            from sqlalchemy import update
             await session.execute(
                 update(Quote).where(Quote.id == quote_id).values(bot_message_id=sent.message_id)
             )
@@ -119,9 +116,6 @@ async def _process_group(bot: Bot, group: Group) -> None:
 
 async def _clear_today_messages(chat_id: int) -> None:
     """Удаление сообщений и реакций за сегодня для группы."""
-    from sqlalchemy import func, delete
-    from .models import Message
-
     async with SessionLocal() as session:
         stmt = delete(Message).where(
             Message.chat_id == chat_id,

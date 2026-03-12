@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, update, delete, func
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select, update, delete, func, literal_column
 from aiogram import types
 import logging
 
@@ -162,7 +163,6 @@ def _extract_emoji(reaction_type: types.ReactionType) -> str | None:
 
 async def get_quote_detail(quote_id: int) -> dict | None:
     """Получение подробной информации о цитате по ID."""
-    from sqlalchemy.orm import selectinload
     async with SessionLocal() as session:
         result = await session.execute(
             select(models.Quote)
@@ -334,7 +334,6 @@ async def get_user_stats(chat_id: int, telegram_id: int) -> dict | None:
             }
 
         # Место в рейтинге (по кол-ву побед)
-        from sqlalchemy import literal_column
         rank_sub = (
             select(
                 models.Quote.author_id,

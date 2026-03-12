@@ -4,11 +4,12 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.filters import Command, CommandObject, CommandStart, or_f, and_f
 from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from collections import Counter
 import logging
 
 from .config import settings, setup_logging
 from .scoring import create_bar
-from . import core
+from . import core, scheduler
 
 router = Router()
 log = setup_logging(logging.getLogger(__name__))
@@ -154,8 +155,6 @@ async def group_start_handler(message: types.Message):
 @router.message(Command("quote"), F.chat.type.in_({"group", "supergroup"}))
 async def manual_quote_handler(message: types.Message, bot: Bot):
     """Ручной выбор цитаты дня (доступно всем)."""
-    from . import scheduler
-
     group = await core.group_getOrCreate(message.chat)
     processing = await message.answer("⏳ <b>Выбираю лучшую цитату...</b>")
     await scheduler._process_group(bot, group)
@@ -267,7 +266,6 @@ async def reaction_handler(event: types.MessageReactionUpdated):
     ``new_reaction`` — список ``ReactionType`` (текущие реакции пользователя).
     Каждый вызов содержит полное новое состояние реакций этого пользователя.
     """
-    from collections import Counter
 
     emoji_counter: Counter[str] = Counter()
     for reaction in event.new_reaction:
@@ -282,7 +280,6 @@ async def reaction_handler(event: types.MessageReactionUpdated):
 @router.message_reaction_count()
 async def reaction_count_handler(event: types.MessageReactionCountUpdated):
     """Учёт агрегированных (анонимных) реакций — для каналов и групп с анонимными реакциями."""
-    from collections import Counter
 
     emoji_counter: Counter[str] = Counter()
     for reaction in event.reactions:
