@@ -1,4 +1,4 @@
-<h1 align="center">🏆 Quto — Цитата дня</h1>
+<h1 align="center">🏆 Quoto — Цитата дня</h1>
 <div align="center">
 
 [English](./README.md) | Русский

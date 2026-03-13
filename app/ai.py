@@ -8,7 +8,6 @@ from .config import settings, setup_logging
 
 log = setup_logging(logging.getLogger(__name__))
 
-# Системный промпт для оценки сообщений
 _SYSTEM_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
     "You will receive a JSON array of messages. "
@@ -41,7 +40,6 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
         log.warning("⚠️ OPENROUTER_API_KEY не задан — AI-оценка пропущена")
         return neutral
 
-    # Формируем пользовательский промпт с массивом сообщений
     user_payload = json.dumps(
         [{"id": m["id"], "author": m["author"], "text": m["text"]} for m in messages],
         ensure_ascii=False,
@@ -52,8 +50,6 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
         "messages": [
             {"role": "user", "content": f"{_SYSTEM_PROMPT}\n\n{user_payload}"},
         ],
-        "temperature": 0.3,
-        "max_tokens": 1024,
     }
 
     headers = {
@@ -62,7 +58,7 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
     }
 
     max_retries = 3
-    retry_delays = [5, 15, 30]  # секунды между попытками
+    retry_delays = [5, 15, 30]
 
     for attempt in range(max_retries):
         try:
@@ -75,7 +71,6 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
                 response.raise_for_status()
 
             data = response.json()
-            # Название реально использованной модели
             actual_model = data.get("model", settings.OPENROUTER_MODEL)
             
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
@@ -92,7 +87,6 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
 
             scores = _parse_scores(content)
 
-            # Нормализация: 0–10 → 0.0–1.0
             result: dict[int, float] = {}
             known_ids = {m["id"] for m in messages}
             for entry in scores:
@@ -135,20 +129,16 @@ def _parse_scores(content: str) -> list[dict]:
     """
     cleaned = content.strip()
 
-    # Убираем <think>...</think> блоки (reasoning-модели)
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
 
-    # Убираем ```json ... ```
     cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
     cleaned = cleaned.replace("```", "").strip()
 
-    # Пробуем напрямую
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
-    # Fallback: ищем JSON-массив регулярным выражением
     match = re.search(r"\[\s*\{.*?}\s*]", cleaned, re.DOTALL)
     if match:
         return json.loads(match.group())
