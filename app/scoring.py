@@ -44,6 +44,8 @@ class ScoreBreakdown:
     ai: float = 0.0
     length: float = 0.0
     reaction_count: int = 0
+    ai_model: str = ""
+    ai_best_text: str | None = None
 
     @property
     def total(self) -> float:
@@ -105,7 +107,7 @@ async def pick_best_quote(chat_id: int) -> tuple[Message | None, ScoreBreakdown]
         messages = result.scalars().all()
 
     if not messages:
-        log.debug(f"📭 Нет сообщений за сегодня в чате {chat_id}")
+        log.debug(f"{chat_id} | 📭 Нет сообщений за сегодня")
         return None, ScoreBreakdown()
 
     # --- Реакции ---
@@ -119,7 +121,11 @@ async def pick_best_quote(chat_id: int) -> tuple[Message | None, ScoreBreakdown]
         {"id": msg.id, "text": msg.text, "author": msg.author.name if msg.author else "Unknown"}
         for msg in messages
     ]
-    ai_scores = await ai.evaluate_messages(ai_payload)
+    ai_scores, actual_model = await ai.evaluate_messages(ai_payload)
+
+    # --- Лучшая цитата по мнению AI ---
+    ai_best_id = max(ai_scores, key=ai_scores.get) if ai_scores else None
+    ai_best_msg = next((m for m in messages if m.id == ai_best_id), None) if ai_best_id else None
 
     # --- Скоринг ---
     best_msg: Message | None = None
@@ -134,6 +140,7 @@ async def pick_best_quote(chat_id: int) -> tuple[Message | None, ScoreBreakdown]
         breakdown = ScoreBreakdown(
             reaction=r_score, ai=a_score, length=l_score,
             reaction_count=reaction_totals.get(msg.id, 0),
+            ai_model=actual_model,
         )
 
         if breakdown.total > best_total:
@@ -141,6 +148,10 @@ async def pick_best_quote(chat_id: int) -> tuple[Message | None, ScoreBreakdown]
             best_breakdown = breakdown
             best_msg = msg
 
-    log.debug(f"{chat_id} | 🏆 Цитата дня: {best_msg.text} ({best_msg.id}) с оценкой {best_total}")
+    # Сохраняем текст лучшей AI-цитаты, если она отличается от итоговой
+    if ai_best_msg and best_msg and ai_best_msg.id != best_msg.id:
+        best_breakdown.ai_best_text = ai_best_msg.text
+
+    log.debug(f"{chat_id} | 🏆 Цитата дня: «{best_msg.text}» ({best_msg.id}) с оценкой {round(best_total, 2)}")
     return best_msg, best_breakdown
 

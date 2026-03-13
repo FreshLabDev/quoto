@@ -35,11 +35,11 @@ async def quote_of_the_day_job(bot: Bot) -> None:
 
 async def _process_group(bot: Bot, group: Group) -> None:
     """Обработка одной группы: скоринг → отправка → сохранение → очистка."""
-    log.debug(f"⏳ Выбираю лучшую цитату для группы {group.name} ({group.chat_id})")
+    log.debug(f"{group.chat_id} | ⏳ Выбор цитаты для группы {group.name}")
     best_msg, breakdown = await scoring.pick_best_quote(group.chat_id)
 
     if not best_msg:
-        log.debug(f"📭 Нет цитаты для группы {group.name} ({group.chat_id})")
+        log.debug(f"{group.chat_id} | 📭 Нет цитаты для группы {group.name}")
         return
 
     author_name = best_msg.author.name if best_msg.author else "Аноним"
@@ -60,6 +60,9 @@ async def _process_group(bot: Bot, group: Group) -> None:
     info_parts.append(date_str)
     info_line = " · ".join(info_parts)
 
+    link_chat_id = str(group.chat_id).replace("-100", "", 1) if str(group.chat_id).startswith("-100") else str(group.chat_id)
+    msg_link = f"https://t.me/c/{link_chat_id}/{best_msg.message_id}"
+
     text = (
         f"🏆 <b>Цитата дня</b>\n\n"
         f"💬 <i>«{best_msg.text}»</i>\n"
@@ -79,12 +82,14 @@ async def _process_group(bot: Bot, group: Group) -> None:
                 length_score=breakdown.length,
                 reaction_count=breakdown.reaction_count,
                 message_id=best_msg.message_id,
+                ai_model=breakdown.ai_model,
+                ai_best_text=breakdown.ai_best_text,
             )
             session.add(quote)
             await session.commit()
             await session.refresh(quote)
             quote_id = quote.id
-            text += f"<a href='https://t.me/{settings.BOT_USERNAME}?start=quote_{quote_id}'>Подробнее</a> — #quto"
+            text += f"<a href='{msg_link}'>Оригинал</a> · <a href='https://t.me/{settings.BOT_USERNAME}?start=quote_{quote_id}'>Подробнее</a> · #quoto"
 
         sent = await bot.send_message(
             chat_id=group.chat_id, text=text

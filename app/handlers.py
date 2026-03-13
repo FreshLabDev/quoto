@@ -32,7 +32,7 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
 
         text = (
             f"👋 Привет, <b>{chat.title}</b>!\n\n"
-            f"Я <b>Quto</b> — бот, который каждый день выбирает лучшую цитату вашего чата.\n\n"
+            f"Я <b>Quoto</b> — бот, который каждый день выбирает лучшую цитату вашего чата.\n\n"
             f"📩 Просто общайтесь как обычно — я запоминаю сообщения и реакции.\n"
             f"🏆 Каждый день в <b>{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}</b> "
             f"я выбираю и закрепляю <b>цитату дня</b>!"
@@ -103,16 +103,26 @@ async def private_handler(message: types.Message, command: CommandObject = None)
             ]
             date_str = f"{created.day} {months[created.month]} {created.year}"
 
+            if detail.get("ai_model"):
+                model_short = detail["ai_model"].split("/")[-1] if "/" in detail["ai_model"] else detail["ai_model"]
+
+            if detail.get("message_id") and detail.get("chat_id"):
+                link_chat_id = str(detail["chat_id"]).replace("-100", "", 1) if str(detail["chat_id"]).startswith("-100") else str(detail["chat_id"])
+
             text = (
                 f"📊 <b>Подробности цитаты #{detail['id']}</b>\n\n"
                 f"💬 <i>«{detail['text']}»</i>\n"
                 f"— <b>{detail['author_name']}</b>\n\n"
-                f"{detail['group_name']}{' · ' + str(detail['reaction_count']) + '❤️' if detail['reaction_count'] > 0 else ''} · {date_str}\n\n"
+                f"<a href='https://t.me/c/{link_chat_id}/{detail['message_id']}'>{detail['group_name']}</a>{' · ' + str(detail['reaction_count']) + '❤️' if detail['reaction_count'] > 0 else ''} · {date_str}\n\n"
                 f"<b>Итого: {detail['score'] * 10:.1f}/10</b>\n"
                 f"<code>{'Реакции':<10} {bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10 ({w_r}%)\n"
-                f"<code>{'ИИ':<10} {bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 ({w_a}%)\n"
+                f"<code>{model_short:<10} {bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 ({w_a}%)\n"
                 f"<code>{'Длина':<10} {bar(int(detail['length_score'] * 100), 100)}</code> {detail['length_score'] * 10:.1f}/10 ({w_l}%)\n\n"
             )
+
+            if detail.get("ai_best_text"):
+                ai_text = detail["ai_best_text"][:100] + ("..." if len(detail["ai_best_text"]) > 100 else "")
+                text += f"💡 <b>Выбор ИИ:</b> <i>«{ai_text}»</i>\n"
 
             await message.answer(text)
             return
@@ -122,7 +132,7 @@ async def private_handler(message: types.Message, command: CommandObject = None)
     
     await message.answer(
         text=(
-            "🏆 <b>Привет! Я Quto</b>\n\n"
+            "🏆 <b>Привет! Я Quoto</b>\n\n"
             "Я выбираю лучшую <b>цитату дня</b> из сообщений вашего чата!\n\n"
             "📩 Добавь меня в группу, и я начну работу.\n"
             f"⏰ Каждый день в <b>{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}</b> "
@@ -140,7 +150,7 @@ async def group_start_handler(message: types.Message):
     await core.group_getOrCreate(message.chat)
 
     await message.answer(
-        "🏆 <b>Quto — Цитата дня</b>\n\n"
+        "🏆 <b>Quoto — Цитата дня</b>\n\n"
         "Я автоматически собираю сообщения и реакции в этом чате, "
         f"а в <b>{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}</b> "
         "выбираю и закрепляю лучшую <b>цитату дня</b>.\n\n"

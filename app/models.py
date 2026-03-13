@@ -76,6 +76,8 @@ class Quote(Base):
     reaction_count = Column(Integer, default=0)
     message_id = Column(BigInteger)           # telegram message_id оригинала
     bot_message_id = Column(BigInteger)       # telegram message_id отправленной ботом цитаты
+    ai_model = Column(String, nullable=True)  # модель AI, оценившая цитаты
+    ai_best_text = Column(String, nullable=True)  # текст лучшей цитаты по мнению AI (если отличается)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     group = relationship("Group", back_populates="quotes")

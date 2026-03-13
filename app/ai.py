@@ -21,24 +21,25 @@ _SYSTEM_PROMPT = (
 )
 
 
-async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, float]:
+async def evaluate_messages(messages: list[dict[str, str | int]]) -> tuple[dict[int, float], str]:
     """Batch-оценка сообщений через OpenRouter API.
 
     Args:
         messages: Список словарей ``{id, text, author}``.
 
     Returns:
-        Маппинг ``{message_id: normalized_score}`` (0.0 – 1.0).
+        Кортеж ``(маппинг {message_id: normalized_score}, actual_model)``.
         При ошибке все сообщения получают нейтральную оценку 0.5.
     """
     if not messages:
-        return {}
+        return {}, settings.OPENROUTER_MODEL
 
     neutral = {msg["id"]: 0.5 for msg in messages}
+    default_model = settings.OPENROUTER_MODEL
 
     if not settings.OPENROUTER_API_KEY:
         log.warning("⚠️ OPENROUTER_API_KEY не задан — AI-оценка пропущена")
-        return neutral
+        return neutral, default_model
 
     user_payload = json.dumps(
         [{"id": m["id"], "author": m["author"], "text": m["text"]} for m in messages],
@@ -82,8 +83,8 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
                     log.warning(f"⏳ Пустой ответ AI, повтор через {delay}с (попытка {attempt + 1}/{max_retries})")
                     await asyncio.sleep(delay)
                     continue
-                log.warning("⚠️ AI вернул пустой ответ после всех попыток")
-                return neutral
+                log.warning(f"⚠️ {actual_model} вернул пустой ответ после всех попыток")
+                return neutral, actual_model
 
             scores = _parse_scores(content)
 
@@ -99,8 +100,8 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
                 if msg["id"] not in result:
                     result[msg["id"]] = 0.5
 
-            log.debug(f"🤖 AI оценил {len(result)} сообщений")
-            return result
+            log.debug(f"🤖 {actual_model} оценил {len(result)} сообщений")
+            return result, actual_model
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_retries - 1:
@@ -116,7 +117,7 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
 
         break
 
-    return neutral
+    return neutral, default_model
 
 
 def _parse_scores(content: str) -> list[dict]:
