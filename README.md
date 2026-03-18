@@ -1,4 +1,4 @@
-<h1 align="center">🏆 Quto — Quote of the Day</h1>
+<h1 align="center">🏆 Quoto — Quote of the Day</h1>
 <div align="center">
 
 English | [Русский](./README.ru.md)

@@ -8,7 +8,6 @@ from .config import settings, setup_logging
 
 log = setup_logging(logging.getLogger(__name__))
 
-# Системный промпт для оценки сообщений
 _SYSTEM_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
     "You will receive a JSON array of messages. "
@@ -22,26 +21,26 @@ _SYSTEM_PROMPT = (
 )
 
 
-async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, float]:
+async def evaluate_messages(messages: list[dict[str, str | int]]) -> tuple[dict[int, float], str]:
     """Batch-оценка сообщений через OpenRouter API.
 
     Args:
         messages: Список словарей ``{id, text, author}``.
 
     Returns:
-        Маппинг ``{message_id: normalized_score}`` (0.0 – 1.0).
+        Кортеж ``(маппинг {message_id: normalized_score}, actual_model)``.
         При ошибке все сообщения получают нейтральную оценку 0.5.
     """
     if not messages:
-        return {}
+        return {}, settings.OPENROUTER_MODEL
 
     neutral = {msg["id"]: 0.5 for msg in messages}
+    default_model = settings.OPENROUTER_MODEL
 
     if not settings.OPENROUTER_API_KEY:
         log.warning("⚠️ OPENROUTER_API_KEY не задан — AI-оценка пропущена")
-        return neutral
+        return neutral, default_model
 
-    # Формируем пользовательский промпт с массивом сообщений
     user_payload = json.dumps(
         [{"id": m["id"], "author": m["author"], "text": m["text"]} for m in messages],
         ensure_ascii=False,
@@ -52,8 +51,6 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
         "messages": [
             {"role": "user", "content": f"{_SYSTEM_PROMPT}\n\n{user_payload}"},
         ],
-        "temperature": 0.3,
-        "max_tokens": 1024,
     }
 
     headers = {
@@ -62,7 +59,7 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
     }
 
     max_retries = 3
-    retry_delays = [5, 15, 30]  # секунды между попытками
+    retry_delays = [5, 15, 30]
 
     for attempt in range(max_retries):
         try:
@@ -75,7 +72,6 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
                 response.raise_for_status()
 
             data = response.json()
-            # Название реально использованной модели
             actual_model = data.get("model", settings.OPENROUTER_MODEL)
             
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
@@ -87,12 +83,11 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
                     log.warning(f"⏳ Пустой ответ AI, повтор через {delay}с (попытка {attempt + 1}/{max_retries})")
                     await asyncio.sleep(delay)
                     continue
-                log.warning("⚠️ AI вернул пустой ответ после всех попыток")
-                return neutral
+                log.warning(f"⚠️ {actual_model} вернул пустой ответ после всех попыток")
+                return neutral, actual_model
 
             scores = _parse_scores(content)
 
-            # Нормализация: 0–10 → 0.0–1.0
             result: dict[int, float] = {}
             known_ids = {m["id"] for m in messages}
             for entry in scores:
@@ -105,8 +100,8 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
                 if msg["id"] not in result:
                     result[msg["id"]] = 0.5
 
-            log.debug(f"🤖 AI оценил {len(result)} сообщений")
-            return result
+            log.debug(f"🤖 {actual_model} оценил {len(result)} сообщений")
+            return result, actual_model
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_retries - 1:
@@ -122,7 +117,7 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> dict[int, f
 
         break
 
-    return neutral
+    return neutral, default_model
 
 
 def _parse_scores(content: str) -> list[dict]:
@@ -135,20 +130,16 @@ def _parse_scores(content: str) -> list[dict]:
     """
     cleaned = content.strip()
 
-    # Убираем <think>...</think> блоки (reasoning-модели)
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
 
-    # Убираем ```json ... ```
     cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
     cleaned = cleaned.replace("```", "").strip()
 
-    # Пробуем напрямую
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
-    # Fallback: ищем JSON-массив регулярным выражением
     match = re.search(r"\[\s*\{.*?}\s*]", cleaned, re.DOTALL)
     if match:
         return json.loads(match.group())

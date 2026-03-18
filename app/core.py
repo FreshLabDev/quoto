@@ -36,7 +36,7 @@ async def user_getOrCreate(telegram_user: types.User) -> models.User:
             session.add(user)
             await session.commit()
             await session.refresh(user)
-            log.debug(f"✅ Создан пользователь: {user.name} ({user.telegram_id})")
+            log.debug(f"{user.telegram_id} | ✅ Создан пользователь: {user.name}")
             return user
         except IntegrityError:
             await session.rollback()
@@ -45,7 +45,7 @@ async def user_getOrCreate(telegram_user: types.User) -> models.User:
             )
             return result.scalars().first()
         except Exception as e:
-            log.error(f"❌ Ошибка при создании пользователя {telegram_user.id}: {e}")
+            log.error(f"{telegram_user.id} | ❌ Ошибка при создании пользователя: {e}")
             raise
 
 
@@ -71,7 +71,7 @@ async def group_getOrCreate(chat: types.Chat) -> models.Group:
             session.add(group)
             await session.commit()
             await session.refresh(group)
-            log.debug(f"✅ Создана группа: {group.name} ({group.chat_id})")
+            log.debug(f"{group.chat_id} | ✅ Создана группа: {group.name}")
             return group
         except IntegrityError:
             await session.rollback()
@@ -116,7 +116,6 @@ async def upsert_reactions(chat_id: int, message_id: int, emoji_counts: dict[str
         return
 
     async with SessionLocal() as session:
-        # Ищем сообщение по telegram message_id + chat_id
         result = await session.execute(
             select(models.Message).where(
                 models.Message.message_id == message_id,
@@ -129,7 +128,6 @@ async def upsert_reactions(chat_id: int, message_id: int, emoji_counts: dict[str
             return
 
         for emoji, count in emoji_counts.items():
-            # Ищем существующую запись реакции
             result = await session.execute(
                 select(models.Reaction).where(
                     models.Reaction.message_db_id == db_msg.id,
@@ -148,7 +146,7 @@ async def upsert_reactions(chat_id: int, message_id: int, emoji_counts: dict[str
                 ))
 
         await session.commit()
-        log.debug(f"🔄 Обновлены реакции для msg {message_id} в {chat_id}: {dict(emoji_counts)}")
+        log.debug(f"{chat_id} | 🔄 Реакция {dict(emoji_counts)} для сообщения {message_id}")
 
 
 
@@ -187,13 +185,16 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "author_name": quote.author.name if quote.author else "Аноним",
             "group_name": quote.group.name if quote.group else "—",
             "created_at": quote.created_at,
+            "ai_model": quote.ai_model,
+            "ai_best_text": quote.ai_best_text,
+            "message_id": quote.message_id,
+            "chat_id": quote.group.chat_id if quote.group else None,
         }
 
 
 async def get_chat_stats(chat_id: int) -> dict | None:
     """Статистика группы: кол-во цитат, топ авторов, лучшая цитата."""
     async with SessionLocal() as session:
-        # Находим группу
         result = await session.execute(
             select(models.Group).where(models.Group.chat_id == chat_id)
         )
@@ -201,7 +202,6 @@ async def get_chat_stats(chat_id: int) -> dict | None:
         if not group:
             return None
 
-        # Общее число цитат
         total_q = await session.execute(
             select(func.count(models.Quote.id)).where(models.Quote.group_id == group.id)
         )
@@ -210,7 +210,6 @@ async def get_chat_stats(chat_id: int) -> dict | None:
         if total_quotes == 0:
             return {"group_name": group.name, "total_quotes": 0}
 
-        # Уникальные авторы
         unique_a = await session.execute(
             select(func.count(func.distinct(models.Quote.author_id))).where(
                 models.Quote.group_id == group.id
@@ -218,13 +217,10 @@ async def get_chat_stats(chat_id: int) -> dict | None:
         )
         unique_authors = unique_a.scalar() or 0
 
-        # Средний скор
         avg_s = await session.execute(
             select(func.avg(models.Quote.score)).where(models.Quote.group_id == group.id)
         )
         avg_score = avg_s.scalar() or 0.0
-
-        # Топ-3 авторов по количеству побед
         top_authors_q = await session.execute(
             select(
                 models.User.name,
@@ -242,7 +238,6 @@ async def get_chat_stats(chat_id: int) -> dict | None:
             for row in top_authors_q
         ]
 
-        # Лучшая цитата всех времён
         best_q = await session.execute(
             select(models.Quote)
             .where(models.Quote.group_id == group.id)
