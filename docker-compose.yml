@@ -1,25 +1,23 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: quto
-      POSTGRES_PASSWORD: quto_secret_2026
-      POSTGRES_DB: quto
+      POSTGRES_USER: quoto
+      POSTGRES_PASSWORD: quoto_secret_2026
+      POSTGRES_DB: quoto
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quto -d quto"]
+      test: ["CMD-SHELL", "pg_isready -U quoto -d quoto"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  bot:
+  app:
     build: .
-    container_name: bot
     restart: unless-stopped
     depends_on:
       db:
@@ -27,7 +25,7 @@ services:
     env_file:
       - .env
     environment:
-      DB_URL: postgresql+asyncpg://quto:quto_secret_2026@db:5432/quto
+      DB_URL: postgresql+asyncpg://quoto:quoto_secret_2026@db:5432/quoto
 
 volumes:
   pgdata:

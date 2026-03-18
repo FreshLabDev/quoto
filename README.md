@@ -31,8 +31,8 @@ A Telegram bot that automatically picks and pins the best **quote of the day** f
 
 | Component     | Weight | Description                                    |
 | :------------ | :----- | :--------------------------------------------- |
-| **Reactions** | 40%    | Normalized count of emoji reactions            |
-| **AI Score**  | 50%    | LLM-based evaluation (humor, wit, quotability) |
+| **Reactions** | 20%    | Normalized count of emoji reactions            |
+| **AI Score**  | 70%    | LLM-based evaluation (humor, wit, quotability) |
 | **Length**    | 10%    | Optimal message length bonus                   |
 
 5. The winning quote is announced, pinned, and saved to the archive
