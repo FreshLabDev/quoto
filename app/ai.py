@@ -2,44 +2,67 @@ import asyncio
 import json
 import logging
 import re
+from dataclasses import dataclass
+
 import httpx
 
 from .config import settings, setup_logging
+from .quote_status import REASON_BORING_DAY, REASON_WORTHY
 
 log = setup_logging(logging.getLogger(__name__))
 
-_SYSTEM_PROMPT = (
+_SCORE_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
     "You will receive a JSON array of messages. "
-    "Rate each message on a scale from 0 to 10 based on:\n"
-    "- Humor and wit\n"
-    "- Insight and depth\n"
-    "- Memorability and quotability\n"
-    "- Originality\n\n"
-    "Respond ONLY with a valid JSON array of objects: [{\"id\": <message_id>, \"score\": <0-10>}]\n"
-    "No explanations, no markdown, no extra text — just the JSON array."
+    "Rate each message on a scale from 0 to 10 based on humor, wit, insight, memorability, and originality. "
+    "Respond ONLY with a valid JSON array of objects in this format: "
+    "[{\"id\": <message_id>, \"score\": <0-10>}]."
+)
+
+_DAY_PROMPT = (
+    "You are a humor and wit judge for a Telegram group chat. "
+    "You will receive a JSON array of messages from one chat window. "
+    "First, rate every message from 0 to 10 based on humor, wit, insight, memorability, and originality. "
+    "Then decide whether the day is worthy of a public 'quote of the day' announcement. "
+    "If the conversation feels flat, repetitive, generic, or lacking a truly quotable line, set should_publish to false. "
+    "Respond ONLY with a valid JSON object in this format: "
+    "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
+    "\"messages\": [{\"id\": <message_id>, \"score\": <0-10>}]}."
 )
 
 
-async def evaluate_messages(messages: list[dict[str, str | int]]) -> tuple[dict[int, float], str]:
-    """Batch-оценка сообщений через OpenRouter API.
+@dataclass
+class DayVerdict:
+    should_publish: bool = True
+    reason_code: str = REASON_WORTHY
+    reason_text: str = ""
 
-    Args:
-        messages: Список словарей ``{id, text, author}``.
 
-    Returns:
-        Кортеж ``(маппинг {message_id: normalized_score}, actual_model)``.
-        При ошибке все сообщения получают нейтральную оценку 0.5.
-    """
+@dataclass
+class EvaluationResult:
+    scores: dict[int, float]
+    actual_model: str
+    day_verdict: DayVerdict | None = None
+
+
+async def evaluate_messages(
+    messages: list[dict[str, str | int]],
+    include_day_verdict: bool = False,
+) -> EvaluationResult:
     if not messages:
-        return {}, settings.OPENROUTER_MODEL
+        return EvaluationResult(scores={}, actual_model=settings.OPENROUTER_MODEL)
 
-    neutral = {msg["id"]: 0.5 for msg in messages}
+    neutral_scores = {int(msg["id"]): 0.5 for msg in messages}
     default_model = settings.OPENROUTER_MODEL
+    default_verdict = DayVerdict()
 
     if not settings.OPENROUTER_API_KEY:
         log.warning("⚠️ OPENROUTER_API_KEY не задан — AI-оценка пропущена")
-        return neutral, default_model
+        return EvaluationResult(
+            scores=neutral_scores,
+            actual_model=default_model,
+            day_verdict=default_verdict if include_day_verdict else None,
+        )
 
     user_payload = json.dumps(
         [{"id": m["id"], "author": m["author"], "text": m["text"]} for m in messages],
@@ -49,7 +72,8 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> tuple[dict[
     body = {
         "model": settings.OPENROUTER_MODEL,
         "messages": [
-            {"role": "user", "content": f"{_SYSTEM_PROMPT}\n\n{user_payload}"},
+            {"role": "system", "content": _DAY_PROMPT if include_day_verdict else _SCORE_PROMPT},
+            {"role": "user", "content": user_payload},
         ],
     }
 
@@ -73,76 +97,133 @@ async def evaluate_messages(messages: list[dict[str, str | int]]) -> tuple[dict[
 
             data = response.json()
             actual_model = data.get("model", settings.OPENROUTER_MODEL)
-            
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             content = content.strip()
 
             if not content:
                 if attempt < max_retries - 1:
                     delay = retry_delays[attempt]
-                    log.warning(f"⏳ Пустой ответ AI, повтор через {delay}с (попытка {attempt + 1}/{max_retries})")
+                    log.warning(
+                        f"⏳ Пустой ответ AI, повтор через {delay}с (попытка {attempt + 1}/{max_retries})"
+                    )
                     await asyncio.sleep(delay)
                     continue
                 log.warning(f"⚠️ {actual_model} вернул пустой ответ после всех попыток")
-                return neutral, actual_model
+                return EvaluationResult(
+                    scores=neutral_scores,
+                    actual_model=actual_model,
+                    day_verdict=default_verdict if include_day_verdict else None,
+                )
 
-            scores = _parse_scores(content)
+            if include_day_verdict:
+                entries, verdict = _parse_day_payload(content)
+            else:
+                entries = _parse_scores(content)
+                verdict = None
 
-            result: dict[int, float] = {}
-            known_ids = {m["id"] for m in messages}
-            for entry in scores:
-                msg_id = int(entry["id"])
-                if msg_id in known_ids:
-                    raw = max(0.0, min(10.0, float(entry["score"])))
-                    result[msg_id] = raw / 10.0
-
-            for msg in messages:
-                if msg["id"] not in result:
-                    result[msg["id"]] = 0.5
-
-            log.debug(f"🤖 {actual_model} оценил {len(result)} сообщений")
-            return result, actual_model
+            scores = _normalize_scores(messages, entries)
+            log.debug(f"🤖 {actual_model} оценил {len(scores)} сообщений")
+            return EvaluationResult(scores=scores, actual_model=actual_model, day_verdict=verdict)
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_retries - 1:
                 delay = retry_delays[attempt]
-                log.warning(f"⏳ Rate-limit (429), повтор через {delay}с (попытка {attempt + 1}/{max_retries})")
+                log.warning(
+                    f"⏳ Rate-limit (429), повтор через {delay}с (попытка {attempt + 1}/{max_retries})"
+                )
                 await asyncio.sleep(delay)
                 continue
             log.error(f"OpenRouter HTTP {e.response.status_code}: {e.response.text[:200]}")
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
+        except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
             log.error(f"Ошибка парсинга ответа AI: {e}")
         except Exception as e:
             log.error(f"Ошибка при запросе к OpenRouter: {e}")
 
         break
 
-    return neutral, default_model
+    return EvaluationResult(
+        scores=neutral_scores,
+        actual_model=default_model,
+        day_verdict=default_verdict if include_day_verdict else None,
+    )
+
+
+def _normalize_scores(
+    messages: list[dict[str, str | int]],
+    entries: list[dict],
+) -> dict[int, float]:
+    result: dict[int, float] = {}
+    known_ids = {int(m["id"]) for m in messages}
+
+    for entry in entries:
+        msg_id = int(entry["id"])
+        if msg_id not in known_ids:
+            continue
+        raw = max(0.0, min(10.0, float(entry["score"])))
+        result[msg_id] = raw / 10.0
+
+    for msg in messages:
+        msg_id = int(msg["id"])
+        if msg_id not in result:
+            result[msg_id] = 0.5
+
+    return result
+
+
+def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict]:
+    cleaned = _extract_json_payload(content)
+    parsed = json.loads(cleaned)
+
+    if isinstance(parsed, list):
+        return parsed, DayVerdict()
+
+    if not isinstance(parsed, dict):
+        raise json.JSONDecodeError("Expected dict payload", cleaned, 0)
+
+    entries = parsed.get("messages") or []
+    day = parsed.get("day") or {}
+
+    should_publish = bool(day.get("should_publish", True))
+    reason_code = str(
+        day.get("reason_code") or (REASON_WORTHY if should_publish else REASON_BORING_DAY)
+    )
+    reason_text = str(day.get("reason_text") or "").strip()
+
+    return entries, DayVerdict(
+        should_publish=should_publish,
+        reason_code=reason_code,
+        reason_text=reason_text,
+    )
 
 
 def _parse_scores(content: str) -> list[dict]:
-    """Извлекает JSON-массив оценок из ответа AI.
+    cleaned = _extract_json_payload(content)
+    parsed = json.loads(cleaned)
 
-    Обрабатывает:
-    - ``<think>...</think>`` блоки (DeepSeek R1 и другие reasoning-модели)
-    - Markdown-обёртки (```json ... ```)
-    - Произвольный текст вокруг JSON-массива
-    """
+    if isinstance(parsed, dict):
+        parsed = parsed.get("messages") or []
+
+    if not isinstance(parsed, list):
+        raise json.JSONDecodeError("Expected list payload", cleaned, 0)
+
+    return parsed
+
+
+def _extract_json_payload(content: str) -> str:
     cleaned = content.strip()
-
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
-
     cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
     cleaned = cleaned.replace("```", "").strip()
 
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
+    if cleaned.startswith("{") or cleaned.startswith("["):
+        return cleaned
 
-    match = re.search(r"\[\s*\{.*?}\s*]", cleaned, re.DOTALL)
-    if match:
-        return json.loads(match.group())
+    object_match = re.search(r"\{[\s\S]*\}", cleaned)
+    if object_match:
+        return object_match.group()
 
-    raise json.JSONDecodeError("Не найден JSON-массив в ответе AI", cleaned, 0)
+    array_match = re.search(r"\[\s*\{.*?}\s*]", cleaned, re.DOTALL)
+    if array_match:
+        return array_match.group()
 
+    raise json.JSONDecodeError("Не найден JSON payload в ответе AI", cleaned, 0)

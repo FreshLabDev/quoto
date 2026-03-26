@@ -3,7 +3,7 @@
 
 English | [Русский](./README.ru.md)
 
-A Telegram bot that automatically picks and pins the best **quote of the day** from your group chat, powered by AI scoring, reaction tracking, and smart text analysis.
+A Telegram bot that tracks chat windows, previews quote candidates, and only publishes a **quote of the day** when the conversation was actually worth quoting.
 
 [![GitHub Stars](https://img.shields.io/github/stars/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=f59e0b&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZjU5ZTBiIiBzdHJva2U9Im5vbmUiPjxwb2x5Z29uIHBvaW50cz0iMTIgMiAxNS4wOSA4LjI2IDIyIDkuMjcgMTcgMTQuMTQgMTguMTggMjEuMDIgMTIgMTcuNzcgNS44MiAyMS4wMiA3IDE0LjE0IDIgOS4yNyA4LjkxIDguMjYgMTIgMiIvPjwvc3ZnPg==)](https://github.com/FreshLabDev/quoto/stargazers)
 ![GitHub Repo Size](https://img.shields.io/github/repo-size/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=a6da95&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM3ODcxNmMiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTIyIDE5YTIgMiAwIDAgMS0yIDJINGEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg1bDIgM2g5YTIgMiAwIDAgMSAyIDJ6Ii8+PC9zdmc+)
@@ -13,10 +13,12 @@ A Telegram bot that automatically picks and pins the best **quote of the day** f
 
 ## ✨ Features
 
-- 🏆 **Quote of the Day** — automatically picks the best message from your group chat every day
+- 🏆 **Windowed Quote Flow** — scores messages between two daily cutoff points
 - 🤖 **AI Scoring** — evaluates messages for humor, wit, depth, and memorability via OpenRouter API
+- 😴 **Boring-Day Detection** — if the day feels flat, the bot says so instead of forcing a weak quote
 - ❤️ **Reaction Tracking** — accounts for emoji reactions from chat members
 - 📏 **Text Analysis** — smart scoring based on message length and quality
+- 🔎 **Safe Preview** — `/quote` shows the current leader without publishing or clearing data
 - 📌 **Auto-Pin** — pins the winning quote in the chat
 - 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
 - ⏰ **Scheduler** — configurable daily time for quote selection
@@ -26,8 +28,11 @@ A Telegram bot that automatically picks and pins the best **quote of the day** f
 
 1. Add the bot to your Telegram group and grant admin rights
 2. Members chat as usual — the bot silently collects messages and reactions
-3. At the scheduled time (default `21:00`), the bot evaluates all messages of the day
-4. The best message is selected based on a **weighted scoring formula**:
+3. The bot collects messages inside a rolling window from the previous cutoff to the next one
+4. At the scheduled time (default `21:00`), the bot evaluates the closed window
+5. If there are fewer than `10` messages, the window is skipped silently
+6. If there are `10+` messages, AI both scores messages and decides whether the whole day is quote-worthy
+7. The best message is selected based on a **weighted scoring formula**:
 
 | Component     | Weight | Description                                    |
 | :------------ | :----- | :--------------------------------------------- |
@@ -35,14 +40,15 @@ A Telegram bot that automatically picks and pins the best **quote of the day** f
 | **AI Score**  | 70%    | LLM-based evaluation (humor, wit, quotability) |
 | **Length**    | 10%    | Optimal message length bonus                   |
 
-5. The winning quote is announced, pinned, and saved to the archive
+8. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
 
 ## 📌 Commands
 
 | Command    | Description                      |
 | :--------- | :------------------------------- |
 | `/start`   | Bot info and help                |
-| `/quote`   | Manually trigger quote selection |
+| `/quote`   | Safe preview of the current open window |
+| `/publish_quote` | Admin-only override for boring-day / failed runs |
 | `/stats`   | Chat statistics and top authors  |
 | `/mystats` | Your personal statistics         |
 
@@ -68,6 +74,9 @@ source venv/bin/activate  # Linux/Mac
 
 # 3. Install dependencies
 pip install -r requirements.txt
+
+# 4. Apply database migrations
+alembic upgrade head
 ```
 
 ### Configuration
@@ -84,9 +93,12 @@ DEVELOPER_IDS=[1234567890]
 QUOTE_HOUR=21
 QUOTE_MINUTE=0
 TIMEZONE=Europe/Berlin
+MIN_MESSAGES_FOR_AUTO_REVIEW=10
 ```
 
 ### Running
+
+`/quote` is preview-only. `/publish_quote` is reserved for admins when the automatic run marked the window as boring or failed.
 
 ```bash
 python main.py

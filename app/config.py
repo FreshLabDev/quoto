@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     QUOTE_HOUR: int = 21
     QUOTE_MINUTE: int = 0
     TIMEZONE: str = "Europe/Kyiv"
+    MIN_MESSAGES_FOR_AUTO_REVIEW: int = 10
 
 
 

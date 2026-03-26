@@ -9,6 +9,7 @@ aiogram==3.25.0           # via -r requirements.in
 aiohappyeyeballs==2.6.1   # via aiohttp
 aiohttp==3.13.3           # via aiogram
 aiosignal==1.4.0          # via aiohttp
+alembic==1.16.4           # via -r requirements.in
 annotated-types==0.7.0    # via pydantic
 asyncpg==0.31.0           # via -r requirements.in
 attrs==25.4.0             # via aiohttp
@@ -19,7 +20,9 @@ colorama==0.4.6           # via build, click
 frozenlist==1.8.0         # via aiohttp, aiosignal
 greenlet==3.3.2           # via sqlalchemy
 idna==3.11                # via yarl
+mako==1.3.10              # via alembic
 magic-filter==1.0.12      # via aiogram
+markupsafe==3.0.3         # via mako
 multidict==6.7.1          # via aiohttp, yarl
 packaging==26.0           # via build, wheel
 pip-tools==7.5.3          # via -r requirements.in
