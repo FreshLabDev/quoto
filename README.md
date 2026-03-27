@@ -18,7 +18,7 @@ A Telegram bot that tracks chat windows, previews quote candidates, and only pub
 - 😴 **Boring-Day Detection** — if the day feels flat, the bot says so instead of forcing a weak quote
 - ❤️ **Reaction Tracking** — accounts for emoji reactions from chat members
 - 📏 **Text Analysis** — smart scoring based on message length and quality
-- 🔎 **Safe Preview** — `/quote` shows the current leader without publishing or clearing data
+- 🔎 **Admin AI Preview** — `/quote` shows the current leader for chat admins without publishing or clearing data
 - 📌 **Auto-Pin** — pins the winning quote in the chat
 - 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
 - ⏰ **Scheduler** — configurable daily time for quote selection
@@ -47,7 +47,7 @@ A Telegram bot that tracks chat windows, previews quote candidates, and only pub
 | Command    | Description                      |
 | :--------- | :------------------------------- |
 | `/start`   | Bot info and help                |
-| `/quote`   | Safe preview of the current open window |
+| `/quote`   | AI preview of the current open window for chat admins |
 | `/publish_quote` | Admin-only override for boring-day / failed runs |
 | `/stats`   | Chat statistics and top authors  |
 | `/mystats` | Your personal statistics         |
@@ -98,7 +98,7 @@ MIN_MESSAGES_FOR_AUTO_REVIEW=10
 
 ### Running
 
-`/quote` is preview-only. `/publish_quote` is reserved for admins when the automatic run marked the window as boring or failed.
+`/quote` is an admin-only AI preview. `/publish_quote` is reserved for admins when the automatic run marked the window as boring or failed.
 
 ```bash
 python main.py

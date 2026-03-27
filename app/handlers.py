@@ -9,8 +9,10 @@ from . import core, scheduler, scoring
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
+    STATUS_BORING_NOTICE_UNKNOWN,
     STATUS_PUBLISHED,
     STATUS_PUBLISH_FAILED,
+    STATUS_PUBLISH_UNKNOWN,
     STATUS_SKIPPED_BORING,
 )
 from .windows import get_open_window
@@ -38,7 +40,7 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
             f"Я <b>Quoto</b> — бот, который в <b>{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}</b> "
             "выбирает и публикует цитату окна.\n\n"
             "📩 Я собираю сообщения и реакции между двумя cutoff-точками.\n"
-            "🔎 Команда /quote показывает безопасный preview текущего окна.\n"
+            "🔎 Команда /quote доступна только администраторам и показывает AI-preview текущего окна.\n"
             "⚙️ /publish_quote нужна админам только для ручного override после boring-day/ошибки."
         )
 
@@ -90,6 +92,8 @@ async def private_handler(message: types.Message, command: CommandObject = None)
                 STATUS_SKIPPED_BORING: "😴 Скучное окно",
                 STATUS_PUBLISH_FAILED: "⚠️ Публикация не удалась",
                 STATUS_BORING_NOTICE_FAILED: "⚠️ Boring-day уведомление не удалось",
+                STATUS_PUBLISH_UNKNOWN: "⚠️ Публикация в неопределённом состоянии",
+                STATUS_BORING_NOTICE_UNKNOWN: "⚠️ Boring-day в неопределённом состоянии",
             }
             status_label = status_map.get(detail["decision_status"], detail["decision_status"])
             model_short = detail.get("ai_model") or "AI"
@@ -146,7 +150,10 @@ async def private_handler(message: types.Message, command: CommandObject = None)
             )
 
             if detail.get("decision_reason"):
-                text += f"\n💭 <b>Причина:</b> {detail['decision_reason']}\n"
+                text += f"\n💭 <b>Причина решения:</b> {detail['decision_reason']}\n"
+
+            if detail.get("operation_error"):
+                text += f"⚠️ <b>Техническая ошибка:</b> {detail['operation_error']}\n"
 
             if detail.get("ai_best_text"):
                 ai_text = detail["ai_best_text"][:100] + ("..." if len(detail["ai_best_text"]) > 100 else "")
@@ -165,7 +172,7 @@ async def private_handler(message: types.Message, command: CommandObject = None)
         text=(
             "🏆 <b>Привет! Я Quoto</b>\n\n"
             "Я веду окно цитаты между двумя daily cutoff-точками и публикую результат в группе.\n\n"
-            "🔎 /quote — безопасный preview текущего окна.\n"
+            "🔎 /quote — AI-preview текущего окна для администраторов.\n"
             "😴 Если день вышел скучным, бот честно скажет об этом и даст ссылку на детали."
         ),
         reply_markup=kb.as_markup(),
@@ -179,7 +186,7 @@ async def group_start_handler(message: types.Message):
         "🏆 <b>Quoto — Цитата окна</b>\n\n"
         "Я собираю сообщения между двумя cutoff-точками и в конце окна выбираю победителя.\n\n"
         "📌 <b>Команды:</b>\n"
-        "/quote — безопасный preview текущего окна\n"
+        "/quote — AI-preview текущего окна (только админы)\n"
         "/publish_quote — ручная публикация после boring-day/ошибки (только админы)\n"
         "/stats — статистика опубликованных цитат\n"
         "/mystats — твоя статистика\n"
@@ -188,8 +195,15 @@ async def group_start_handler(message: types.Message):
 
 
 @router.message(Command("quote"), F.chat.type.in_({"group", "supergroup"}))
-async def manual_quote_handler(message: types.Message):
+async def manual_quote_handler(message: types.Message, bot: Bot):
+    if not message.from_user:
+        return
+
     await core.group_getOrCreate(message.chat)
+    if not await _is_chat_admin(bot, message.chat.id, message.from_user.id):
+        await message.answer("🔒 Команда /quote с AI-preview доступна только администраторам чата.")
+        return
+
     window = get_open_window()
     evaluation = await scoring.pick_best_quote(message.chat.id, window)
 

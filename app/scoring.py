@@ -66,6 +66,7 @@ class QuoteEvaluation:
     should_publish: bool = True
     day_reason_code: str | None = None
     day_reason_text: str = ""
+    day_verdict_error: str = ""
 
 
 def calculate_length_score(text: str) -> float:
@@ -171,4 +172,5 @@ async def pick_best_quote(
         should_publish=should_publish,
         day_reason_code=day_verdict.reason_code if day_verdict else None,
         day_reason_text=day_verdict.reason_text if day_verdict else "",
+        day_verdict_error=evaluation.day_verdict_error or "",
     )

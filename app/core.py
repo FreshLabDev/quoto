@@ -12,6 +12,7 @@ from .db import SessionLocal
 from .quote_status import (
     MANUAL_PUBLISHABLE_STATUSES,
     STATUS_PUBLISHED,
+    STATUS_PUBLISHING,
     STATUS_SKIPPED_BORING,
     VISIBLE_IN_STATS,
 )
@@ -19,6 +20,7 @@ from .scoring import ScoreBreakdown
 from .windows import QuoteWindow, utc_now
 
 log = setup_logging(logging.getLogger(__name__))
+_UNSET = object()
 
 
 async def user_getOrCreate(telegram_user: types.User) -> models.User:
@@ -190,6 +192,7 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "chat_id": quote.group.chat_id if quote.group else None,
             "decision_status": quote.decision_status,
             "decision_reason": quote.decision_reason,
+            "operation_error": quote.operation_error,
             "forced_by_admin": quote.forced_by_admin,
             "quote_day": quote.quote_day,
         }
@@ -396,7 +399,8 @@ async def create_quote_record(
     window: QuoteWindow,
     decision_status: str,
     decision_reason: str | None = None,
-) -> models.Quote:
+    operation_error: str | None = None,
+) -> tuple[models.Quote, bool]:
     async with SessionLocal() as session:
         try:
             quote = models.Quote(
@@ -416,13 +420,14 @@ async def create_quote_record(
                 window_end_at=window.end_utc,
                 decision_status=decision_status,
                 decision_reason=decision_reason,
+                operation_error=operation_error,
                 forced_by_admin=False,
                 created_at=utc_now(),
             )
             session.add(quote)
             await session.commit()
             await session.refresh(quote)
-            return quote
+            return quote, True
         except IntegrityError:
             await session.rollback()
             result = await session.execute(
@@ -433,7 +438,7 @@ async def create_quote_record(
             )
             existing = result.scalars().first()
             if existing:
-                return existing
+                return existing, False
             raise
 
 
@@ -453,7 +458,9 @@ async def update_quote_publication(
 
         quote.bot_message_id = bot_message_id
         quote.decision_status = STATUS_PUBLISHED
-        quote.decision_reason = decision_reason
+        if decision_reason is not None:
+            quote.decision_reason = decision_reason
+        quote.operation_error = None
         quote.forced_by_admin = forced_by_admin
         await session.commit()
 
@@ -469,13 +476,15 @@ async def update_quote_notice(quote_id: int, notice_message_id: int) -> None:
 
         quote.notice_message_id = notice_message_id
         quote.decision_status = STATUS_SKIPPED_BORING
+        quote.operation_error = None
         await session.commit()
 
 
 async def mark_quote_status(
     quote_id: int,
     decision_status: str,
-    decision_reason: str | None = None,
+    decision_reason: str | object = _UNSET,
+    operation_error: str | object = _UNSET,
 ) -> None:
     async with SessionLocal() as session:
         result = await session.execute(
@@ -486,8 +495,54 @@ async def mark_quote_status(
             return
 
         quote.decision_status = decision_status
-        quote.decision_reason = decision_reason
+        if decision_reason is not _UNSET:
+            quote.decision_reason = decision_reason
+        if operation_error is not _UNSET:
+            quote.operation_error = operation_error
         await session.commit()
+
+
+async def append_quote_operation_error(quote_id: int, operation_error: str) -> None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Quote).where(models.Quote.id == quote_id)
+        )
+        quote = result.scalars().first()
+        if not quote:
+            return
+
+        existing = (quote.operation_error or "").strip()
+        new_error = operation_error.strip()[:250]
+        quote.operation_error = f"{existing} | {new_error}".strip(" |") if existing else new_error
+        await session.commit()
+
+
+async def claim_latest_manual_publish_candidate(
+    chat_id: int,
+) -> tuple[models.Quote | None, str | None]:
+    async with SessionLocal() as session:
+        async with session.begin():
+            result = await session.execute(
+                select(models.Quote)
+                .join(models.Group, models.Quote.group_id == models.Group.id)
+                .options(selectinload(models.Quote.author), selectinload(models.Quote.group))
+                .where(
+                    models.Group.chat_id == chat_id,
+                    models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
+                )
+                .order_by(models.Quote.window_end_at.desc())
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            )
+            quote = result.scalars().first()
+            if not quote:
+                return None, None
+
+            previous_status = quote.decision_status
+            quote.decision_status = STATUS_PUBLISHING
+            quote.operation_error = None
+
+        return quote, previous_status
 
 
 async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | None:

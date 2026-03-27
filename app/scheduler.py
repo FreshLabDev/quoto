@@ -13,9 +13,11 @@ from .models import Group, Quote
 from .quote_status import (
     MANUAL_PUBLISHABLE_STATUSES,
     STATUS_BORING_NOTICE_FAILED,
+    STATUS_BORING_NOTICE_UNKNOWN,
     STATUS_NOTIFYING_BORING,
     STATUS_PUBLISHED,
     STATUS_PUBLISH_FAILED,
+    STATUS_PUBLISH_UNKNOWN,
     STATUS_PUBLISHING,
     STATUS_SKIPPED_BORING,
 )
@@ -58,11 +60,11 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         if await _recover_stale_quote(existing):
             existing = await core.get_quote_for_day(group.id, window.quote_day)
 
-        if existing and existing.decision_status not in MANUAL_PUBLISHABLE_STATUSES:
-            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже обработано ({existing.decision_status})")
-            return
         if existing and existing.decision_status in MANUAL_PUBLISHABLE_STATUSES:
             log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} ждёт ручного решения ({existing.decision_status})")
+            return
+        if existing:
+            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже обработано ({existing.decision_status})")
             return
 
     evaluation = await scoring.pick_best_quote(
@@ -89,10 +91,28 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         log.warning(f"{group.chat_id} | ⚠️ Не удалось выбрать лидера окна {window.quote_day}")
         return
 
+    if evaluation.day_verdict_error:
+        quote, created = await core.create_quote_record(
+            group=group,
+            best_message=evaluation.best_message,
+            breakdown=evaluation.breakdown,
+            window=window,
+            decision_status=STATUS_PUBLISH_FAILED,
+            operation_error=evaluation.day_verdict_error,
+        )
+        if created:
+            log.error(
+                f"{group.chat_id} | ⚠️ AI verdict для окна {window.quote_day} невалиден: "
+                f"{evaluation.day_verdict_error}"
+            )
+        else:
+            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже забрал другой воркер")
+        return
+
     author_name = evaluation.best_message.author.name if evaluation.best_message.author else "Аноним"
 
     if evaluation.should_publish:
-        quote = await core.create_quote_record(
+        quote, created = await core.create_quote_record(
             group=group,
             best_message=evaluation.best_message,
             breakdown=evaluation.breakdown,
@@ -100,6 +120,9 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             decision_status=STATUS_PUBLISHING,
             decision_reason=evaluation.day_reason_text or None,
         )
+        if not created:
+            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже забрал другой воркер")
+            return
         await _publish_quote_message(
             bot=bot,
             group=group,
@@ -111,7 +134,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         )
         return
 
-    quote = await core.create_quote_record(
+    quote, created = await core.create_quote_record(
         group=group,
         best_message=evaluation.best_message,
         breakdown=evaluation.breakdown,
@@ -119,11 +142,14 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         decision_status=STATUS_NOTIFYING_BORING,
         decision_reason=evaluation.day_reason_text or None,
     )
+    if not created:
+        log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже забрал другой воркер")
+        return
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
 
 
 async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
-    quote = await core.get_latest_manual_publish_candidate(chat_id)
+    quote, previous_status = await core.claim_latest_manual_publish_candidate(chat_id)
     if not quote or not quote.group:
         return None
 
@@ -137,7 +163,7 @@ async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
         ai_best_text=quote.ai_best_text,
     )
 
-    clear_window_after = quote.decision_status != STATUS_SKIPPED_BORING
+    clear_window_after = _manual_publish_clears_window(previous_status)
 
     return await _publish_quote_message(
         bot=bot,
@@ -148,6 +174,10 @@ async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
         forced_by_admin=True,
         clear_window_after=clear_window_after,
     )
+
+
+def _manual_publish_clears_window(previous_status: str | None) -> bool:
+    return previous_status != STATUS_SKIPPED_BORING
 
 
 async def _publish_quote_message(
@@ -180,36 +210,51 @@ async def _publish_quote_message(
 
     try:
         sent = await bot.send_message(chat_id=group.chat_id, text=text)
+    except Exception as e:
+        await core.mark_quote_status(
+            quote_id=quote.id,
+            decision_status=STATUS_PUBLISH_FAILED,
+            operation_error=str(e)[:250],
+        )
+        log.error(f"❌ Ошибка при отправке цитаты в {group.chat_id}: {e}")
+        return False
+
+    try:
         await core.update_quote_publication(
             quote_id=quote.id,
             bot_message_id=sent.message_id,
             forced_by_admin=forced_by_admin,
             decision_reason=quote.decision_reason,
         )
-
-        try:
-            await bot.pin_chat_message(
-                chat_id=group.chat_id,
-                message_id=sent.message_id,
-                disable_notification=True,
-            )
-        except Exception as e:
-            log.warning(f"⚠️ Не удалось закрепить сообщение в {group.chat_id}: {e}")
-
-        if clear_window_after:
-            deleted = await core.clear_window_messages(group.chat_id, _window_from_quote(quote))
-            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после публикации")
-
-        log.info(f"✅ Цитата окна {quote.quote_day} отправлена в {group.name} ({group.chat_id})")
-        return True
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,
-            decision_status=STATUS_PUBLISH_FAILED,
-            decision_reason=str(e)[:250],
+            decision_status=STATUS_PUBLISH_UNKNOWN,
+            operation_error=f"Telegram message was sent, but DB finalization failed: {str(e)[:200]}",
         )
-        log.error(f"❌ Ошибка при отправке цитаты в {group.chat_id}: {e}")
+        log.error(f"❌ Цитата отправлена, но не удалось зафиксировать статус в БД для {group.chat_id}: {e}")
         return False
+
+    try:
+        await bot.pin_chat_message(
+            chat_id=group.chat_id,
+            message_id=sent.message_id,
+            disable_notification=True,
+        )
+    except Exception as e:
+        await core.append_quote_operation_error(quote.id, f"Pin failed: {str(e)[:200]}")
+        log.warning(f"⚠️ Не удалось закрепить сообщение в {group.chat_id}: {e}")
+
+    if clear_window_after:
+        try:
+            deleted = await core.clear_window_messages(group.chat_id, _window_from_quote(quote))
+            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после публикации")
+        except Exception as e:
+            await core.append_quote_operation_error(quote.id, f"Cleanup failed: {str(e)[:200]}")
+            log.warning(f"⚠️ Не удалось очистить окно после публикации в {group.chat_id}: {e}")
+
+    log.info(f"✅ Цитата окна {quote.quote_day} отправлена в {group.name} ({group.chat_id})")
+    return True
 
 
 async def _send_boring_notice(
@@ -229,20 +274,38 @@ async def _send_boring_notice(
 
     try:
         sent = await bot.send_message(chat_id=group.chat_id, text=text)
-        await core.update_quote_notice(quote.id, sent.message_id)
-
-        if clear_window_after:
-            deleted = await core.clear_window_messages(group.chat_id, _window_from_quote(quote))
-            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после скучного окна")
-
-        log.info(f"😴 Окно {quote.quote_day} помечено как скучное в {group.name} ({group.chat_id})")
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,
             decision_status=STATUS_BORING_NOTICE_FAILED,
-            decision_reason=str(e)[:250],
+            operation_error=str(e)[:250],
         )
         log.error(f"❌ Ошибка при отправке boring-day уведомления в {group.chat_id}: {e}")
+        return
+
+    try:
+        await core.update_quote_notice(quote.id, sent.message_id)
+    except Exception as e:
+        await core.mark_quote_status(
+            quote_id=quote.id,
+            decision_status=STATUS_BORING_NOTICE_UNKNOWN,
+            operation_error=f"Telegram notice was sent, but DB finalization failed: {str(e)[:200]}",
+        )
+        log.error(
+            f"❌ Boring-day уведомление отправлено, но не удалось зафиксировать статус в БД для "
+            f"{group.chat_id}: {e}"
+        )
+        return
+
+    if clear_window_after:
+        try:
+            deleted = await core.clear_window_messages(group.chat_id, _window_from_quote(quote))
+            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после скучного окна")
+        except Exception as e:
+            await core.append_quote_operation_error(quote.id, f"Cleanup failed: {str(e)[:200]}")
+            log.warning(f"⚠️ Не удалось очистить скучное окно в {group.chat_id}: {e}")
+
+    log.info(f"😴 Окно {quote.quote_day} помечено как скучное в {group.name} ({group.chat_id})")
 
 
 async def _recover_stale_quote(quote: Quote) -> bool:
@@ -253,14 +316,14 @@ async def _recover_stale_quote(quote: Quote) -> bool:
         return False
 
     fallback_status = (
-        STATUS_PUBLISH_FAILED
+        STATUS_PUBLISH_UNKNOWN
         if quote.decision_status == STATUS_PUBLISHING
-        else STATUS_BORING_NOTICE_FAILED
+        else STATUS_BORING_NOTICE_UNKNOWN
     )
     await core.mark_quote_status(
         quote.id,
         fallback_status,
-        "Stale in-progress quote recovered after timeout.",
+        operation_error="In-progress quote timed out before final status confirmation.",
     )
     log.warning(f"⚠️ Quote #{quote.id} помечен как {fallback_status} после таймаута")
     return True

@@ -92,6 +92,7 @@ class Quote(Base):
     window_end_at = Column(DateTime(timezone=True), nullable=False)
     decision_status = Column(String, nullable=False, default="published")
     decision_reason = Column(String, nullable=True)
+    operation_error = Column(String, nullable=True)
     forced_by_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 

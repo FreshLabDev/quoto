@@ -43,6 +43,11 @@ class EvaluationResult:
     scores: dict[int, float]
     actual_model: str
     day_verdict: DayVerdict | None = None
+    day_verdict_error: str | None = None
+
+
+class DayVerdictParseError(ValueError):
+    pass
 
 
 async def evaluate_messages(
@@ -61,7 +66,12 @@ async def evaluate_messages(
         return EvaluationResult(
             scores=neutral_scores,
             actual_model=default_model,
-            day_verdict=default_verdict if include_day_verdict else None,
+            day_verdict=default_verdict if not include_day_verdict else None,
+            day_verdict_error=(
+                "OPENROUTER_API_KEY is not configured for automatic day verdict evaluation."
+                if include_day_verdict
+                else None
+            ),
         )
 
     user_payload = json.dumps(
@@ -112,18 +122,29 @@ async def evaluate_messages(
                 return EvaluationResult(
                     scores=neutral_scores,
                     actual_model=actual_model,
-                    day_verdict=default_verdict if include_day_verdict else None,
+                    day_verdict=default_verdict if not include_day_verdict else None,
+                    day_verdict_error=(
+                        "AI returned an empty response for automatic day verdict evaluation."
+                        if include_day_verdict
+                        else None
+                    ),
                 )
 
             if include_day_verdict:
-                entries, verdict = _parse_day_payload(content)
+                entries, verdict, verdict_error = _parse_day_payload_safely(content)
             else:
                 entries = _parse_scores(content)
                 verdict = None
+                verdict_error = None
 
             scores = _normalize_scores(messages, entries)
             log.debug(f"🤖 {actual_model} оценил {len(scores)} сообщений")
-            return EvaluationResult(scores=scores, actual_model=actual_model, day_verdict=verdict)
+            return EvaluationResult(
+                scores=scores,
+                actual_model=actual_model,
+                day_verdict=verdict,
+                day_verdict_error=verdict_error,
+            )
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_retries - 1:
@@ -144,7 +165,12 @@ async def evaluate_messages(
     return EvaluationResult(
         scores=neutral_scores,
         actual_model=default_model,
-        day_verdict=default_verdict if include_day_verdict else None,
+        day_verdict=default_verdict if not include_day_verdict else None,
+        day_verdict_error=(
+            "AI evaluation failed before a valid automatic day verdict was produced."
+            if include_day_verdict
+            else None
+        ),
     )
 
 
@@ -170,20 +196,40 @@ def _normalize_scores(
     return result
 
 
+def _parse_day_payload_safely(content: str) -> tuple[list[dict], DayVerdict | None, str | None]:
+    try:
+        entries, verdict = _parse_day_payload(content)
+        return entries, verdict, None
+    except (json.JSONDecodeError, DayVerdictParseError, ValueError) as exc:
+        log.error(f"Ошибка day verdict ответа AI: {exc}")
+        try:
+            entries = _parse_scores(content)
+        except (json.JSONDecodeError, ValueError):
+            entries = []
+        return entries, None, str(exc)
+
+
 def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict]:
     cleaned = _extract_json_payload(content)
     parsed = json.loads(cleaned)
 
     if isinstance(parsed, list):
-        return parsed, DayVerdict()
+        raise DayVerdictParseError("AI response must include a `day` verdict object.")
 
     if not isinstance(parsed, dict):
-        raise json.JSONDecodeError("Expected dict payload", cleaned, 0)
+        raise DayVerdictParseError("Expected dict payload for day verdict.")
 
-    entries = parsed.get("messages") or []
-    day = parsed.get("day") or {}
+    entries = parsed.get("messages")
+    if entries is None:
+        entries = []
+    if not isinstance(entries, list):
+        raise DayVerdictParseError("AI response field `messages` must be a list.")
 
-    should_publish = bool(day.get("should_publish", True))
+    day = parsed.get("day")
+    if not isinstance(day, dict):
+        raise DayVerdictParseError("AI response is missing a valid `day` verdict block.")
+
+    should_publish = _parse_bool_like(day.get("should_publish"))
     reason_code = str(
         day.get("reason_code") or (REASON_WORTHY if should_publish else REASON_BORING_DAY)
     )
@@ -194,6 +240,20 @@ def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict]:
         reason_code=reason_code,
         reason_text=reason_text,
     )
+
+
+def _parse_bool_like(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "1"}:
+            return True
+        if normalized in {"false", "no", "0"}:
+            return False
+    raise DayVerdictParseError("AI response field `day.should_publish` must be a strict boolean value.")
 
 
 def _parse_scores(content: str) -> list[dict]:
