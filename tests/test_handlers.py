@@ -110,3 +110,33 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("LLM rejected auto publication", message.answers[0])
         self.assertIn("Техническая ошибка", message.answers[0])
         self.assertIn("Telegram timeout", message.answers[0])
+
+    async def test_reaction_handler_applies_non_anonymous_delta(self) -> None:
+        event = SimpleNamespace(
+            chat=SimpleNamespace(id=-100123456),
+            message_id=42,
+            old_reaction=[SimpleNamespace(emoji="🔥"), SimpleNamespace(emoji="❤️")],
+            new_reaction=[SimpleNamespace(emoji="🔥"), SimpleNamespace(emoji="😂")],
+        )
+
+        with patch.object(handlers.core, "apply_reaction_delta", new=AsyncMock()) as apply_delta:
+            await handlers.reaction_handler(event)
+
+        apply_delta.assert_awaited_once_with(
+            -100123456,
+            42,
+            {"❤️": -1, "😂": 1},
+        )
+
+    async def test_reaction_handler_skips_zero_net_delta(self) -> None:
+        event = SimpleNamespace(
+            chat=SimpleNamespace(id=-100123456),
+            message_id=42,
+            old_reaction=[SimpleNamespace(emoji="🔥")],
+            new_reaction=[SimpleNamespace(emoji="🔥")],
+        )
+
+        with patch.object(handlers.core, "apply_reaction_delta", new=AsyncMock()) as apply_delta:
+            await handlers.reaction_handler(event)
+
+        apply_delta.assert_not_awaited()

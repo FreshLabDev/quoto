@@ -154,6 +154,55 @@ async def sync_reactions(chat_id: int, message_id: int, emoji_counts: dict[str, 
         log.debug(f"{chat_id} | 🔄 Синхронизированы реакции {dict(emoji_counts)} для сообщения {message_id}")
 
 
+async def apply_reaction_delta(chat_id: int, message_id: int, emoji_deltas: dict[str, int]) -> None:
+    if not emoji_deltas:
+        return
+
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Message).where(
+                models.Message.message_id == message_id,
+                models.Message.chat_id == chat_id,
+            )
+        )
+        db_msg = result.scalars().first()
+
+        if not db_msg:
+            return
+
+        result = await session.execute(
+            select(models.Reaction).where(models.Reaction.message_db_id == db_msg.id)
+        )
+        existing = {reaction.emoji: reaction for reaction in result.scalars().all()}
+
+        for emoji, delta in emoji_deltas.items():
+            if delta == 0:
+                continue
+
+            reaction = existing.get(emoji)
+            next_count = (reaction.count if reaction else 0) + delta
+
+            if next_count <= 0:
+                if reaction:
+                    await session.delete(reaction)
+                continue
+
+            if reaction:
+                reaction.count = next_count
+                continue
+
+            session.add(
+                models.Reaction(
+                    message_db_id=db_msg.id,
+                    emoji=emoji,
+                    count=next_count,
+                )
+            )
+
+        await session.commit()
+        log.debug(f"{chat_id} | 🔄 Применены delta-реакции {dict(emoji_deltas)} для сообщения {message_id}")
+
+
 def _extract_emoji(reaction_type: types.ReactionType) -> str | None:
     if hasattr(reaction_type, "emoji"):
         return reaction_type.emoji

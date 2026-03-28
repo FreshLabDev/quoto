@@ -291,13 +291,12 @@ def _migration_timezone() -> ZoneInfo:
 
 
 def _upgrade_created_at_type(table_name: str, column_name: str) -> None:
-    timezone_name = _migration_timezone_name().replace("'", "''")
     op.alter_column(
         table_name,
         column_name,
         existing_type=sa.DateTime(),
         type_=sa.DateTime(timezone=True),
-        postgresql_using=f"{column_name} AT TIME ZONE '{timezone_name}'",
+        postgresql_using=f"{column_name} AT TIME ZONE 'UTC'",
     )
 
 

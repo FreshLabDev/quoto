@@ -351,7 +351,23 @@ async def group_message_handler(message: types.Message):
 
 @router.message_reaction()
 async def reaction_handler(event: types.MessageReactionUpdated):
-    log.debug(f"{event.chat.id} | 🔍 Игнорирую per-user reaction update в пользу aggregated counts")
+    emoji_deltas: Counter[str] = Counter()
+
+    for reaction in event.old_reaction:
+        emoji = core._extract_emoji(reaction)
+        if emoji:
+            emoji_deltas[emoji] -= 1
+
+    for reaction in event.new_reaction:
+        emoji = core._extract_emoji(reaction)
+        if emoji:
+            emoji_deltas[emoji] += 1
+
+    filtered_deltas = {emoji: delta for emoji, delta in emoji_deltas.items() if delta}
+    if not filtered_deltas:
+        return
+
+    await core.apply_reaction_delta(event.chat.id, event.message_id, filtered_deltas)
 
 
 @router.message_reaction_count()
