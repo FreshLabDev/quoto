@@ -33,8 +33,44 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.group = SimpleNamespace(id=1, chat_id=-100123456, name="Quoto Test Chat")
         self.window = _make_window()
 
+    async def test_process_group_recovers_stale_quotes_before_day_lookup(self) -> None:
+        calls: list[str] = []
+
+        async def recover_stale_quotes(chat_id: int) -> int:
+            self.assertEqual(chat_id, self.group.chat_id)
+            calls.append("recover")
+            return 1
+
+        async def get_quote_for_day(group_id: int, quote_day: date):
+            self.assertEqual(group_id, self.group.id)
+            self.assertEqual(quote_day, self.window.quote_day)
+            calls.append("lookup")
+            return None
+
+        with (
+            patch.object(
+                scheduler,
+                "_recover_stale_quotes_for_chat",
+                new=AsyncMock(side_effect=recover_stale_quotes),
+            ),
+            patch.object(
+                scheduler.core,
+                "get_quote_for_day",
+                new=AsyncMock(side_effect=get_quote_for_day),
+            ),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "clear_window_messages", new=AsyncMock()) as clear_messages,
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock()) as pick_best_quote,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        self.assertEqual(calls, ["recover", "lookup"])
+        clear_messages.assert_not_awaited()
+        pick_best_quote.assert_not_awaited()
+
     async def test_process_group_skips_empty_window_before_ai(self) -> None:
         with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
             patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
             patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=0)),
             patch.object(scheduler.core, "clear_window_messages", new=AsyncMock()) as clear_messages,
@@ -49,9 +85,14 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         message_count = max(1, scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW - 1)
 
         with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
             patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
             patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
-            patch.object(scheduler.core, "clear_window_messages", new=AsyncMock(return_value=message_count)) as clear_messages,
+            patch.object(
+                scheduler.core,
+                "clear_window_messages",
+                new=AsyncMock(return_value=message_count),
+            ) as clear_messages,
             patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock()) as pick_best_quote,
         ):
             await scheduler._process_group(SimpleNamespace(), self.group, self.window)
@@ -64,10 +105,15 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         evaluation = scoring.QuoteEvaluation(message_count=message_count, best_message=None)
 
         with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
             patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
             patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
             patch.object(scheduler.core, "clear_window_messages", new=AsyncMock()) as clear_messages,
-            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)) as pick_best_quote,
+            patch.object(
+                scheduler.scoring,
+                "pick_best_quote",
+                new=AsyncMock(return_value=evaluation),
+            ) as pick_best_quote,
         ):
             await scheduler._process_group(SimpleNamespace(), self.group, self.window)
 
@@ -93,16 +139,51 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
             ai_best_text=None,
         )
 
+    async def test_manual_publish_recovers_stale_quotes_before_claiming_candidate(self) -> None:
+        calls: list[str] = []
+
+        async def recover_stale_quotes(chat_id: int) -> int:
+            self.assertEqual(chat_id, -100123456)
+            calls.append("recover")
+            return 1
+
+        async def claim_candidate(chat_id: int):
+            self.assertEqual(chat_id, -100123456)
+            calls.append("claim")
+            return None, None
+
+        with (
+            patch.object(
+                scheduler,
+                "_recover_stale_quotes_for_chat",
+                new=AsyncMock(side_effect=recover_stale_quotes),
+            ),
+            patch.object(
+                scheduler.core,
+                "claim_latest_manual_publish_candidate",
+                new=AsyncMock(side_effect=claim_candidate),
+            ),
+        ):
+            result = await scheduler.manual_publish_latest(SimpleNamespace(), -100123456)
+
+        self.assertIsNone(result)
+        self.assertEqual(calls, ["recover", "claim"])
+
     async def test_manual_publish_latest_accepts_publish_unknown(self) -> None:
         quote = self._make_quote()
 
         with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
             patch.object(
                 scheduler.core,
                 "claim_latest_manual_publish_candidate",
                 new=AsyncMock(return_value=(quote, STATUS_PUBLISH_UNKNOWN)),
             ),
-            patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)) as publish_quote,
+            patch.object(
+                scheduler,
+                "_publish_quote_message",
+                new=AsyncMock(return_value=True),
+            ) as publish_quote,
         ):
             result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
 
@@ -114,12 +195,17 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
         quote = self._make_quote()
 
         with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
             patch.object(
                 scheduler.core,
                 "claim_latest_manual_publish_candidate",
                 new=AsyncMock(return_value=(quote, STATUS_BORING_NOTICE_UNKNOWN)),
             ),
-            patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)) as publish_quote,
+            patch.object(
+                scheduler,
+                "_publish_quote_message",
+                new=AsyncMock(return_value=True),
+            ) as publish_quote,
         ):
             result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
 

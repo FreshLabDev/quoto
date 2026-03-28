@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from aiogram import types
 from sqlalchemy import func, select
@@ -10,6 +10,7 @@ from . import models
 from .config import setup_logging
 from .db import SessionLocal
 from .quote_status import (
+    IN_PROGRESS_STATUSES,
     MANUAL_PUBLISHABLE_STATUSES,
     STATUS_PUBLISHED,
     STATUS_PUBLISHING,
@@ -559,6 +560,21 @@ async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | No
             .limit(1)
         )
         return result.scalars().first()
+
+
+async def get_stale_in_progress_quotes(chat_id: int, older_than: datetime) -> list[models.Quote]:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Quote)
+            .join(models.Group, models.Quote.group_id == models.Group.id)
+            .where(
+                models.Group.chat_id == chat_id,
+                models.Quote.decision_status.in_(IN_PROGRESS_STATUSES),
+                models.Quote.created_at < older_than,
+            )
+            .order_by(models.Quote.window_end_at.desc())
+        )
+        return result.scalars().all()
 
 
 async def count_window_messages(chat_id: int, window: QuoteWindow) -> int:

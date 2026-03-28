@@ -55,11 +55,10 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     window = window or get_closed_window()
     log.debug(f"{group.chat_id} | ⏳ Обработка окна {window.quote_day} для группы {group.name}")
 
+    await _recover_stale_quotes_for_chat(group.chat_id)
+
     existing = await core.get_quote_for_day(group.id, window.quote_day)
     if existing:
-        if await _recover_stale_quote(existing):
-            existing = await core.get_quote_for_day(group.id, window.quote_day)
-
         if existing and existing.decision_status in MANUAL_PUBLISHABLE_STATUSES:
             log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} ждёт ручного решения ({existing.decision_status})")
             return
@@ -164,6 +163,8 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
 
 
 async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
+    await _recover_stale_quotes_for_chat(chat_id)
+
     quote, previous_status = await core.claim_latest_manual_publish_candidate(chat_id)
     if not quote or not quote.group:
         return None
@@ -193,6 +194,20 @@ async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
 
 def _manual_publish_clears_window(previous_status: str | None) -> bool:
     return previous_status != STATUS_SKIPPED_BORING
+
+
+async def _recover_stale_quotes_for_chat(chat_id: int) -> int:
+    stale_quotes = await core.get_stale_in_progress_quotes(
+        chat_id=chat_id,
+        older_than=utc_now() - _STALE_QUOTE_AFTER,
+    )
+
+    recovered = 0
+    for quote in stale_quotes:
+        if await _recover_stale_quote(quote):
+            recovered += 1
+
+    return recovered
 
 
 async def _publish_quote_message(

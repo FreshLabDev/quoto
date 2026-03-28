@@ -260,7 +260,7 @@ def _legacy_window_from_created_at(created_at: datetime) -> tuple[date, datetime
 def _localize_legacy_datetime(value: datetime) -> datetime:
     tz = _migration_timezone()
     if value.tzinfo is None:
-        return value.replace(tzinfo=tz)
+        return value.replace(tzinfo=timezone.utc).astimezone(tz)
     return value.astimezone(tz)
 
 
