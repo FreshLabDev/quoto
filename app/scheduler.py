@@ -67,6 +67,21 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже обработано ({existing.decision_status})")
             return
 
+    message_count = await core.count_window_messages(group.chat_id, window)
+
+    if message_count == 0:
+        log.info(f"{group.chat_id} | 📭 Окно {window.quote_day} пустое")
+        return
+
+    if message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
+        deleted = await core.clear_window_messages(group.chat_id, window)
+        log.info(
+            f"{group.chat_id} | 🤫 Окно {window.quote_day} пропущено: "
+            f"сообщений {message_count} < {settings.MIN_MESSAGES_FOR_AUTO_REVIEW}. "
+            f"Очищено {deleted} сообщений."
+        )
+        return
+
     evaluation = await scoring.pick_best_quote(
         group.chat_id,
         window,

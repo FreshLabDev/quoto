@@ -561,6 +561,18 @@ async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | No
         return result.scalars().first()
 
 
+async def count_window_messages(chat_id: int, window: QuoteWindow) -> int:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(func.count(models.Message.id)).where(
+                models.Message.chat_id == chat_id,
+                models.Message.created_at >= window.start_utc,
+                models.Message.created_at < window.end_utc,
+            )
+        )
+        return int(result.scalar() or 0)
+
+
 async def clear_window_messages(chat_id: int, window: QuoteWindow) -> int:
     async with SessionLocal() as session:
         result = await session.execute(
