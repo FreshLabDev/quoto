@@ -91,6 +91,7 @@ class Quote(Base):
     window_start_at = Column(DateTime(timezone=True), nullable=False)
     window_end_at = Column(DateTime(timezone=True), nullable=False)
     decision_status = Column(String, nullable=False, default="published")
+    status_changed_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     decision_reason = Column(String, nullable=True)
     operation_error = Column(String, nullable=True)
     forced_by_admin = Column(Boolean, nullable=False, default=False)

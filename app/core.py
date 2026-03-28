@@ -469,6 +469,7 @@ async def create_quote_record(
                 window_start_at=window.start_utc,
                 window_end_at=window.end_utc,
                 decision_status=decision_status,
+                status_changed_at=utc_now(),
                 decision_reason=decision_reason,
                 operation_error=operation_error,
                 forced_by_admin=False,
@@ -508,6 +509,7 @@ async def update_quote_publication(
 
         quote.bot_message_id = bot_message_id
         quote.decision_status = STATUS_PUBLISHED
+        quote.status_changed_at = utc_now()
         if decision_reason is not None:
             quote.decision_reason = decision_reason
         quote.operation_error = None
@@ -526,6 +528,7 @@ async def update_quote_notice(quote_id: int, notice_message_id: int) -> None:
 
         quote.notice_message_id = notice_message_id
         quote.decision_status = STATUS_SKIPPED_BORING
+        quote.status_changed_at = utc_now()
         quote.operation_error = None
         await session.commit()
 
@@ -545,6 +548,7 @@ async def mark_quote_status(
             return
 
         quote.decision_status = decision_status
+        quote.status_changed_at = utc_now()
         if decision_reason is not _UNSET:
             quote.decision_reason = decision_reason
         if operation_error is not _UNSET:
@@ -590,6 +594,7 @@ async def claim_latest_manual_publish_candidate(
 
             previous_status = quote.decision_status
             quote.decision_status = STATUS_PUBLISHING
+            quote.status_changed_at = utc_now()
             quote.operation_error = None
 
         return quote, previous_status
@@ -619,7 +624,7 @@ async def get_stale_in_progress_quotes(chat_id: int, older_than: datetime) -> li
             .where(
                 models.Group.chat_id == chat_id,
                 models.Quote.decision_status.in_(IN_PROGRESS_STATUSES),
-                models.Quote.created_at < older_than,
+                models.Quote.status_changed_at < older_than,
             )
             .order_by(models.Quote.window_end_at.desc())
         )

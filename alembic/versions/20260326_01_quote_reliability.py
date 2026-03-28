@@ -100,6 +100,12 @@ def upgrade() -> None:
             sa.Column("window_start_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("window_end_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("decision_status", sa.String(), nullable=False, server_default="published"),
+            sa.Column(
+                "status_changed_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("CURRENT_TIMESTAMP"),
+            ),
             sa.Column("decision_reason", sa.String(), nullable=True),
             sa.Column("operation_error", sa.String(), nullable=True),
             sa.Column("forced_by_admin", sa.Boolean(), nullable=False, server_default=sa.false()),
@@ -136,6 +142,8 @@ def _upgrade_quotes_table(inspector) -> None:
         op.add_column("quotes", sa.Column("window_end_at", sa.DateTime(timezone=True), nullable=True))
     if "decision_status" not in columns:
         op.add_column("quotes", sa.Column("decision_status", sa.String(), nullable=True))
+    if "status_changed_at" not in columns:
+        op.add_column("quotes", sa.Column("status_changed_at", sa.DateTime(timezone=True), nullable=True))
     if "decision_reason" not in columns:
         op.add_column("quotes", sa.Column("decision_reason", sa.String(), nullable=True))
     if "operation_error" not in columns:
@@ -147,12 +155,14 @@ def _upgrade_quotes_table(inspector) -> None:
     _deduplicate_quotes_by_day()
 
     op.execute("UPDATE quotes SET decision_status = COALESCE(decision_status, 'published')")
+    op.execute("UPDATE quotes SET status_changed_at = COALESCE(status_changed_at, created_at)")
     op.execute("UPDATE quotes SET forced_by_admin = COALESCE(forced_by_admin, FALSE)")
 
     op.alter_column("quotes", "quote_day", nullable=False)
     op.alter_column("quotes", "window_start_at", nullable=False)
     op.alter_column("quotes", "window_end_at", nullable=False)
     op.alter_column("quotes", "decision_status", nullable=False)
+    op.alter_column("quotes", "status_changed_at", nullable=False)
     op.alter_column("quotes", "forced_by_admin", nullable=False)
 
     constraints = {constraint["name"] for constraint in inspector.get_unique_constraints("quotes")}
@@ -260,7 +270,7 @@ def _legacy_window_from_created_at(created_at: datetime) -> tuple[date, datetime
 def _localize_legacy_datetime(value: datetime) -> datetime:
     tz = _migration_timezone()
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc).astimezone(tz)
+        return value.replace(tzinfo=_legacy_source_timezone()).astimezone(tz)
     return value.astimezone(tz)
 
 
@@ -290,13 +300,25 @@ def _migration_timezone() -> ZoneInfo:
     return ZoneInfo(_migration_timezone_name())
 
 
+def _legacy_source_timezone_name() -> str:
+    bind = op.get_bind()
+    result = bind.exec_driver_sql("SHOW TIMEZONE")
+    timezone_name = result.scalar()
+    return str(timezone_name or "UTC")
+
+
+def _legacy_source_timezone() -> ZoneInfo:
+    return ZoneInfo(_legacy_source_timezone_name())
+
+
 def _upgrade_created_at_type(table_name: str, column_name: str) -> None:
+    source_timezone_name = _legacy_source_timezone_name().replace("'", "''")
     op.alter_column(
         table_name,
         column_name,
         existing_type=sa.DateTime(),
         type_=sa.DateTime(timezone=True),
-        postgresql_using=f"{column_name} AT TIME ZONE 'UTC'",
+        postgresql_using=f"{column_name} AT TIME ZONE '{source_timezone_name}'",
     )
 
 

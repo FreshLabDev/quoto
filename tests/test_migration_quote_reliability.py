@@ -39,7 +39,22 @@ class MigrationLegacyTimestampTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.migration = _load_migration_module()
 
-    def test_localize_legacy_datetime_treats_naive_timestamp_as_utc(self) -> None:
+    @staticmethod
+    def _bind_with_timezone(timezone_name: str):
+        class FakeResult:
+            def scalar(self_nonlocal):
+                return timezone_name
+
+        class FakeBind:
+            def exec_driver_sql(self_nonlocal, sql: str):
+                assert sql == "SHOW TIMEZONE"
+                return FakeResult()
+
+        return FakeBind()
+
+    def test_localize_legacy_datetime_uses_session_timezone_for_naive_value(self) -> None:
+        self.migration.op = types.SimpleNamespace(get_bind=lambda: self._bind_with_timezone("UTC"))
+
         with patch.dict(
             os.environ,
             {"TIMEZONE": "Europe/Berlin", "QUOTE_HOUR": "21", "QUOTE_MINUTE": "0"},
@@ -53,6 +68,8 @@ class MigrationLegacyTimestampTests(unittest.TestCase):
         )
 
     def test_legacy_window_from_naive_utc_timestamp_keeps_expected_quote_day(self) -> None:
+        self.migration.op = types.SimpleNamespace(get_bind=lambda: self._bind_with_timezone("UTC"))
+
         with patch.dict(
             os.environ,
             {"TIMEZONE": "Europe/Berlin", "QUOTE_HOUR": "21", "QUOTE_MINUTE": "0"},
@@ -66,9 +83,12 @@ class MigrationLegacyTimestampTests(unittest.TestCase):
         self.assertEqual(window_start_at, datetime(2026, 3, 26, 20, 0, tzinfo=timezone.utc))
         self.assertEqual(window_end_at, datetime(2026, 3, 27, 20, 0, tzinfo=timezone.utc))
 
-    def test_upgrade_created_at_type_uses_utc_semantics_for_legacy_values(self) -> None:
+    def test_upgrade_created_at_type_uses_session_timezone_for_legacy_values(self) -> None:
         alter_column = Mock()
-        self.migration.op = types.SimpleNamespace(alter_column=alter_column)
+        self.migration.op = types.SimpleNamespace(
+            alter_column=alter_column,
+            get_bind=lambda: self._bind_with_timezone("Europe/Berlin"),
+        )
         self.migration.sa = types.SimpleNamespace(DateTime=lambda timezone=False: ("DateTime", timezone))
 
         with patch.dict(os.environ, {"TIMEZONE": "Europe/Berlin"}, clear=False):
@@ -79,5 +99,41 @@ class MigrationLegacyTimestampTests(unittest.TestCase):
             "created_at",
             existing_type=("DateTime", False),
             type_=("DateTime", True),
-            postgresql_using="created_at AT TIME ZONE 'UTC'",
+            postgresql_using="created_at AT TIME ZONE 'Europe/Berlin'",
         )
+
+    def test_upgrade_quotes_table_backfills_and_requires_status_changed_at(self) -> None:
+        add_column = Mock()
+        execute = Mock()
+        alter_column = Mock()
+        create_unique_constraint = Mock()
+
+        self.migration.op = types.SimpleNamespace(
+            add_column=add_column,
+            execute=execute,
+            alter_column=alter_column,
+            create_unique_constraint=create_unique_constraint,
+        )
+        self.migration.sa = types.SimpleNamespace(
+            Column=lambda name, *_args, **_kwargs: name,
+            BigInteger=lambda: "BigInteger",
+            Date=lambda: "Date",
+            DateTime=lambda timezone=False: ("DateTime", timezone),
+            String=lambda: "String",
+            Boolean=lambda: "Boolean",
+        )
+
+        fake_inspector = types.SimpleNamespace(
+            get_columns=lambda _table: [{"name": "created_at"}],
+            get_unique_constraints=lambda _table: [],
+        )
+
+        with (
+            patch.object(self.migration, "_upgrade_created_at_type"),
+            patch.object(self.migration, "_backfill_quotes_table"),
+            patch.object(self.migration, "_deduplicate_quotes_by_day"),
+        ):
+            self.migration._upgrade_quotes_table(fake_inspector)
+
+        execute.assert_any_call("UPDATE quotes SET status_changed_at = COALESCE(status_changed_at, created_at)")
+        alter_column.assert_any_call("quotes", "status_changed_at", nullable=False)
