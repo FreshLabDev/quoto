@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from html import escape
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -27,6 +28,11 @@ from .windows import quote_timezone
 log = setup_logging(logging.getLogger(__name__))
 
 _STALE_QUOTE_AFTER = timedelta(minutes=15)
+_MANUAL_PUBLISH_NOTHING = "nothing"
+_MANUAL_PUBLISH_PUBLISHED = "published"
+_MANUAL_PUBLISH_FAILED = "failed"
+_MANUAL_PUBLISH_ALREADY_SENT = "already_sent"
+_PUBLISH_UNKNOWN_SENT_PREFIX = "Telegram message was sent, but DB finalization failed:"
 
 
 async def quote_of_the_day_job(bot: Bot) -> None:
@@ -162,12 +168,22 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
 
 
-async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
+async def manual_publish_latest(bot: Bot, chat_id: int) -> str:
     await _recover_stale_quotes_for_chat(chat_id)
+
+    latest = await core.get_latest_manual_publish_candidate(chat_id)
+    if not latest or not latest.group:
+        return _MANUAL_PUBLISH_NOTHING
+
+    if (
+        latest.decision_status == STATUS_PUBLISH_UNKNOWN
+        and _publish_unknown_already_sent(latest.operation_error)
+    ):
+        return _MANUAL_PUBLISH_ALREADY_SENT
 
     quote, previous_status = await core.claim_latest_manual_publish_candidate(chat_id)
     if not quote or not quote.group:
-        return None
+        return _MANUAL_PUBLISH_NOTHING
 
     author_name = quote.author.name if quote.author else "Аноним"
     breakdown = scoring.ScoreBreakdown(
@@ -181,7 +197,7 @@ async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
 
     clear_window_after = _manual_publish_clears_window(previous_status)
 
-    return await _publish_quote_message(
+    published = await _publish_quote_message(
         bot=bot,
         group=quote.group,
         quote=quote,
@@ -190,10 +206,15 @@ async def manual_publish_latest(bot: Bot, chat_id: int) -> bool | None:
         forced_by_admin=True,
         clear_window_after=clear_window_after,
     )
+    return _MANUAL_PUBLISH_PUBLISHED if published else _MANUAL_PUBLISH_FAILED
 
 
 def _manual_publish_clears_window(previous_status: str | None) -> bool:
     return previous_status != STATUS_SKIPPED_BORING
+
+
+def _publish_unknown_already_sent(operation_error: str | None) -> bool:
+    return bool(operation_error and operation_error.startswith(_PUBLISH_UNKNOWN_SENT_PREFIX))
 
 
 async def _recover_stale_quotes_for_chat(chat_id: int) -> int:
@@ -228,11 +249,13 @@ async def _publish_quote_message(
     msg_link = _message_link(group.chat_id, quote.message_id)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
     forced_line = "\n⚙️ <i>Опубликовано администратором вручную.</i>" if forced_by_admin else ""
+    quote_text = escape(quote.text)
+    safe_author_name = escape(author_name)
 
     text = (
         "🏆 <b>Цитата окна</b>\n\n"
-        f"💬 <i>«{quote.text}»</i>\n"
-        f"— <b>{author_name}</b>\n\n"
+        f"💬 <i>«{quote_text}»</i>\n"
+        f"— <b>{safe_author_name}</b>\n\n"
         f"{info_line}\n\n"
         f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
         f"{forced_line}"
@@ -294,7 +317,7 @@ async def _send_boring_notice(
     clear_window_after: bool,
 ) -> None:
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
-    reason_line = f"\n💭 {quote.decision_reason}" if quote.decision_reason else ""
+    reason_line = f"\n💭 {escape(quote.decision_reason)}" if quote.decision_reason else ""
     text = (
         "😴 <b>Сегодня окно вышло скучным</b>\n\n"
         "Бот не нашёл достаточно сильную цитату для публикации."

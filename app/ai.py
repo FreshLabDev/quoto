@@ -50,6 +50,10 @@ class DayVerdictParseError(ValueError):
     pass
 
 
+def _is_retryable_http_status(status_code: int) -> bool:
+    return status_code == 429 or 500 <= status_code < 600
+
+
 async def evaluate_messages(
     messages: list[dict[str, str | int]],
     include_day_verdict: bool = False,
@@ -147,14 +151,25 @@ async def evaluate_messages(
             )
 
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429 and attempt < max_retries - 1:
+            if _is_retryable_http_status(e.response.status_code) and attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 log.warning(
-                    f"⏳ Rate-limit (429), повтор через {delay}с (попытка {attempt + 1}/{max_retries})"
+                    f"⏳ OpenRouter HTTP {e.response.status_code}, повтор через {delay}с "
+                    f"(попытка {attempt + 1}/{max_retries})"
                 )
                 await asyncio.sleep(delay)
                 continue
             log.error(f"OpenRouter HTTP {e.response.status_code}: {e.response.text[:200]}")
+        except httpx.RequestError as e:
+            if attempt < max_retries - 1:
+                delay = retry_delays[attempt]
+                log.warning(
+                    f"⏳ Ошибка сети OpenRouter ({type(e).__name__}), повтор через {delay}с "
+                    f"(попытка {attempt + 1}/{max_retries})"
+                )
+                await asyncio.sleep(delay)
+                continue
+            log.error(f"Ошибка сети OpenRouter: {e}")
         except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
             log.error(f"Ошибка парсинга ответа AI: {e}")
         except Exception as e:
@@ -275,15 +290,18 @@ def _extract_json_payload(content: str) -> str:
     cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
     cleaned = cleaned.replace("```", "").strip()
 
-    if cleaned.startswith("{") or cleaned.startswith("["):
-        return cleaned
+    decoder = json.JSONDecoder()
+    candidates: list[str] = []
+    for index, char in enumerate(cleaned):
+        if char not in "[{":
+            continue
+        try:
+            _, end = decoder.raw_decode(cleaned[index:])
+        except json.JSONDecodeError:
+            continue
+        candidates.append(cleaned[index:index + end])
 
-    object_match = re.search(r"\{[\s\S]*\}", cleaned)
-    if object_match:
-        return object_match.group()
-
-    array_match = re.search(r"\[\s*\{.*?}\s*]", cleaned, re.DOTALL)
-    if array_match:
-        return array_match.group()
+    if candidates:
+        return max(candidates, key=len)
 
     raise json.JSONDecodeError("Не найден JSON payload в ответе AI", cleaned, 0)

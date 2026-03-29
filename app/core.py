@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from aiogram import types
 from sqlalchemy import func, select
@@ -92,6 +92,12 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
     if not message.text:
         return None
 
+    message_created_at = getattr(message, "date", None) or utc_now()
+    if message_created_at.tzinfo is None:
+        message_created_at = message_created_at.replace(tzinfo=timezone.utc)
+    else:
+        message_created_at = message_created_at.astimezone(timezone.utc)
+
     async with SessionLocal() as session:
         try:
             db_msg = models.Message(
@@ -99,7 +105,7 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
                 chat_id=message.chat.id,
                 user_id=user.id,
                 text=message.text,
-                created_at=utc_now(),
+                created_at=message_created_at,
             )
             session.add(db_msg)
             await session.commit()

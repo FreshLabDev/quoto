@@ -1,5 +1,6 @@
 import logging
 from collections import Counter
+from html import escape
 
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
@@ -21,12 +22,17 @@ router = Router()
 log = setup_logging(logging.getLogger(__name__))
 
 
+def _html(value: object) -> str:
+    return escape(str(value))
+
+
 @router.my_chat_member()
 async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
     chat = event.chat
     kb = InlineKeyboardBuilder()
     text = ""
     text_log = ""
+    safe_chat_title = _html(chat.title or "этот чат")
 
     if (
         event.old_chat_member.status not in ["member", "administrator", "restricted"]
@@ -36,7 +42,7 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
         await core.group_getOrCreate(chat)
 
         text = (
-            f"👋 Привет, <b>{chat.title}</b>!\n\n"
+            f"👋 Привет, <b>{safe_chat_title}</b>!\n\n"
             f"Я <b>Quoto</b> — бот, который в <b>{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}</b> "
             "выбирает и публикует цитату окна.\n\n"
             "📩 Я собираю сообщения и реакции между двумя cutoff-точками.\n"
@@ -99,6 +105,7 @@ async def private_handler(message: types.Message, command: CommandObject = None)
             model_short = detail.get("ai_model") or "AI"
             if "/" in model_short:
                 model_short = model_short.split("/")[-1]
+            safe_model_short = _html(model_short)
 
             created = detail["created_at"]
             months = [
@@ -129,35 +136,35 @@ async def private_handler(message: types.Message, command: CommandObject = None)
             text = (
                 f"📊 <b>Подробности окна #{detail['id']}</b>\n\n"
                 f"🏷️ {status_label}\n"
-                f"💬 <i>«{detail['text']}»</i>\n"
-                f"— <b>{detail['author_name']}</b>\n\n"
+                f"💬 <i>«{_html(detail['text'])}»</i>\n"
+                f"— <b>{_html(detail['author_name'])}</b>\n\n"
             )
 
             if link_chat_id:
                 text += (
-                    f"<a href='https://t.me/c/{link_chat_id}/{detail['message_id']}'>{detail['group_name']}</a>"
+                    f"<a href='https://t.me/c/{link_chat_id}/{detail['message_id']}'>{_html(detail['group_name'])}</a>"
                     f"{' · ' + str(detail['reaction_count']) + '❤️' if detail['reaction_count'] > 0 else ''}"
                     f" · {date_str}\n\n"
                 )
             else:
-                text += f"{detail['group_name']} · {date_str}\n\n"
+                text += f"{_html(detail['group_name'])} · {date_str}\n\n"
 
             text += (
                 f"<b>Итого: {detail['score'] * 10:.1f}/10</b>\n"
                 f"<code>{'Реакции':<10} {scoring.create_bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10 ({int(settings.WEIGHT_REACTIONS * 100)}%)\n"
-                f"<code>{model_short:<10} {scoring.create_bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 ({int(settings.WEIGHT_AI * 100)}%)\n"
+                f"<code>{safe_model_short:<10} {scoring.create_bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 ({int(settings.WEIGHT_AI * 100)}%)\n"
                 f"<code>{'Длина':<10} {scoring.create_bar(int(detail['length_score'] * 100), 100)}</code> {detail['length_score'] * 10:.1f}/10 ({int(settings.WEIGHT_LENGTH * 100)}%)\n"
             )
 
             if detail.get("decision_reason"):
-                text += f"\n💭 <b>Причина решения:</b> {detail['decision_reason']}\n"
+                text += f"\n💭 <b>Причина решения:</b> {_html(detail['decision_reason'])}\n"
 
             if detail.get("operation_error"):
-                text += f"⚠️ <b>Техническая ошибка:</b> {detail['operation_error']}\n"
+                text += f"⚠️ <b>Техническая ошибка:</b> {_html(detail['operation_error'])}\n"
 
             if detail.get("ai_best_text"):
                 ai_text = detail["ai_best_text"][:100] + ("..." if len(detail["ai_best_text"]) > 100 else "")
-                text += f"💡 <b>Выбор ИИ:</b> <i>«{ai_text}»</i>\n"
+                text += f"💡 <b>Выбор ИИ:</b> <i>«{_html(ai_text)}»</i>\n"
 
             if detail.get("forced_by_admin"):
                 text += "⚙️ <i>Опубликовано администратором вручную.</i>\n"
@@ -215,8 +222,8 @@ async def manual_quote_handler(message: types.Message, bot: Bot):
     parts = [
         "🔎 <b>Preview текущего окна</b>",
         "",
-        f"💬 <i>«{evaluation.best_message.text}»</i>",
-        f"— <b>{author_name}</b>",
+        f"💬 <i>«{_html(evaluation.best_message.text)}»</i>",
+        f"— <b>{_html(author_name)}</b>",
         "",
         f"📨 Сообщений в окне: <b>{evaluation.message_count}</b>",
         f"⭐ Текущий скор: <b>{evaluation.breakdown.total * 10:.1f}/10</b>",
@@ -248,11 +255,18 @@ async def manual_publish_handler(message: types.Message, bot: Bot):
     processing = await message.answer("⏳ Проверяю, есть ли окно для ручной публикации...")
     result = await scheduler.manual_publish_latest(bot, message.chat.id)
 
-    if result is None:
+    if result == "nothing":
         await processing.edit_text("📭 Нет boring-day/failed окна, которое можно опубликовать вручную.")
         return
 
-    if result is False:
+    if result == "already_sent":
+        await processing.edit_text(
+            "⚠️ Последнее окно уже было отправлено в Telegram, но БД не подтвердила финальный статус. "
+            "Я не стал публиковать дубль."
+        )
+        return
+
+    if result == "failed":
         await processing.edit_text("❌ Ручная публикация не удалась. Смотри логи бота.")
         return
 
@@ -276,7 +290,7 @@ async def chat_stats_handler(message: types.Message):
     for i, author in enumerate(stats["top_authors"]):
         medal = medals[i] if i < len(medals) else f"{i + 1}."
         top_lines.append(
-            f"{medal} <b>{author['name']}</b> — {author['wins']} 🏆 (avg {author['avg_score'] * 10:.1f}/10)"
+            f"{medal} <b>{_html(author['name'])}</b> — {author['wins']} 🏆 (avg {author['avg_score'] * 10:.1f}/10)"
         )
     top_text = "\n".join(top_lines)
 
@@ -293,8 +307,8 @@ async def chat_stats_handler(message: types.Message):
         quote_text = bq["text"][:80] + ("..." if len(bq["text"]) > 80 else "")
         text += (
             f"\n\n⭐ <b>Лучшая цитата:</b>\n"
-            f"💬 <i>«{quote_text}»</i>\n"
-            f"— {bq['author']} ({bq['score'] * 10:.1f}/10)"
+            f"💬 <i>«{_html(quote_text)}»</i>\n"
+            f"— {_html(bq['author'])} ({bq['score'] * 10:.1f}/10)"
         )
 
     await message.answer(text)
@@ -313,14 +327,14 @@ async def user_stats_handler(message: types.Message):
 
     if stats["wins"] == 0:
         await message.answer(
-            f"📊 <b>{stats['user_name']}</b>, у тебя пока нет опубликованных цитат в этом чате.\n"
+            f"📊 <b>{_html(stats['user_name'])}</b>, у тебя пока нет опубликованных цитат в этом чате.\n"
             "Продолжай писать — твоё время придёт! 💪"
         )
         return
 
     text = (
         f"📊 <b>Твоя статистика</b>\n\n"
-        f"👤 <b>{stats['user_name']}</b>\n"
+        f"👤 <b>{_html(stats['user_name'])}</b>\n"
         f"🏆 Побед: <b>{stats['wins']}</b>\n"
         f"📈 Средний рейтинг: <b>{stats['avg_score'] * 10:.1f}/10</b>\n"
         f"🏅 Место: <b>{stats['rank']}</b> из {stats['total_participants']}"
@@ -331,7 +345,7 @@ async def user_stats_handler(message: types.Message):
         quote_text = bq["text"][:80] + ("..." if len(bq["text"]) > 80 else "")
         text += (
             f"\n\n⭐ <b>Лучшая цитата:</b>\n"
-            f"💬 <i>«{quote_text}»</i> ({bq['score'] * 10:.1f}/10)"
+            f"💬 <i>«{_html(quote_text)}»</i> ({bq['score'] * 10:.1f}/10)"
         )
 
     await message.answer(text)
@@ -339,6 +353,8 @@ async def user_stats_handler(message: types.Message):
 
 @router.message(F.chat.type.in_({"group", "supergroup"}), F.text)
 async def group_message_handler(message: types.Message):
+    if not message.from_user:
+        return
     if message.from_user.is_bot:
         return
     if message.text.startswith("/"):

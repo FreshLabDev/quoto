@@ -67,7 +67,7 @@ class MigrationLegacyTimestampTests(unittest.TestCase):
             datetime(2026, 3, 27, 21, 30, tzinfo=ZoneInfo("Europe/Berlin")),
         )
 
-    def test_legacy_window_from_naive_utc_timestamp_keeps_expected_quote_day(self) -> None:
+    def test_legacy_window_from_naive_utc_timestamp_uses_legacy_calendar_day(self) -> None:
         self.migration.op = types.SimpleNamespace(get_bind=lambda: self._bind_with_timezone("UTC"))
 
         with patch.dict(
@@ -82,6 +82,20 @@ class MigrationLegacyTimestampTests(unittest.TestCase):
         self.assertEqual(quote_day, date(2026, 3, 27))
         self.assertEqual(window_start_at, datetime(2026, 3, 26, 20, 0, tzinfo=timezone.utc))
         self.assertEqual(window_end_at, datetime(2026, 3, 27, 20, 0, tzinfo=timezone.utc))
+
+    def test_legacy_quote_day_does_not_shift_pre_cutoff_manual_quote_to_previous_day(self) -> None:
+        self.migration.op = types.SimpleNamespace(get_bind=lambda: self._bind_with_timezone("Europe/Berlin"))
+
+        with patch.dict(
+            os.environ,
+            {"TIMEZONE": "Europe/Berlin", "QUOTE_HOUR": "21", "QUOTE_MINUTE": "0"},
+            clear=False,
+        ):
+            quote_day, _, _ = self.migration._legacy_window_from_created_at(
+                datetime(2026, 3, 27, 20, 30)
+            )
+
+        self.assertEqual(quote_day, date(2026, 3, 27))
 
     def test_upgrade_created_at_type_uses_session_timezone_for_legacy_values(self) -> None:
         alter_column = Mock()

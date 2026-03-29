@@ -125,6 +125,67 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             day_verdict_min_messages=scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
         )
 
+    async def test_send_boring_notice_escapes_ai_reason_html(self) -> None:
+        bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=101)))
+        quote = SimpleNamespace(
+            id=7,
+            quote_day=self.window.quote_day,
+            decision_reason="LLM says <boring> & unstable",
+        )
+
+        with (
+            patch.object(scheduler.core, "update_quote_notice", new=AsyncMock()) as update_notice,
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+        ):
+            await scheduler._send_boring_notice(bot, self.group, quote, clear_window_after=False)
+
+        sent_text = bot.send_message.await_args.kwargs["text"]
+        self.assertIn("LLM says &lt;boring&gt; &amp; unstable", sent_text)
+        update_notice.assert_awaited_once_with(quote.id, 101)
+        mark_status.assert_not_awaited()
+
+    async def test_publish_quote_message_escapes_quote_and_author_html(self) -> None:
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=202)),
+            pin_chat_message=AsyncMock(),
+        )
+        quote = SimpleNamespace(
+            id=8,
+            quote_day=self.window.quote_day,
+            text="1 < 2 & 3",
+            message_id=55,
+            decision_reason=None,
+        )
+        breakdown = scoring.ScoreBreakdown(reaction=0.2, ai=0.7, length=0.1, reaction_count=1)
+
+        with (
+            patch.object(scheduler.core, "update_quote_publication", new=AsyncMock()) as update_publication,
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+            patch.object(scheduler.core, "append_quote_operation_error", new=AsyncMock()) as append_error,
+        ):
+            result = await scheduler._publish_quote_message(
+                bot=bot,
+                group=self.group,
+                quote=quote,
+                author_name="Alice & Bob",
+                breakdown=breakdown,
+                forced_by_admin=False,
+                clear_window_after=False,
+            )
+
+        self.assertTrue(result)
+        sent_text = bot.send_message.await_args.kwargs["text"]
+        self.assertIn("1 &lt; 2 &amp; 3", sent_text)
+        self.assertIn("Alice &amp; Bob", sent_text)
+        update_publication.assert_awaited_once_with(
+            quote_id=quote.id,
+            bot_message_id=202,
+            forced_by_admin=False,
+            decision_reason=None,
+        )
+        mark_status.assert_not_awaited()
+        append_error.assert_not_awaited()
+
 
 class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
     def _make_quote(self) -> SimpleNamespace:
@@ -137,6 +198,8 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
             reaction_count=3,
             ai_model="openrouter/test",
             ai_best_text=None,
+            decision_status=STATUS_PUBLISH_UNKNOWN,
+            operation_error=None,
         )
 
     async def test_manual_publish_recovers_stale_quotes_before_claiming_candidate(self) -> None:
@@ -160,20 +223,31 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(
                 scheduler.core,
+                "get_latest_manual_publish_candidate",
+                new=AsyncMock(return_value=None),
+            ),
+            patch.object(
+                scheduler.core,
                 "claim_latest_manual_publish_candidate",
                 new=AsyncMock(side_effect=claim_candidate),
             ),
         ):
             result = await scheduler.manual_publish_latest(SimpleNamespace(), -100123456)
 
-        self.assertIsNone(result)
-        self.assertEqual(calls, ["recover", "claim"])
+        self.assertEqual(result, "nothing")
+        self.assertEqual(calls, ["recover"])
 
-    async def test_manual_publish_latest_accepts_publish_unknown(self) -> None:
+    async def test_manual_publish_latest_accepts_timeout_based_publish_unknown(self) -> None:
         quote = self._make_quote()
+        quote.operation_error = "In-progress quote timed out before final status confirmation."
 
         with (
             patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(
+                scheduler.core,
+                "get_latest_manual_publish_candidate",
+                new=AsyncMock(return_value=quote),
+            ),
             patch.object(
                 scheduler.core,
                 "claim_latest_manual_publish_candidate",
@@ -187,15 +261,49 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
 
-        self.assertTrue(result)
+        self.assertEqual(result, "published")
         self.assertTrue(publish_quote.await_args.kwargs["forced_by_admin"])
         self.assertTrue(publish_quote.await_args.kwargs["clear_window_after"])
 
-    async def test_manual_publish_latest_accepts_boring_notice_unknown(self) -> None:
+    async def test_manual_publish_latest_skips_already_sent_publish_unknown(self) -> None:
         quote = self._make_quote()
+        quote.operation_error = "Telegram message was sent, but DB finalization failed: lost DB connection"
 
         with (
             patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(
+                scheduler.core,
+                "get_latest_manual_publish_candidate",
+                new=AsyncMock(return_value=quote),
+            ),
+            patch.object(
+                scheduler.core,
+                "claim_latest_manual_publish_candidate",
+                new=AsyncMock(),
+            ) as claim_candidate,
+            patch.object(
+                scheduler,
+                "_publish_quote_message",
+                new=AsyncMock(),
+            ) as publish_quote,
+        ):
+            result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
+
+        self.assertEqual(result, "already_sent")
+        claim_candidate.assert_not_awaited()
+        publish_quote.assert_not_awaited()
+
+    async def test_manual_publish_latest_accepts_boring_notice_unknown(self) -> None:
+        quote = self._make_quote()
+        quote.decision_status = STATUS_BORING_NOTICE_UNKNOWN
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(
+                scheduler.core,
+                "get_latest_manual_publish_candidate",
+                new=AsyncMock(return_value=quote),
+            ),
             patch.object(
                 scheduler.core,
                 "claim_latest_manual_publish_candidate",
@@ -209,7 +317,7 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
 
-        self.assertTrue(result)
+        self.assertEqual(result, "published")
         self.assertTrue(publish_quote.await_args.kwargs["forced_by_admin"])
         self.assertTrue(publish_quote.await_args.kwargs["clear_window_after"])
 

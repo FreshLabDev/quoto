@@ -76,26 +76,26 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Лучший тестовый панчлайн", message.answers[0])
         self.assertIn("Alice", message.answers[0])
 
-    async def test_private_quote_details_show_reason_and_operation_error(self) -> None:
+    async def test_private_quote_details_escape_reason_and_operation_error(self) -> None:
         message = DummyMessage(chat_type="private")
         detail = {
             "id": 7,
-            "text": "Цитата",
+            "text": "Цитата <script>",
             "score": 0.8,
             "reaction_score": 0.2,
             "ai_score": 0.5,
             "length_score": 0.1,
             "reaction_count": 3,
-            "author_name": "Alice",
-            "group_name": "Quoto Test Chat",
+            "author_name": "Alice & Bob",
+            "group_name": "Quoto <Test> Chat",
             "created_at": datetime(2026, 3, 27, 21, 0, tzinfo=timezone.utc),
             "ai_model": "openrouter/test",
             "ai_best_text": None,
             "message_id": 10,
             "chat_id": -100123456,
             "decision_status": STATUS_PUBLISH_FAILED,
-            "decision_reason": "LLM rejected auto publication",
-            "operation_error": "Telegram timeout",
+            "decision_reason": "LLM rejected <auto> publication",
+            "operation_error": "Telegram timeout & retry",
             "forced_by_admin": False,
             "quote_day": None,
         }
@@ -107,9 +107,12 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             await handlers.private_handler(message, SimpleNamespace(args="quote_7"))
 
         self.assertIn("Причина решения", message.answers[0])
-        self.assertIn("LLM rejected auto publication", message.answers[0])
+        self.assertIn("LLM rejected &lt;auto&gt; publication", message.answers[0])
         self.assertIn("Техническая ошибка", message.answers[0])
-        self.assertIn("Telegram timeout", message.answers[0])
+        self.assertIn("Telegram timeout &amp; retry", message.answers[0])
+        self.assertIn("Alice &amp; Bob", message.answers[0])
+        self.assertIn("Quoto &lt;Test&gt; Chat", message.answers[0])
+        self.assertIn("Цитата &lt;script&gt;", message.answers[0])
 
     async def test_reaction_handler_applies_non_anonymous_delta(self) -> None:
         event = SimpleNamespace(
@@ -140,3 +143,21 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             await handlers.reaction_handler(event)
 
         apply_delta.assert_not_awaited()
+
+    async def test_group_message_handler_ignores_sender_chat_updates_without_from_user(self) -> None:
+        message = SimpleNamespace(
+            from_user=None,
+            text="anonymous admin message",
+            chat=SimpleNamespace(id=-100123456, type="supergroup"),
+        )
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()) as user_get_or_create,
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock()) as group_get_or_create,
+            patch.object(handlers.core, "save_message", new=AsyncMock()) as save_message,
+        ):
+            await handlers.group_message_handler(message)
+
+        user_get_or_create.assert_not_awaited()
+        group_get_or_create.assert_not_awaited()
+        save_message.assert_not_awaited()

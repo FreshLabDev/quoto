@@ -257,7 +257,7 @@ def _deduplicate_quotes_by_day() -> None:
 
 def _legacy_window_from_created_at(created_at: datetime) -> tuple[date, datetime, datetime]:
     local_created_at = _localize_legacy_datetime(created_at)
-    quote_day = _quote_day_from_local(local_created_at)
+    quote_day = _legacy_quote_day_from_created_at(local_created_at)
     window_end_local = _cutoff_at(quote_day)
     window_start_local = _cutoff_at(quote_day - timedelta(days=1))
     return (
@@ -265,6 +265,10 @@ def _legacy_window_from_created_at(created_at: datetime) -> tuple[date, datetime
         window_start_local.astimezone(timezone.utc),
         window_end_local.astimezone(timezone.utc),
     )
+
+
+def _legacy_quote_day_from_created_at(local_created_at: datetime) -> date:
+    return local_created_at.date()
 
 
 def _localize_legacy_datetime(value: datetime) -> datetime:

@@ -1,4 +1,5 @@
 import logging
+from html import escape
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -19,6 +20,6 @@ async def notify_developers(message: str):
     
     for dev_id in settings.DEVELOPER_IDS:
         try:
-            await bot.send_message(dev_id, message)
+            await bot.send_message(dev_id, escape(message))
         except Exception as e:
             log.error(f"Ошибка при отправке сообщения разработчику {dev_id}: {e}")
