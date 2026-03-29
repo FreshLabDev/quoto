@@ -3,7 +3,7 @@
 
 [English](./README.md) | Русский
 
-Телеграм-бот, который автоматически выбирает и закрепляет лучшую **Цитату дня** из вашего группового чата, используя AI-скоринг, отслеживание реакций и интеллектуальный анализ текста.
+Телеграм-бот, который ведёт окна сообщений, показывает безопасный preview кандидата и публикует **Цитату дня** только если день действительно был достойным цитаты.
 
 [![GitHub Stars](https://img.shields.io/github/stars/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=f59e0b&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZjU5ZTBiIiBzdHJva2U9Im5vbmUiPjxwb2x5Z29uIHBvaW50cz0iMTIgMiAxNS4wOSA4LjI2IDIyIDkuMjcgMTcgMTQuMTQgMTguMTggMjEuMDIgMTIgMTcuNzcgNS44MiAyMS4wMiA3IDE0LjE0IDIgOS4yNyA4LjkxIDguMjYgMTIgMiIvPjwvc3ZnPg==)](https://github.com/FreshLabDev/quoto/stargazers)
 ![GitHub Repo Size](https://img.shields.io/github/repo-size/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=a6da95&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM3ODcxNmMiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTIyIDE5YTIgMiAwIDAgMS0yIDJINGEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg1bDIgM2g5YTIgMiAwIDAgMSAyIDJ6Ii8+PC9zdmc+)
@@ -13,10 +13,12 @@
 
 ## ✨ Возможности
 
-- 🏆 **Цитата дня** — автоматически выбирает лучшее сообщение из группового чата каждый день
+- 🏆 **Оконный цикл цитаты** — оценивает сообщения между двумя daily cutoff-точками
 - 🤖 **AI-скоринг** — оценивает сообщения на юмор, остроумие, глубину и запоминаемость через OpenRouter API
+- 😴 **Проверка скучного дня** — если день вышел плоским, бот честно скажет об этом вместо слабой цитаты
 - ❤️ **Отслеживание реакций** — учитывает эмодзи-реакции участников чата
 - 📏 **Анализ текста** — умный скоринг на основе длины и качества сообщения
+- 🔎 **Админский AI-preview** — `/quote` показывает текущего лидера администраторам без публикации и очистки данных
 - 📌 **Автозакрепление** — закрепляет цитату-победителя в чате
 - 📊 **Статистика** — статистика чата, личная статистика, топ авторов и разбор рейтинга
 - ⏰ **Планировщик** — настраиваемое время ежедневного выбора цитаты
@@ -26,8 +28,11 @@
 
 1. Добавьте бота в группу Telegram и дайте ему права администратора
 2. Участники общаются как обычно — бот тихо собирает сообщения и реакции
-3. В назначенное время (по умолчанию `21:00`) бот оценивает все сообщения дня
-4. Лучшее сообщение выбирается на основе **взвешенной формулы скоринга**:
+3. Бот собирает сообщения внутри rolling-window от прошлого cutoff до следующего
+4. В назначенное время (по умолчанию `21:00`) бот оценивает закрытое окно
+5. Если в окне меньше `10` сообщений, окно пропускается без публикации
+6. Если сообщений `10+`, ИИ не только оценивает сообщения, но и решает, достоин ли весь день публикации
+7. Лучшее сообщение выбирается на основе **взвешенной формулы скоринга**:
 
 | Компонент | Вес | Описание |
 | :--- | :--- | :--- |
@@ -35,14 +40,15 @@
 | **AI-оценка** | 70% | Оценка LLM (юмор, остроумие, цитатность) |
 | **Длина** | 10% | Бонус за оптимальную длину сообщения |
 
-5. Цитата-победитель объявляется, закрепляется и сохраняется в архив
+8. Если день признан скучным, бот отправляет boring-day сообщение со ссылкой `Подробнее`
 
 ## 📌 Команды
 
 | Команда | Описание |
 | :--- | :--- |
 | `/start` | Информация о боте и справка |
-| `/quote` | Выбрать цитату вручную |
+| `/quote` | AI-preview текущего открытого окна для администраторов |
+| `/publish_quote` | Admin-only override после boring-day / ошибки |
 | `/stats` | Статистика чата и топ авторов |
 | `/mystats` | Твоя личная статистика |
 
@@ -68,6 +74,9 @@ source venv/bin/activate  # Linux/Mac
 
 # 3. Установите зависимости
 pip install -r requirements.txt
+
+# 4. Примените миграции
+alembic upgrade head
 ```
 
 ### Конфигурация
@@ -84,9 +93,12 @@ DEVELOPER_IDS=[1234567890]
 QUOTE_HOUR=21
 QUOTE_MINUTE=0
 TIMEZONE=Europe/Berlin
+MIN_MESSAGES_FOR_AUTO_REVIEW=10
 ```
 
 ### Запуск
+
+`/quote` теперь доступен только администраторам и показывает AI-preview. `/publish_quote` нужен администраторам, если автоматический запуск пометил окно как скучное или упал с ошибкой.
 
 ```bash
 python main.py

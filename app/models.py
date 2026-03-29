@@ -1,9 +1,20 @@
-from sqlalchemy import func, Column, Integer, BigInteger, String, ForeignKey, DateTime, Float, UniqueConstraint
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy import (
+    func,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    BigInteger,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
-# === МОДЕЛИ ===
 
 class User(Base):
     __tablename__ = "users"
@@ -27,7 +38,6 @@ class Group(Base):
 
 
 class Message(Base):
-    """Временное хранение сообщений за текущий день (очищается после выбора цитаты)."""
     __tablename__ = "messages"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -35,7 +45,7 @@ class Message(Base):
     chat_id = Column(BigInteger, nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     text = Column(String, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     author = relationship("User", back_populates="messages")
     reactions = relationship("Reaction", back_populates="message", cascade="all, delete-orphan")
@@ -46,7 +56,6 @@ class Message(Base):
 
 
 class Reaction(Base):
-    """Реакции на сообщения (агрегированные по эмодзи)."""
     __tablename__ = "reactions"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -62,7 +71,6 @@ class Reaction(Base):
 
 
 class Quote(Base):
-    """Архив выбранных цитат дня."""
     __tablename__ = "quotes"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -74,11 +82,24 @@ class Quote(Base):
     ai_score = Column(Float, default=0.0)
     length_score = Column(Float, default=0.0)
     reaction_count = Column(Integer, default=0)
-    message_id = Column(BigInteger)           # telegram message_id оригинала
-    bot_message_id = Column(BigInteger)       # telegram message_id отправленной ботом цитаты
-    ai_model = Column(String, nullable=True)  # модель AI, оценившая цитаты
-    ai_best_text = Column(String, nullable=True)  # текст лучшей цитаты по мнению AI (если отличается)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    message_id = Column(BigInteger)
+    bot_message_id = Column(BigInteger)
+    notice_message_id = Column(BigInteger)
+    ai_model = Column(String, nullable=True)
+    ai_best_text = Column(String, nullable=True)
+    quote_day = Column(Date, nullable=False, index=True)
+    window_start_at = Column(DateTime(timezone=True), nullable=False)
+    window_end_at = Column(DateTime(timezone=True), nullable=False)
+    decision_status = Column(String, nullable=False, default="published")
+    status_changed_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    decision_reason = Column(String, nullable=True)
+    operation_error = Column(String, nullable=True)
+    forced_by_admin = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     group = relationship("Group", back_populates="quotes")
     author = relationship("User", back_populates="quotes")
+
+    __table_args__ = (
+        UniqueConstraint("group_id", "quote_day", name="uq_quote_group_day"),
+    )

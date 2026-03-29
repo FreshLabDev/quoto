@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # -- BOT SETTINGS --
     BOT_TOKEN: str
-    BOT_USERNAME: str = ""
+    BOT_USERNAME: str
     DEVELOPER_IDS: list[int] = []
     ENABLE_DEVELOPERS_NOTIFY: bool = False
 
@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     QUOTE_HOUR: int = 21
     QUOTE_MINUTE: int = 0
     TIMEZONE: str = "Europe/Kyiv"
+    MIN_MESSAGES_FOR_AUTO_REVIEW: int = 10
 
 
 
@@ -173,4 +174,12 @@ def setup_logging(logger):
     return logger
 
 
-settings = Settings()
+def _load_settings() -> Settings:
+    loaded = Settings()
+    loaded.BOT_USERNAME = loaded.BOT_USERNAME.strip().lstrip("@")
+    if not loaded.BOT_USERNAME:
+        raise ValueError("BOT_USERNAME must be configured with the bot public username.")
+    return loaded
+
+
+settings = _load_settings()

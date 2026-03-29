@@ -1,4 +1,5 @@
 pip-tools
+alembic
 aiogram
 pydantic-settings
 python-dotenv
@@ -6,3 +7,4 @@ asyncpg
 sqlalchemy
 httpx
 apscheduler
+pytest
