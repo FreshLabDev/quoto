@@ -28,6 +28,7 @@ _DAY_PROMPT = (
     "Respond ONLY with a valid JSON object in this format: "
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
     "\"messages\": [{\"id\": <message_id>, \"score\": <0-10>}]}."
+    "Respond in the language of the messages for reason_text."
 )
 
 
