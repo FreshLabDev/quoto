@@ -186,6 +186,47 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         mark_status.assert_not_awaited()
         append_error.assert_not_awaited()
 
+    async def test_publish_quote_message_renders_context_dialog(self) -> None:
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=203)),
+            pin_chat_message=AsyncMock(),
+        )
+        quote = SimpleNamespace(
+            id=9,
+            quote_day=self.window.quote_day,
+            text="primary",
+            message_id=56,
+            decision_reason=None,
+            context_snapshot=(
+                '[{"message_id":55,"author":"Alice <A>","text":"setup & context","is_primary":false},'
+                '{"message_id":56,"author":"Bob","text":"punch <line>","is_primary":true}]'
+            ),
+        )
+        breakdown = scoring.ScoreBreakdown(reaction=0.2, ai=0.7, length=0.1, reaction_count=1)
+
+        with (
+            patch.object(scheduler.core, "update_quote_publication", new=AsyncMock()) as update_publication,
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+            patch.object(scheduler.core, "append_quote_operation_error", new=AsyncMock()) as append_error,
+        ):
+            result = await scheduler._publish_quote_message(
+                bot=bot,
+                group=self.group,
+                quote=quote,
+                author_name="Bob",
+                breakdown=breakdown,
+                forced_by_admin=False,
+                clear_window_after=False,
+            )
+
+        self.assertTrue(result)
+        sent_text = bot.send_message.await_args.kwargs["text"]
+        self.assertIn("<b>Alice &lt;A&gt;:</b> setup &amp; context", sent_text)
+        self.assertIn("💬 <b>Bob:</b> <i>«punch &lt;line&gt;»</i>", sent_text)
+        update_publication.assert_awaited_once()
+        mark_status.assert_not_awaited()
+        append_error.assert_not_awaited()
+
 
 class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
     def _make_quote(self) -> SimpleNamespace:

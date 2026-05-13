@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import timedelta
 from html import escape
 
@@ -38,7 +39,7 @@ _PUBLISH_UNKNOWN_SENT_PREFIX = "Telegram message was sent, but DB finalization f
 async def quote_of_the_day_job(bot: Bot) -> None:
     window = get_closed_window()
     log.info(
-        f"⏰ Запуск выбора цитаты дня за окно "
+        f"⏰ Запуск выбора цитаты дня за день "
         f"{window.start_local.isoformat()} -> {window.end_local.isoformat()}"
     )
 
@@ -59,29 +60,29 @@ async def quote_of_the_day_job(bot: Bot) -> None:
 
 async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = None) -> None:
     window = window or get_closed_window()
-    log.debug(f"{group.chat_id} | ⏳ Обработка окна {window.quote_day} для группы {group.name}")
+    log.debug(f"{group.chat_id} | ⏳ Обработка дня {window.quote_day} для группы {group.name}")
 
     await _recover_stale_quotes_for_chat(group.chat_id)
 
     existing = await core.get_quote_for_day(group.id, window.quote_day)
     if existing:
         if existing and existing.decision_status in MANUAL_PUBLISHABLE_STATUSES:
-            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} ждёт ручного решения ({existing.decision_status})")
+            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} ждёт ручного решения ({existing.decision_status})")
             return
         if existing:
-            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже обработано ({existing.decision_status})")
+            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже обработан ({existing.decision_status})")
             return
 
     message_count = await core.count_window_messages(group.chat_id, window)
 
     if message_count == 0:
-        log.info(f"{group.chat_id} | 📭 Окно {window.quote_day} пустое")
+        log.info(f"{group.chat_id} | 📭 День {window.quote_day} пустой")
         return
 
     if message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
         deleted = await core.clear_window_messages(group.chat_id, window)
         log.info(
-            f"{group.chat_id} | 🤫 Окно {window.quote_day} пропущено: "
+            f"{group.chat_id} | 🤫 День {window.quote_day} пропущен: "
             f"сообщений {message_count} < {settings.MIN_MESSAGES_FOR_AUTO_REVIEW}. "
             f"Очищено {deleted} сообщений."
         )
@@ -95,20 +96,20 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     )
 
     if evaluation.message_count == 0:
-        log.info(f"{group.chat_id} | 📭 Окно {window.quote_day} пустое")
+        log.info(f"{group.chat_id} | 📭 День {window.quote_day} пустой")
         return
 
     if evaluation.message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
         deleted = await core.clear_window_messages(group.chat_id, window)
         log.info(
-            f"{group.chat_id} | 🤫 Окно {window.quote_day} пропущено: "
+            f"{group.chat_id} | 🤫 День {window.quote_day} пропущен: "
             f"сообщений {evaluation.message_count} < {settings.MIN_MESSAGES_FOR_AUTO_REVIEW}. "
             f"Очищено {deleted} сообщений."
         )
         return
 
     if not evaluation.best_message:
-        log.warning(f"{group.chat_id} | ⚠️ Не удалось выбрать лидера окна {window.quote_day}")
+        log.warning(f"{group.chat_id} | ⚠️ Не удалось выбрать лидера дня {window.quote_day}")
         return
 
     if evaluation.day_verdict_error:
@@ -119,14 +120,15 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             window=window,
             decision_status=STATUS_PUBLISH_FAILED,
             operation_error=evaluation.day_verdict_error,
+            context_messages=evaluation.context_messages,
         )
         if created:
             log.error(
-                f"{group.chat_id} | ⚠️ AI verdict для окна {window.quote_day} невалиден: "
+                f"{group.chat_id} | ⚠️ AI verdict для дня {window.quote_day} невалиден: "
                 f"{evaluation.day_verdict_error}"
             )
         else:
-            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже забрал другой воркер")
+            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
         return
 
     author_name = evaluation.best_message.author.name if evaluation.best_message.author else "Аноним"
@@ -139,9 +141,10 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             window=window,
             decision_status=STATUS_PUBLISHING,
             decision_reason=evaluation.day_reason_text or None,
+            context_messages=evaluation.context_messages,
         )
         if not created:
-            log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже забрал другой воркер")
+            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
             return
         await _publish_quote_message(
             bot=bot,
@@ -161,9 +164,10 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         window=window,
         decision_status=STATUS_NOTIFYING_BORING,
         decision_reason=evaluation.day_reason_text or None,
+        context_messages=evaluation.context_messages,
     )
     if not created:
-        log.info(f"{group.chat_id} | ⏭️ Окно {window.quote_day} уже забрал другой воркер")
+        log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
         return
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
 
@@ -251,11 +255,19 @@ async def _publish_quote_message(
     forced_line = "\n⚙️ <i>Опубликовано администратором вручную.</i>" if forced_by_admin else ""
     quote_text = escape(quote.text)
     safe_author_name = escape(author_name)
+    context_lines = _load_quote_context_lines(quote)
+
+    if context_lines:
+        quote_body = _format_context_quote_body(context_lines)
+    else:
+        quote_body = (
+            f"💬 <i>«{quote_text}»</i>\n"
+            f"— <b>{safe_author_name}</b>"
+        )
 
     text = (
-        "🏆 <b>Цитата окна</b>\n\n"
-        f"💬 <i>«{quote_text}»</i>\n"
-        f"— <b>{safe_author_name}</b>\n\n"
+        "🏆 <b>Цитата дня</b>\n\n"
+        f"{quote_body}\n\n"
         f"{info_line}\n\n"
         f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
         f"{forced_line}"
@@ -304,9 +316,9 @@ async def _publish_quote_message(
             log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после публикации")
         except Exception as e:
             await core.append_quote_operation_error(quote.id, f"Cleanup failed: {str(e)[:200]}")
-            log.warning(f"⚠️ Не удалось очистить окно после публикации в {group.chat_id}: {e}")
+            log.warning(f"⚠️ Не удалось очистить день после публикации в {group.chat_id}: {e}")
 
-    log.info(f"✅ Цитата окна {quote.quote_day} отправлена в {group.name} ({group.chat_id})")
+    log.info(f"✅ Цитата дня {quote.quote_day} отправлена в {group.name} ({group.chat_id})")
     return True
 
 
@@ -319,7 +331,7 @@ async def _send_boring_notice(
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
     reason_line = f"\n💭 {escape(quote.decision_reason)}" if quote.decision_reason else ""
     text = (
-        "😴 <b>Сегодня окно вышло скучным</b>\n\n"
+        "😴 <b>Сегодня день вышел скучным</b>\n\n"
         "Бот не нашёл достаточно сильную цитату для публикации."
         f"{reason_line}\n\n"
         f"<a href='{details_link}'>Подробнее</a> · #quoto"
@@ -353,12 +365,12 @@ async def _send_boring_notice(
     if clear_window_after:
         try:
             deleted = await core.clear_window_messages(group.chat_id, _window_from_quote(quote))
-            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после скучного окна")
+            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после скучного дня")
         except Exception as e:
             await core.append_quote_operation_error(quote.id, f"Cleanup failed: {str(e)[:200]}")
-            log.warning(f"⚠️ Не удалось очистить скучное окно в {group.chat_id}: {e}")
+            log.warning(f"⚠️ Не удалось очистить скучный день в {group.chat_id}: {e}")
 
-    log.info(f"😴 Окно {quote.quote_day} помечено как скучное в {group.name} ({group.chat_id})")
+    log.info(f"😴 День {quote.quote_day} помечен как скучный в {group.name} ({group.chat_id})")
 
 
 async def _recover_stale_quote(quote: Quote) -> bool:
@@ -396,6 +408,46 @@ def _window_from_quote(quote: Quote) -> QuoteWindow:
 def _message_link(chat_id: int, message_id: int | None) -> str:
     link_chat_id = str(chat_id).replace("-100", "", 1) if str(chat_id).startswith("-100") else str(chat_id)
     return f"https://t.me/c/{link_chat_id}/{message_id}"
+
+
+def _load_quote_context_lines(quote: Quote) -> list[dict[str, object]]:
+    raw = getattr(quote, "context_snapshot", None)
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list) or len(parsed) <= 1:
+        return []
+
+    lines: list[dict[str, object]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        lines.append(
+            {
+                "author": str(item.get("author") or "Аноним"),
+                "text": text,
+                "is_primary": bool(item.get("is_primary")),
+            }
+        )
+    return lines if len(lines) > 1 else []
+
+
+def _format_context_quote_body(context_lines: list[dict[str, object]]) -> str:
+    rendered: list[str] = []
+    for line in context_lines:
+        author = escape(str(line["author"]))
+        text = escape(str(line["text"]))
+        if line.get("is_primary"):
+            rendered.append(f"💬 <b>{author}:</b> <i>«{text}»</i>")
+        else:
+            rendered.append(f"<b>{author}:</b> {text}")
+    return "\n".join(rendered)
 
 
 def _format_quote_day(quote_day) -> str:

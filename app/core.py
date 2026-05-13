@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import date, datetime, timezone
 
 from aiogram import types
@@ -97,6 +98,8 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
         message_created_at = message_created_at.replace(tzinfo=timezone.utc)
     else:
         message_created_at = message_created_at.astimezone(timezone.utc)
+    reply_to_message = getattr(message, "reply_to_message", None)
+    reply_to_message_id = getattr(reply_to_message, "message_id", None) if reply_to_message else None
 
     async with SessionLocal() as session:
         try:
@@ -105,6 +108,7 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
                 chat_id=message.chat.id,
                 user_id=user.id,
                 text=message.text,
+                reply_to_message_id=reply_to_message_id,
                 created_at=message_created_at,
             )
             session.add(db_msg)
@@ -244,6 +248,8 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "created_at": quote.created_at,
             "ai_model": quote.ai_model,
             "ai_best_text": quote.ai_best_text,
+            "context_message_ids": _load_context_message_ids(quote.context_message_ids),
+            "context_messages": _load_context_snapshot(quote.context_snapshot),
             "message_id": quote.message_id,
             "chat_id": quote.group.chat_id if quote.group else None,
             "decision_status": quote.decision_status,
@@ -456,7 +462,12 @@ async def create_quote_record(
     decision_status: str,
     decision_reason: str | None = None,
     operation_error: str | None = None,
+    context_messages: list[models.Message] | None = None,
 ) -> tuple[models.Quote, bool]:
+    context_message_ids, context_snapshot = _serialize_context_messages(
+        context_messages or [],
+        primary_message_id=best_message.id,
+    )
     async with SessionLocal() as session:
         try:
             quote = models.Quote(
@@ -471,6 +482,8 @@ async def create_quote_record(
                 message_id=best_message.message_id,
                 ai_model=breakdown.ai_model,
                 ai_best_text=breakdown.ai_best_text,
+                context_message_ids=context_message_ids,
+                context_snapshot=context_snapshot,
                 quote_day=window.quote_day,
                 window_start_at=window.start_utc,
                 window_end_at=window.end_utc,
@@ -497,6 +510,75 @@ async def create_quote_record(
             if existing:
                 return existing, False
             raise
+
+
+def _serialize_context_messages(
+    context_messages: list[models.Message],
+    primary_message_id: int,
+) -> tuple[str | None, str | None]:
+    if len(context_messages) <= 1:
+        return None, None
+
+    ids = [int(message.message_id) for message in context_messages]
+    snapshot = [
+        {
+            "message_id": int(message.message_id),
+            "author": message.author.name if message.author else "Аноним",
+            "text": message.text,
+            "is_primary": message.id == primary_message_id,
+        }
+        for message in context_messages
+    ]
+    return (
+        json.dumps(ids, ensure_ascii=False),
+        json.dumps(snapshot, ensure_ascii=False),
+    )
+
+
+def _load_context_message_ids(raw: str | None) -> list[int]:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    result: list[int] = []
+    for value in parsed:
+        try:
+            result.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _load_context_snapshot(raw: str | None) -> list[dict[str, object]]:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+
+    result: list[dict[str, object]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        result.append(
+            {
+                "message_id": item.get("message_id"),
+                "author": str(item.get("author") or "Аноним"),
+                "text": text,
+                "is_primary": bool(item.get("is_primary")),
+            }
+        )
+    return result
 
 
 async def update_quote_publication(

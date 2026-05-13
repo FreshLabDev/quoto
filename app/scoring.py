@@ -46,11 +46,7 @@ class ScoreBreakdown:
 
     @property
     def total(self) -> float:
-        return (
-            settings.WEIGHT_REACTIONS * self.reaction
-            + settings.WEIGHT_AI * self.ai
-            + settings.WEIGHT_LENGTH * self.length
-        )
+        return self.ai
 
     @property
     def stars(self) -> str:
@@ -62,6 +58,7 @@ class ScoreBreakdown:
 class QuoteEvaluation:
     best_message: Message | None = None
     breakdown: ScoreBreakdown = field(default_factory=ScoreBreakdown)
+    context_messages: list[Message] = field(default_factory=list)
     message_count: int = 0
     should_publish: bool = True
     day_reason_code: str | None = None
@@ -110,7 +107,7 @@ async def pick_best_quote(
         messages = result.scalars().all()
 
     if not messages:
-        log.debug(f"{chat_id} | 📭 Нет сообщений в окне {window.start_local} -> {window.end_local}")
+        log.debug(f"{chat_id} | 📭 Нет сообщений за день {window.start_local} -> {window.end_local}")
         return QuoteEvaluation(message_count=0)
 
     reaction_totals: dict[int, int] = {
@@ -119,10 +116,21 @@ async def pick_best_quote(
     }
     max_reactions = max(reaction_totals.values(), default=0)
 
-    ai_payload = [
-        {"id": msg.id, "text": msg.text, "author": msg.author.name if msg.author else "Unknown"}
-        for msg in messages
-    ]
+    ai_payload = []
+    for msg in messages:
+        payload = {
+            "id": msg.id,
+            "message_id": msg.message_id,
+            "text": msg.text,
+            "author": msg.author.name if msg.author else "Unknown",
+        }
+        reply_to_message_id = getattr(msg, "reply_to_message_id", None)
+        if reply_to_message_id is not None:
+            payload["reply_to_message_id"] = reply_to_message_id
+        reactions = _message_reactions_payload(msg)
+        if reactions:
+            payload["reactions"] = reactions
+        ai_payload.append(payload)
     should_request_day_verdict = include_day_verdict
     if day_verdict_min_messages is not None and len(messages) < day_verdict_min_messages:
         should_request_day_verdict = False
@@ -132,14 +140,16 @@ async def pick_best_quote(
         include_day_verdict=should_request_day_verdict,
     )
 
-    ai_best_id = max(evaluation.scores, key=evaluation.scores.get) if evaluation.scores else None
-    ai_best_msg = next((m for m in messages if m.id == ai_best_id), None) if ai_best_id else None
+    fallback_best_id = max(evaluation.scores, key=evaluation.scores.get) if evaluation.scores else None
+    ai_best_msg = next((m for m in messages if m.id == fallback_best_id), None) if fallback_best_id else None
+    primary_id = _valid_primary_id(evaluation.quote_choice, messages) or fallback_best_id
 
     best_msg: Message | None = None
     best_breakdown = ScoreBreakdown()
-    best_total = -1.0
 
     for msg in messages:
+        if msg.id != primary_id:
+            continue
         breakdown = ScoreBreakdown(
             reaction=calculate_reaction_score(reaction_totals.get(msg.id, 0), max_reactions),
             ai=evaluation.scores.get(msg.id, 0.5),
@@ -147,30 +157,117 @@ async def pick_best_quote(
             reaction_count=reaction_totals.get(msg.id, 0),
             ai_model=evaluation.actual_model,
         )
-
-        if breakdown.total > best_total:
-            best_total = breakdown.total
-            best_breakdown = breakdown
-            best_msg = msg
+        best_breakdown = breakdown
+        best_msg = msg
+        break
 
     if ai_best_msg and best_msg and ai_best_msg.id != best_msg.id:
         best_breakdown.ai_best_text = ai_best_msg.text
+    context_messages = _valid_context_messages(evaluation.quote_choice, messages, best_msg) if best_msg else []
 
     day_verdict = evaluation.day_verdict
     should_publish = day_verdict.should_publish if day_verdict else True
 
     if best_msg:
         log.debug(
-            f"{chat_id} | 🏆 Лидер окна: «{best_msg.text}» ({best_msg.id}) "
+            f"{chat_id} | 🏆 Лидер дня: «{best_msg.text}» ({best_msg.id}) "
             f"с оценкой {round(best_breakdown.total, 2)}"
         )
 
     return QuoteEvaluation(
         best_message=best_msg,
         breakdown=best_breakdown,
+        context_messages=context_messages,
         message_count=len(messages),
         should_publish=should_publish,
         day_reason_code=day_verdict.reason_code if day_verdict else None,
         day_reason_text=day_verdict.reason_text if day_verdict else "",
         day_verdict_error=evaluation.day_verdict_error or "",
     )
+
+
+def _message_reactions_payload(message: Message) -> dict[str, int]:
+    return {
+        reaction.emoji: reaction.count
+        for reaction in message.reactions
+        if reaction.count > 0
+    }
+
+
+def _valid_primary_id(
+    quote_choice: ai.QuoteContextChoice | None,
+    messages: list[Message],
+) -> int | None:
+    if not quote_choice or quote_choice.primary_id is None:
+        return None
+    known_ids = {message.id for message in messages}
+    return quote_choice.primary_id if quote_choice.primary_id in known_ids else None
+
+
+def _valid_context_messages(
+    quote_choice: ai.QuoteContextChoice | None,
+    messages: list[Message],
+    primary_message: Message,
+) -> list[Message]:
+    if not quote_choice or not quote_choice.context_needed:
+        return []
+
+    selected_ids = _dedupe_preserve_order(quote_choice.context_ids)
+    if len(selected_ids) <= 1 or len(selected_ids) > 5:
+        return []
+    if primary_message.id not in selected_ids:
+        return []
+
+    by_id = {message.id: message for message in messages}
+    if any(message_id not in by_id for message_id in selected_ids):
+        return []
+
+    selected = [by_id[message_id] for message_id in selected_ids]
+    if _is_contiguous_context(selected, messages) or _is_reply_connected_context(selected):
+        return sorted(selected, key=lambda message: _message_position(message, messages))
+    return []
+
+
+def _dedupe_preserve_order(values: list[int]) -> list[int]:
+    seen: set[int] = set()
+    result: list[int] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _is_contiguous_context(selected: list[Message], messages: list[Message]) -> bool:
+    positions = sorted(_message_position(message, messages) for message in selected)
+    return positions[-1] - positions[0] + 1 == len(positions)
+
+
+def _is_reply_connected_context(selected: list[Message]) -> bool:
+    by_message_id = {message.message_id: message.id for message in selected}
+    graph: dict[int, set[int]] = {message.id: set() for message in selected}
+
+    for message in selected:
+        reply_to_id = getattr(message, "reply_to_message_id", None)
+        if reply_to_id not in by_message_id:
+            continue
+        parent_id = by_message_id[reply_to_id]
+        graph[message.id].add(parent_id)
+        graph[parent_id].add(message.id)
+
+    start = selected[0].id
+    visited: set[int] = set()
+    stack = [start]
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        stack.extend(graph[current] - visited)
+
+    return len(visited) == len(selected)
+
+
+def _message_position(message: Message, messages: list[Message]) -> int:
+    return next(index for index, candidate in enumerate(messages) if candidate.id == message.id)

@@ -3,7 +3,7 @@
 
 English | [Русский](./README.ru.md)
 
-A Telegram bot that tracks chat windows, previews quote candidates, and only publishes a **quote of the day** when the conversation was actually worth quoting.
+A Telegram bot that tracks quote days, previews quote candidates, and only publishes a **quote of the day** when the conversation was actually worth quoting.
 
 [![GitHub Stars](https://img.shields.io/github/stars/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=f59e0b&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZjU5ZTBiIiBzdHJva2U9Im5vbmUiPjxwb2x5Z29uIHBvaW50cz0iMTIgMiAxNS4wOSA4LjI2IDIyIDkuMjcgMTcgMTQuMTQgMTguMTggMjEuMDIgMTIgMTcuNzcgNS44MiAyMS4wMiA3IDE0LjE0IDIgOS4yNyA4LjkxIDguMjYgMTIgMiIvPjwvc3ZnPg==)](https://github.com/FreshLabDev/quoto/stargazers)
 ![GitHub Repo Size](https://img.shields.io/github/repo-size/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=a6da95&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM3ODcxNmMiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTIyIDE5YTIgMiAwIDAgMS0yIDJINGEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg1bDIgM2g5YTIgMiAwIDAgMSAyIDJ6Ii8+PC9zdmc+)
@@ -13,11 +13,12 @@ A Telegram bot that tracks chat windows, previews quote candidates, and only pub
 
 ## ✨ Features
 
-- 🏆 **Windowed Quote Flow** — scores messages between two daily cutoff points
+- 🏆 **Quote of the Day Flow** — scores messages between two daily cutoff points
 - 🤖 **AI Scoring** — evaluates messages for humor, wit, depth, and memorability via OpenRouter API
+- 🧵 **Optional Quote Context** — adds up to 5 consecutive or reply-linked messages only when needed
 - 😴 **Boring-Day Detection** — if the day feels flat, the bot says so instead of forcing a weak quote
-- ❤️ **Reaction Tracking** — accounts for emoji reactions from chat members
-- 📏 **Text Analysis** — smart scoring based on message length and quality
+- ❤️ **Reaction Context** — sends emoji reactions to AI as context for each message
+- 📏 **Text Context** — stores message length signals for transparent details
 - 🔎 **Admin AI Preview** — `/quote` shows the current leader for chat admins without publishing or clearing data
 - 📌 **Auto-Pin** — pins the winning quote in the chat
 - 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
@@ -28,26 +29,27 @@ A Telegram bot that tracks chat windows, previews quote candidates, and only pub
 
 1. Add the bot to your Telegram group and grant admin rights
 2. Members chat as usual — the bot silently collects messages and reactions
-3. The bot collects messages inside a rolling window from the previous cutoff to the next one
-4. At the scheduled time (default `21:00`), the bot evaluates the closed window
-5. If there are fewer than `10` messages, the window is skipped silently
+3. The bot collects messages for the day from the previous cutoff to the next one
+4. At the scheduled time (default `21:00`), the bot evaluates the closed day
+5. If there are fewer than `10` messages, the day is skipped silently
 6. If there are `10+` messages, AI both scores messages and decides whether the whole day is quote-worthy
-7. The best message is selected based on a **weighted scoring formula**:
+7. The best message is selected by the **AI score**; reactions and length are only context:
 
 | Component     | Weight | Description                                    |
 | :------------ | :----- | :--------------------------------------------- |
-| **Reactions** | 20%    | Normalized count of emoji reactions            |
-| **AI Score**  | 70%    | LLM-based evaluation (humor, wit, quotability) |
-| **Length**    | 10%    | Optimal message length bonus                   |
+| **AI Score**  | 100%   | LLM-based evaluation with reaction context     |
+| **Reactions** | Context | Emoji reactions sent to AI when present       |
+| **Length**    | Context | Stored for transparent quote details          |
 
-8. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
+8. If the quote needs setup, AI may attach a validated consecutive/reply-linked context block of up to `5` messages
+9. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
 
 ## 📌 Commands
 
 | Command    | Description                      |
 | :--------- | :------------------------------- |
 | `/start`   | Bot info and help                |
-| `/quote`   | AI preview of the current open window for chat admins |
+| `/quote`   | AI preview of the current day for chat admins |
 | `/publish_quote` | Admin-only override for boring-day / failed runs |
 | `/stats`   | Chat statistics and top authors  |
 | `/mystats` | Your personal statistics         |
@@ -92,13 +94,16 @@ OPENROUTER_MODEL=google/gemma-3-1b-it:free
 DEVELOPER_IDS=[1234567890]
 QUOTE_HOUR=21
 QUOTE_MINUTE=0
-TIMEZONE=Europe/Berlin
+TIMEZONE=Europe/Kyiv
 MIN_MESSAGES_FOR_AUTO_REVIEW=10
+WEIGHT_REACTIONS=0.0
+WEIGHT_AI=1.0
+WEIGHT_LENGTH=0.0
 ```
 
 ### Running
 
-`/quote` is an admin-only AI preview. `/publish_quote` is reserved for admins when the automatic run marked the window as boring or failed.
+`/quote` is an admin-only AI preview. `/publish_quote` is reserved for admins when the automatic run marked the day as boring or failed.
 
 ```bash
 python main.py
