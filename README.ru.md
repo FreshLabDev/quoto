@@ -91,6 +91,7 @@ BOT_USERNAME=your_bot_username
 DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 OPENROUTER_MODEL=google/gemma-3-1b-it:free
+OPENROUTER_REASONING_EFFORT=
 DEVELOPER_IDS=[1234567890]
 QUOTE_HOUR=21
 QUOTE_MINUTE=0

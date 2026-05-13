@@ -82,6 +82,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
             patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+            patch.object(ai.settings, "OPENROUTER_REASONING_EFFORT", "low"),
             patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
         ):
             result = await ai.evaluate_messages(
@@ -101,6 +102,10 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.scores, {1: 0.7, 2: 0.8})
         self.assertIsNotNone(captured_body)
+        self.assertEqual(
+            captured_body["reasoning"],
+            {"enabled": True, "effort": "low", "exclude": True},
+        )
         user_payload = json.loads(captured_body["messages"][1]["content"])
         self.assertEqual(user_payload[0]["message_id"], 11)
         self.assertEqual(user_payload[0]["reply_to_message_id"], 10)

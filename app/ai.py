@@ -105,6 +105,12 @@ async def evaluate_messages(
             {"role": "user", "content": user_payload},
         ],
     }
+    if settings.OPENROUTER_REASONING_EFFORT:
+        body["reasoning"] = {
+            "enabled": True,
+            "effort": settings.OPENROUTER_REASONING_EFFORT,
+            "exclude": True,
+        }
 
     headers = {
         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",

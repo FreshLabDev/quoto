@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "nvidia/nemotron-3-nano-30b-a3b:free"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
+    OPENROUTER_REASONING_EFFORT: str = ""
 
     # -- SCORING WEIGHTS --
     WEIGHT_REACTIONS: float = 0.0
