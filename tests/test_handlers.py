@@ -72,7 +72,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ):
             await handlers.manual_quote_handler(message, SimpleNamespace())
 
-        self.assertIn("Preview текущего окна", message.answers[0])
+        self.assertIn("Preview текущего дня", message.answers[0])
         self.assertIn("Лучший тестовый панчлайн", message.answers[0])
         self.assertIn("Alice", message.answers[0])
 
@@ -113,6 +113,43 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Alice &amp; Bob", message.answers[0])
         self.assertIn("Quoto &lt;Test&gt; Chat", message.answers[0])
         self.assertIn("Цитата &lt;script&gt;", message.answers[0])
+
+    async def test_private_quote_details_renders_context_messages(self) -> None:
+        message = DummyMessage(chat_type="private")
+        detail = {
+            "id": 8,
+            "text": "primary",
+            "score": 0.8,
+            "reaction_score": 0.2,
+            "ai_score": 0.8,
+            "length_score": 0.1,
+            "reaction_count": 0,
+            "author_name": "Bob",
+            "group_name": "Quoto Test Chat",
+            "created_at": datetime(2026, 3, 27, 21, 0, tzinfo=timezone.utc),
+            "ai_model": "openrouter/test",
+            "ai_best_text": None,
+            "message_id": 10,
+            "chat_id": -100123456,
+            "decision_status": STATUS_PUBLISH_FAILED,
+            "decision_reason": None,
+            "operation_error": None,
+            "forced_by_admin": False,
+            "quote_day": None,
+            "context_messages": [
+                {"message_id": 9, "author": "Alice <A>", "text": "setup & context", "is_primary": False},
+                {"message_id": 10, "author": "Bob", "text": "punch <line>", "is_primary": True},
+            ],
+        }
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
+            patch.object(handlers.core, "get_quote_detail", new=AsyncMock(return_value=detail)),
+        ):
+            await handlers.private_handler(message, SimpleNamespace(args="quote_8"))
+
+        self.assertIn("<b>Alice &lt;A&gt;:</b> setup &amp; context", message.answers[0])
+        self.assertIn("💬 <b>Bob:</b> <i>«punch &lt;line&gt;»</i>", message.answers[0])
 
     async def test_reaction_handler_applies_non_anonymous_delta(self) -> None:
         event = SimpleNamespace(

@@ -45,6 +45,7 @@ class Message(Base):
     chat_id = Column(BigInteger, nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     text = Column(String, nullable=False)
+    reply_to_message_id = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     author = relationship("User", back_populates="messages")
@@ -87,6 +88,8 @@ class Quote(Base):
     notice_message_id = Column(BigInteger)
     ai_model = Column(String, nullable=True)
     ai_best_text = Column(String, nullable=True)
+    context_message_ids = Column(String, nullable=True)
+    context_snapshot = Column(String, nullable=True)
     quote_day = Column(Date, nullable=False, index=True)
     window_start_at = Column(DateTime(timezone=True), nullable=False)
     window_end_at = Column(DateTime(timezone=True), nullable=False)

@@ -32,9 +32,9 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
 
     # -- SCORING WEIGHTS --
-    WEIGHT_REACTIONS: float = 0.20
-    WEIGHT_AI: float = 0.70
-    WEIGHT_LENGTH: float = 0.10
+    WEIGHT_REACTIONS: float = 0.0
+    WEIGHT_AI: float = 1.0
+    WEIGHT_LENGTH: float = 0.0
     LENGTH_OPTIMAL_MIN: int = 20
     LENGTH_OPTIMAL_MAX: int = 150
 

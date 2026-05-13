@@ -26,6 +26,20 @@ def _html(value: object) -> str:
     return escape(str(value))
 
 
+def _format_context_lines(context_messages: list[dict[str, object]]) -> str:
+    if len(context_messages) <= 1:
+        return ""
+    lines: list[str] = []
+    for item in context_messages:
+        author = _html(item.get("author") or "Аноним")
+        text = _html(item.get("text") or "")
+        if item.get("is_primary"):
+            lines.append(f"💬 <b>{author}:</b> <i>«{text}»</i>")
+        else:
+            lines.append(f"<b>{author}:</b> {text}")
+    return "\n".join(lines)
+
+
 @router.my_chat_member()
 async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
     chat = event.chat
@@ -44,9 +58,9 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
         text = (
             f"👋 Привет, <b>{safe_chat_title}</b>!\n\n"
             f"Я <b>Quoto</b> — бот, который в <b>{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}</b> "
-            "выбирает и публикует цитату окна.\n\n"
+            "выбирает и публикует цитату дня.\n\n"
             "📩 Я собираю сообщения и реакции между двумя cutoff-точками.\n"
-            "🔎 Команда /quote доступна только администраторам и показывает AI-preview текущего окна.\n"
+            "🔎 Команда /quote доступна только администраторам и показывает AI-preview текущего дня.\n"
             "⚙️ /publish_quote нужна админам только для ручного override после boring-day/ошибки."
         )
 
@@ -95,7 +109,7 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 
             status_map = {
                 STATUS_PUBLISHED: "✅ Опубликовано",
-                STATUS_SKIPPED_BORING: "😴 Скучное окно",
+                STATUS_SKIPPED_BORING: "😴 Скучный день",
                 STATUS_PUBLISH_FAILED: "⚠️ Публикация не удалась",
                 STATUS_BORING_NOTICE_FAILED: "⚠️ Boring-day уведомление не удалось",
                 STATUS_PUBLISH_UNKNOWN: "⚠️ Публикация в неопределённом состоянии",
@@ -133,12 +147,20 @@ async def private_handler(message: types.Message, command: CommandObject = None)
                     else str(detail["chat_id"])
                 )
 
-            text = (
-                f"📊 <b>Подробности окна #{detail['id']}</b>\n\n"
-                f"🏷️ {status_label}\n"
-                f"💬 <i>«{_html(detail['text'])}»</i>\n"
-                f"— <b>{_html(detail['author_name'])}</b>\n\n"
-            )
+            context_text = _format_context_lines(detail.get("context_messages") or [])
+            if context_text:
+                text = (
+                    f"📊 <b>Подробности дня #{detail['id']}</b>\n\n"
+                    f"🏷️ {status_label}\n"
+                    f"{context_text}\n\n"
+                )
+            else:
+                text = (
+                    f"📊 <b>Подробности дня #{detail['id']}</b>\n\n"
+                    f"🏷️ {status_label}\n"
+                    f"💬 <i>«{_html(detail['text'])}»</i>\n"
+                    f"— <b>{_html(detail['author_name'])}</b>\n\n"
+                )
 
             if link_chat_id:
                 text += (
@@ -151,9 +173,9 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 
             text += (
                 f"<b>Итого: {detail['score'] * 10:.1f}/10</b>\n"
-                f"<code>{'Реакции':<10} {scoring.create_bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10 ({int(settings.WEIGHT_REACTIONS * 100)}%)\n"
-                f"<code>{safe_model_short:<10} {scoring.create_bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 ({int(settings.WEIGHT_AI * 100)}%)\n"
-                f"<code>{'Длина':<10} {scoring.create_bar(int(detail['length_score'] * 100), 100)}</code> {detail['length_score'] * 10:.1f}/10 ({int(settings.WEIGHT_LENGTH * 100)}%)\n"
+                f"<code>{safe_model_short:<10} {scoring.create_bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 (100%)\n"
+                f"<code>{'Реакции':<10} {scoring.create_bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10 (контекст)\n"
+                f"<code>{'Длина':<10} {scoring.create_bar(int(detail['length_score'] * 100), 100)}</code> {detail['length_score'] * 10:.1f}/10 (контекст)\n"
             )
 
             if detail.get("decision_reason"):
@@ -178,8 +200,8 @@ async def private_handler(message: types.Message, command: CommandObject = None)
     await message.answer(
         text=(
             "🏆 <b>Привет! Я Quoto</b>\n\n"
-            "Я веду окно цитаты между двумя daily cutoff-точками и публикую результат в группе.\n\n"
-            "🔎 /quote — AI-preview текущего окна для администраторов.\n"
+            "Я веду цитату дня между двумя daily cutoff-точками и публикую результат в группе.\n\n"
+            "🔎 /quote — AI-preview текущего дня для администраторов.\n"
             "😴 Если день вышел скучным, бот честно скажет об этом и даст ссылку на детали."
         ),
         reply_markup=kb.as_markup(),
@@ -190,10 +212,10 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 async def group_start_handler(message: types.Message):
     await core.group_getOrCreate(message.chat)
     await message.answer(
-        "🏆 <b>Quoto — Цитата окна</b>\n\n"
-        "Я собираю сообщения между двумя cutoff-точками и в конце окна выбираю победителя.\n\n"
+        "🏆 <b>Quoto — Цитата дня</b>\n\n"
+        "Я собираю сообщения между двумя cutoff-точками и в конце дня выбираю победителя.\n\n"
         "📌 <b>Команды:</b>\n"
-        "/quote — AI-preview текущего окна (только админы)\n"
+        "/quote — AI-preview текущего дня (только админы)\n"
         "/publish_quote — ручная публикация после boring-day/ошибки (только админы)\n"
         "/stats — статистика опубликованных цитат\n"
         "/mystats — твоя статистика\n"
@@ -215,24 +237,24 @@ async def manual_quote_handler(message: types.Message, bot: Bot):
     evaluation = await scoring.pick_best_quote(message.chat.id, window)
 
     if evaluation.message_count == 0 or not evaluation.best_message:
-        await message.answer("📭 В текущем окне пока нет сообщений для preview.")
+        await message.answer("📭 За текущий день пока нет сообщений для preview.")
         return
 
     author_name = evaluation.best_message.author.name if evaluation.best_message.author else "Аноним"
     parts = [
-        "🔎 <b>Preview текущего окна</b>",
+        "🔎 <b>Preview текущего дня</b>",
         "",
         f"💬 <i>«{_html(evaluation.best_message.text)}»</i>",
         f"— <b>{_html(author_name)}</b>",
         "",
-        f"📨 Сообщений в окне: <b>{evaluation.message_count}</b>",
+        f"📨 Сообщений за день: <b>{evaluation.message_count}</b>",
         f"⭐ Текущий скор: <b>{evaluation.breakdown.total * 10:.1f}/10</b>",
     ]
 
     if evaluation.message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
         parts.append(
             f"\n🤫 Если к {settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d} сообщений останется меньше "
-            f"{settings.MIN_MESSAGES_FOR_AUTO_REVIEW}, окно будет пропущено без публикации."
+            f"{settings.MIN_MESSAGES_FOR_AUTO_REVIEW}, день будет пропущен без публикации."
         )
     else:
         parts.append(
@@ -252,16 +274,16 @@ async def manual_publish_handler(message: types.Message, bot: Bot):
         await message.answer("🔒 Эта команда доступна только администраторам чата.")
         return
 
-    processing = await message.answer("⏳ Проверяю, есть ли окно для ручной публикации...")
+    processing = await message.answer("⏳ Проверяю, есть ли день для ручной публикации...")
     result = await scheduler.manual_publish_latest(bot, message.chat.id)
 
     if result == "nothing":
-        await processing.edit_text("📭 Нет boring-day/failed окна, которое можно опубликовать вручную.")
+        await processing.edit_text("📭 Нет boring-day/failed дня, который можно опубликовать вручную.")
         return
 
     if result == "already_sent":
         await processing.edit_text(
-            "⚠️ Последнее окно уже было отправлено в Telegram, но БД не подтвердила финальный статус. "
+            "⚠️ Последний день уже был отправлен в Telegram, но БД не подтвердила финальный статус. "
             "Я не стал публиковать дубль."
         )
         return

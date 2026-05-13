@@ -1,3 +1,4 @@
+import json
 import os
 from types import SimpleNamespace
 import unittest
@@ -15,7 +16,7 @@ from app.quote_status import REASON_BORING_DAY
 
 class DayVerdictParsingTests(unittest.TestCase):
     def test_string_false_is_parsed_strictly(self) -> None:
-        entries, verdict = _parse_day_payload(
+        entries, verdict, quote_choice = _parse_day_payload(
             '{"day":{"should_publish":"false","reason_text":"boring"},"messages":[{"id":1,"score":4}]}'
         )
 
@@ -23,6 +24,7 @@ class DayVerdictParsingTests(unittest.TestCase):
         self.assertFalse(verdict.should_publish)
         self.assertEqual(verdict.reason_code, REASON_BORING_DAY)
         self.assertEqual(verdict.reason_text, "boring")
+        self.assertIsNone(quote_choice)
 
     def test_missing_day_block_is_rejected(self) -> None:
         with self.assertRaises(DayVerdictParseError):
@@ -33,10 +35,12 @@ class DayVerdictParsingTests(unittest.TestCase):
             _parse_day_payload('[{"id":1,"score":5}]')
 
     def test_parse_day_payload_ignores_surrounding_prose_and_braces(self) -> None:
-        entries, verdict = _parse_day_payload(
+        entries, verdict, quote_choice = _parse_day_payload(
             'note {"draft": true}\n'
             '```json\n'
-            '{"day":{"should_publish":"false","reason_text":"boring"},"messages":[{"id":1,"score":4}]}\n'
+            '{"day":{"should_publish":"false","reason_text":"boring"},'
+            '"quote":{"primary_id":1,"context_ids":[1,2],"context_needed":true},'
+            '"messages":[{"id":1,"score":4}]}\n'
             '```\n'
             "thanks"
         )
@@ -44,9 +48,66 @@ class DayVerdictParsingTests(unittest.TestCase):
         self.assertEqual(entries, [{"id": 1, "score": 4}])
         self.assertFalse(verdict.should_publish)
         self.assertEqual(verdict.reason_code, REASON_BORING_DAY)
+        self.assertEqual(quote_choice.primary_id, 1)
+        self.assertEqual(quote_choice.context_ids, [1, 2])
+        self.assertTrue(quote_choice.context_needed)
 
 
 class AIRetryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_evaluate_messages_sends_reactions_when_present(self) -> None:
+        captured_body: dict | None = None
+
+        class FakeResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {
+                    "model": "openrouter/test",
+                    "choices": [{"message": {"content": '[{"id":1,"score":7},{"id":2,"score":8}]'}}],
+                }
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal captured_body
+                captured_body = kwargs["json"]
+                return FakeResponse()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+        ):
+            result = await ai.evaluate_messages(
+                [
+                    {
+                        "id": 1,
+                        "message_id": 11,
+                        "author": "Alice",
+                        "text": "reacted quote",
+                        "reply_to_message_id": 10,
+                        "reactions": {"😂": 3, "❤️": 1},
+                    },
+                    {"id": 2, "message_id": 12, "author": "Bob", "text": "plain quote"},
+                ],
+                include_day_verdict=False,
+            )
+
+        self.assertEqual(result.scores, {1: 0.7, 2: 0.8})
+        self.assertIsNotNone(captured_body)
+        user_payload = json.loads(captured_body["messages"][1]["content"])
+        self.assertEqual(user_payload[0]["message_id"], 11)
+        self.assertEqual(user_payload[0]["reply_to_message_id"], 10)
+        self.assertEqual(user_payload[0]["reactions"], {"😂": 3, "❤️": 1})
+        self.assertNotIn("reactions", user_payload[1])
+        self.assertNotIn("reply_to_message_id", user_payload[1])
+
     async def test_evaluate_messages_retries_request_errors(self) -> None:
         attempts = 0
 

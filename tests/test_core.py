@@ -37,6 +37,7 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             date=message_date,
             message_id=77,
             chat=SimpleNamespace(id=-100123456),
+            reply_to_message=SimpleNamespace(message_id=76),
         )
         user = SimpleNamespace(id=5)
 
@@ -48,5 +49,6 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(saved.created_at, message_date)
         self.assertEqual(saved.message_id, 77)
+        self.assertEqual(saved.reply_to_message_id, 76)
         self.assertEqual(saved.chat_id, -100123456)
         self.assertEqual(saved.user_id, 5)

@@ -2,7 +2,8 @@ import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -14,20 +15,28 @@ log = setup_logging(logging.getLogger(__name__))
 _SCORE_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
     "You will receive a JSON array of messages. "
+    "Use reactions as lightweight context when present. "
     "Rate each message on a scale from 0 to 10 based on humor, wit, insight, memorability, and originality. "
-    "Respond ONLY with a valid JSON array of objects in this format: "
-    "[{\"id\": <message_id>, \"score\": <0-10>}]."
+    "Prefer one standalone message. Use context_ids only for consecutive messages or a real reply thread. "
+    "Never combine unrelated messages. Max 5. "
+    "Respond ONLY with a valid JSON object in this format: "
+    "{\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": false}, "
+    "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
 )
 
 _DAY_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
-    "You will receive a JSON array of messages from one chat window. "
+    "You will receive a JSON array of messages from one quote day. "
+    "Use reactions as lightweight context when present. "
     "First, rate every message from 0 to 10 based on humor, wit, insight, memorability, and originality. "
     "Then decide whether the day is worthy of a public 'quote of the day' announcement. "
     "If the conversation feels flat, repetitive, generic, or lacking a truly quotable line, set should_publish to false. "
+    "Prefer one standalone message. Use context_ids only for consecutive messages or a real reply thread. "
+    "Never combine unrelated messages. Max 5. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
-    "\"messages\": [{\"id\": <message_id>, \"score\": <0-10>}]}."
+    "\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": false}, "
+    "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
     "Respond in the language of the messages for reason_text."
 )
 
@@ -40,11 +49,19 @@ class DayVerdict:
 
 
 @dataclass
+class QuoteContextChoice:
+    primary_id: int | None = None
+    context_ids: list[int] = field(default_factory=list)
+    context_needed: bool = False
+
+
+@dataclass
 class EvaluationResult:
     scores: dict[int, float]
     actual_model: str
     day_verdict: DayVerdict | None = None
     day_verdict_error: str | None = None
+    quote_choice: QuoteContextChoice | None = None
 
 
 class DayVerdictParseError(ValueError):
@@ -56,7 +73,7 @@ def _is_retryable_http_status(status_code: int) -> bool:
 
 
 async def evaluate_messages(
-    messages: list[dict[str, str | int]],
+    messages: list[dict[str, Any]],
     include_day_verdict: bool = False,
 ) -> EvaluationResult:
     if not messages:
@@ -79,10 +96,7 @@ async def evaluate_messages(
             ),
         )
 
-    user_payload = json.dumps(
-        [{"id": m["id"], "author": m["author"], "text": m["text"]} for m in messages],
-        ensure_ascii=False,
-    )
+    user_payload = json.dumps([_message_payload(m) for m in messages], ensure_ascii=False)
 
     body = {
         "model": settings.OPENROUTER_MODEL,
@@ -136,9 +150,9 @@ async def evaluate_messages(
                 )
 
             if include_day_verdict:
-                entries, verdict, verdict_error = _parse_day_payload_safely(content)
+                entries, verdict, quote_choice, verdict_error = _parse_day_payload_safely(content)
             else:
-                entries = _parse_scores(content)
+                entries, quote_choice = _parse_score_payload(content)
                 verdict = None
                 verdict_error = None
 
@@ -149,6 +163,7 @@ async def evaluate_messages(
                 actual_model=actual_model,
                 day_verdict=verdict,
                 day_verdict_error=verdict_error,
+                quote_choice=quote_choice,
             )
 
         except httpx.HTTPStatusError as e:
@@ -191,7 +206,7 @@ async def evaluate_messages(
 
 
 def _normalize_scores(
-    messages: list[dict[str, str | int]],
+    messages: list[dict[str, Any]],
     entries: list[dict],
 ) -> dict[int, float]:
     result: dict[int, float] = {}
@@ -212,20 +227,37 @@ def _normalize_scores(
     return result
 
 
-def _parse_day_payload_safely(content: str) -> tuple[list[dict], DayVerdict | None, str | None]:
+def _message_payload(message: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "id": message["id"],
+        "author": message["author"],
+        "text": message["text"],
+    }
+    reactions = message.get("reactions")
+    if reactions:
+        payload["reactions"] = reactions
+    if message.get("message_id") is not None:
+        payload["message_id"] = message["message_id"]
+    if message.get("reply_to_message_id") is not None:
+        payload["reply_to_message_id"] = message["reply_to_message_id"]
+    return payload
+
+
+def _parse_day_payload_safely(content: str) -> tuple[list[dict], DayVerdict | None, QuoteContextChoice | None, str | None]:
     try:
-        entries, verdict = _parse_day_payload(content)
-        return entries, verdict, None
+        entries, verdict, quote_choice = _parse_day_payload(content)
+        return entries, verdict, quote_choice, None
     except (json.JSONDecodeError, DayVerdictParseError, ValueError) as exc:
         log.error(f"Ошибка day verdict ответа AI: {exc}")
         try:
-            entries = _parse_scores(content)
+            entries, quote_choice = _parse_score_payload(content)
         except (json.JSONDecodeError, ValueError):
             entries = []
-        return entries, None, str(exc)
+            quote_choice = None
+        return entries, None, quote_choice, str(exc)
 
 
-def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict]:
+def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict, QuoteContextChoice | None]:
     cleaned = _extract_json_payload(content)
     parsed = json.loads(cleaned)
 
@@ -251,10 +283,14 @@ def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict]:
     )
     reason_text = str(day.get("reason_text") or "").strip()
 
-    return entries, DayVerdict(
-        should_publish=should_publish,
-        reason_code=reason_code,
-        reason_text=reason_text,
+    return (
+        entries,
+        DayVerdict(
+            should_publish=should_publish,
+            reason_code=reason_code,
+            reason_text=reason_text,
+        ),
+        _parse_quote_choice(parsed),
     )
 
 
@@ -272,17 +308,57 @@ def _parse_bool_like(value: object) -> bool:
     raise DayVerdictParseError("AI response field `day.should_publish` must be a strict boolean value.")
 
 
-def _parse_scores(content: str) -> list[dict]:
+def _parse_score_payload(content: str) -> tuple[list[dict], QuoteContextChoice | None]:
     cleaned = _extract_json_payload(content)
     parsed = json.loads(cleaned)
 
     if isinstance(parsed, dict):
-        parsed = parsed.get("messages") or []
+        return parsed.get("messages") or [], _parse_quote_choice(parsed)
 
     if not isinstance(parsed, list):
         raise json.JSONDecodeError("Expected list payload", cleaned, 0)
 
-    return parsed
+    return parsed, None
+
+
+def _parse_scores(content: str) -> list[dict]:
+    entries, _quote_choice = _parse_score_payload(content)
+    return entries
+
+
+def _parse_quote_choice(payload: dict[str, Any]) -> QuoteContextChoice | None:
+    quote = payload.get("quote")
+    if not isinstance(quote, dict):
+        return None
+
+    primary_id = _parse_optional_int(quote.get("primary_id"))
+    context_ids_raw = quote.get("context_ids") or []
+    context_ids: list[int] = []
+    if isinstance(context_ids_raw, list):
+        for item in context_ids_raw:
+            context_id = _parse_optional_int(item)
+            if context_id is not None:
+                context_ids.append(context_id)
+
+    try:
+        context_needed = _parse_bool_like(quote.get("context_needed"))
+    except DayVerdictParseError:
+        context_needed = False
+
+    return QuoteContextChoice(
+        primary_id=primary_id,
+        context_ids=context_ids,
+        context_needed=context_needed,
+    )
+
+
+def _parse_optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _extract_json_payload(content: str) -> str:
