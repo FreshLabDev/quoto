@@ -26,6 +26,9 @@ services:
       - .env
     environment:
       DB_URL: postgresql+asyncpg://quoto:quoto_secret_2026@db:5432/quoto
+    volumes:
+      - logs:/app/logs
 
 volumes:
   pgdata:
+  logs:

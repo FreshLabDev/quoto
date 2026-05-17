@@ -1,5 +1,8 @@
 import json
 import os
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock
@@ -58,6 +61,9 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         captured_body: dict | None = None
 
         class FakeResponse:
+            status_code = 200
+            text = '{"choices":[{"message":{"content":"ok"}}]}'
+
             def raise_for_status(self) -> None:
                 return None
 
@@ -117,6 +123,9 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         attempts = 0
 
         class FakeResponse:
+            status_code = 200
+            text = '{"choices":[{"message":{"content":"ok"}}]}'
+
             def raise_for_status(self) -> None:
                 return None
 
@@ -157,3 +166,118 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         sleep.assert_awaited_once_with(5)
         self.assertEqual(result.actual_model, "openrouter/test")
         self.assertEqual(result.scores, {1: 0.7})
+
+    async def test_evaluate_messages_writes_ai_audit_jsonl(self) -> None:
+        response_content = (
+            '{"quote":{"primary_id":1,"context_ids":[1,2],"context_needed":true},'
+            '"messages":[{"id":1,"score":7},{"id":2,"score":6}]}'
+        )
+
+        class FakeResponse:
+            status_code = 200
+            text = json.dumps(
+                {
+                    "model": "openrouter/test",
+                    "choices": [{"message": {"content": response_content}}],
+                }
+            )
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                return FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with (
+                patch.object(ai.settings, "LOGS_PATH", tempdir),
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            ):
+                result = await ai.evaluate_messages(
+                    [
+                        {"id": 1, "message_id": 11, "author": "Alice", "text": "setup"},
+                        {"id": 2, "message_id": 12, "author": "Bob", "text": "punchline"},
+                    ],
+                    include_day_verdict=False,
+                )
+
+            audit_path = Path(tempdir) / "ai_audit.jsonl"
+            audit_record = json.loads(audit_path.read_text(encoding="utf-8").strip())
+
+        self.assertEqual(result.quote_choice.context_ids, [1, 2])
+        self.assertEqual(audit_record["request"]["body"]["model"], "openrouter/test")
+        self.assertIn("use ONLY that `id`", audit_record["request"]["body"]["messages"][0]["content"])
+        self.assertEqual(audit_record["response"]["content"], response_content)
+        self.assertEqual(audit_record["result"]["quote_choice"]["context_ids"], [1, 2])
+        self.assertNotIn("headers", audit_record["request"])
+
+    async def test_evaluate_messages_prunes_ai_audit_entries_older_than_seven_days(self) -> None:
+        now = datetime.now(timezone.utc)
+        old_record = {"created_at": (now - timedelta(days=8)).isoformat(), "request_id": "old"}
+        fresh_record = {"created_at": (now - timedelta(days=1)).isoformat(), "request_id": "fresh"}
+
+        class FakeResponse:
+            status_code = 200
+            text = '{"model":"openrouter/test","choices":[{"message":{"content":"[{\\"id\\":1,\\"score\\":7}]"}}]}'
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                return FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            audit_path = Path(tempdir) / "ai_audit.jsonl"
+            audit_path.write_text(
+                "\n".join(
+                    [
+                        json.dumps(old_record),
+                        json.dumps(fresh_record),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(ai.settings, "LOGS_PATH", tempdir),
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            ):
+                await ai.evaluate_messages(
+                    [{"id": 1, "message_id": 11, "author": "Alice", "text": "hello"}],
+                    include_day_verdict=False,
+                )
+
+            records = [
+                json.loads(line)
+                for line in audit_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertNotIn("old", {record.get("request_id") for record in records})
+        self.assertIn("fresh", {record.get("request_id") for record in records})
+        self.assertEqual(len(records), 2)

@@ -18,6 +18,7 @@ A Telegram bot that tracks quote days, previews quote candidates, and only publi
 - 🧵 **Optional Quote Context** — adds up to 5 consecutive or reply-linked messages only when needed
 - 😴 **Boring-Day Detection** — if the day feels flat, the bot says so instead of forcing a weak quote
 - ❤️ **Reaction Context** — sends emoji reactions to AI as context for each message
+- 🧾 **AI Audit Log** — writes the exact OpenRouter request body and raw response to `logs/ai_audit.jsonl` for 7 days
 - 📏 **Text Context** — stores message length signals for transparent details
 - 🔎 **Admin AI Preview** — `/quote` shows the current leader for chat admins without publishing or clearing data
 - 📌 **Auto-Pin** — pins the winning quote in the chat
@@ -90,7 +91,7 @@ BOT_TOKEN=your_telegram_bot_token
 BOT_USERNAME=your_bot_username
 DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
-OPENROUTER_MODEL=google/gemma-3-1b-it:free
+OPENROUTER_MODEL=x-ai/grok-4.3
 OPENROUTER_REASONING_EFFORT=
 DEVELOPER_IDS=[1234567890]
 QUOTE_HOUR=21

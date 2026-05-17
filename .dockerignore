@@ -1,0 +1,10 @@
+.git
+.pytest_cache
+.venv
+logs
+.env
+.collaborator
+__pycache__
+*/__pycache__
+*.pyc
+*.code-workspace

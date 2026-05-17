@@ -1,9 +1,14 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
+from threading import Lock
 from typing import Any
+from uuid import uuid4
 
 import httpx
 
@@ -11,31 +16,43 @@ from .config import settings, setup_logging
 from .quote_status import REASON_BORING_DAY, REASON_WORTHY
 
 log = setup_logging(logging.getLogger(__name__))
+_AUDIT_LOG_NAME = "ai_audit.jsonl"
+_AUDIT_RETENTION = timedelta(days=7)
+_audit_log_lock = Lock()
 
 _SCORE_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
-    "You will receive a JSON array of messages. "
+    "You will receive a JSON array of messages. Each message has an internal `id`; use ONLY that `id` "
+    "for `primary_id`, `context_ids`, and message scores. `message_id` is Telegram metadata for reference only. "
     "Use reactions as lightweight context when present. "
     "Rate each message on a scale from 0 to 10 based on humor, wit, insight, memorability, and originality. "
-    "Prefer one standalone message. Use context_ids only for consecutive messages or a real reply thread. "
-    "Never combine unrelated messages. Max 5. "
+    "A quote can be one standalone message or a short dialogue. If the punchline depends on setup, "
+    "a previous line, or a reply chain, include the minimal context block instead of publishing the punchline alone. "
+    "Use `context_ids` only for consecutive messages or a real reply thread. Keep them in reading order, include "
+    "`primary_id`, and set `context_needed` to true when `context_ids` contains more than one id. "
+    "Never combine unrelated messages. Max 5 context messages. "
     "Respond ONLY with a valid JSON object in this format: "
-    "{\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": false}, "
+    "{\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
     "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
 )
 
 _DAY_PROMPT = (
     "You are a humor and wit judge for a Telegram group chat. "
-    "You will receive a JSON array of messages from one quote day. "
+    "You will receive a JSON array of messages from one quote day. Each message has an internal `id`; use ONLY "
+    "that `id` for `primary_id`, `context_ids`, and message scores. `message_id` is Telegram metadata for "
+    "reference only. "
     "Use reactions as lightweight context when present. "
     "First, rate every message from 0 to 10 based on humor, wit, insight, memorability, and originality. "
     "Then decide whether the day is worthy of a public 'quote of the day' announcement. "
     "If the conversation feels flat, repetitive, generic, or lacking a truly quotable line, set should_publish to false. "
-    "Prefer one standalone message. Use context_ids only for consecutive messages or a real reply thread. "
-    "Never combine unrelated messages. Max 5. "
+    "A quote can be one standalone message or a short dialogue. If the punchline depends on setup, "
+    "a previous line, or a reply chain, include the minimal context block instead of publishing the punchline alone. "
+    "Use `context_ids` only for consecutive messages or a real reply thread. Keep them in reading order, include "
+    "`primary_id`, and set `context_needed` to true when `context_ids` contains more than one id. "
+    "Never combine unrelated messages. Max 5 context messages. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
-    "\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": false}, "
+    "\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
     "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
     "Respond in the language of the messages for reason_text."
 )
@@ -96,6 +113,7 @@ async def evaluate_messages(
             ),
         )
 
+    request_id = uuid4().hex
     user_payload = json.dumps([_message_payload(m) for m in messages], ensure_ascii=False)
 
     body = {
@@ -121,6 +139,16 @@ async def evaluate_messages(
     retry_delays = [5, 15, 30]
 
     for attempt in range(max_retries):
+        audit_record: dict[str, Any] = {
+            "request_id": request_id,
+            "attempt": attempt + 1,
+            "include_day_verdict": include_day_verdict,
+            "message_count": len(messages),
+            "request": {
+                "url": settings.OPENROUTER_BASE_URL,
+                "body": body,
+            },
+        }
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
@@ -128,14 +156,25 @@ async def evaluate_messages(
                     json=body,
                     headers=headers,
                 )
+                audit_record["response"] = {
+                    "status_code": response.status_code,
+                    "text": response.text,
+                }
                 response.raise_for_status()
 
             data = response.json()
             actual_model = data.get("model", settings.OPENROUTER_MODEL)
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             content = content.strip()
+            audit_record["response"]["model"] = actual_model
+            audit_record["response"]["content"] = content
 
             if not content:
+                audit_record["result"] = {
+                    "status": "empty_response",
+                    "actual_model": actual_model,
+                }
+                _write_ai_audit_record(audit_record)
                 if attempt < max_retries - 1:
                     delay = retry_delays[attempt]
                     log.warning(
@@ -163,6 +202,15 @@ async def evaluate_messages(
                 verdict_error = None
 
             scores = _normalize_scores(messages, entries)
+            audit_record["result"] = {
+                "status": "parsed",
+                "actual_model": actual_model,
+                "score_count": len(scores),
+                "quote_choice": _quote_choice_audit_payload(quote_choice),
+                "day_verdict": _day_verdict_audit_payload(verdict),
+                "day_verdict_error": verdict_error,
+            }
+            _write_ai_audit_record(audit_record)
             log.debug(f"🤖 {actual_model} оценил {len(scores)} сообщений")
             return EvaluationResult(
                 scores=scores,
@@ -173,6 +221,12 @@ async def evaluate_messages(
             )
 
         except httpx.HTTPStatusError as e:
+            audit_record["error"] = {
+                "type": type(e).__name__,
+                "message": str(e),
+                "status_code": e.response.status_code,
+            }
+            _write_ai_audit_record(audit_record)
             if _is_retryable_http_status(e.response.status_code) and attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 log.warning(
@@ -183,6 +237,11 @@ async def evaluate_messages(
                 continue
             log.error(f"OpenRouter HTTP {e.response.status_code}: {e.response.text[:200]}")
         except httpx.RequestError as e:
+            audit_record["error"] = {
+                "type": type(e).__name__,
+                "message": str(e),
+            }
+            _write_ai_audit_record(audit_record)
             if attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 log.warning(
@@ -193,8 +252,18 @@ async def evaluate_messages(
                 continue
             log.error(f"Ошибка сети OpenRouter: {e}")
         except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
+            audit_record["error"] = {
+                "type": type(e).__name__,
+                "message": str(e),
+            }
+            _write_ai_audit_record(audit_record)
             log.error(f"Ошибка парсинга ответа AI: {e}")
         except Exception as e:
+            audit_record["error"] = {
+                "type": type(e).__name__,
+                "message": str(e),
+            }
+            _write_ai_audit_record(audit_record)
             log.error(f"Ошибка при запросе к OpenRouter: {e}")
 
         break
@@ -209,6 +278,87 @@ async def evaluate_messages(
             else None
         ),
     )
+
+
+def _write_ai_audit_record(record: dict[str, Any]) -> None:
+    try:
+        path = Path(settings.LOGS_PATH) / _AUDIT_LOG_NAME
+        os.makedirs(path.parent, exist_ok=True)
+        now = datetime.now(timezone.utc)
+        payload = {
+            "created_at": now.isoformat(),
+            **record,
+        }
+        line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        with _audit_log_lock:
+            _prune_ai_audit_log(path, now)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.write("\n")
+    except Exception:
+        pass
+
+
+def _prune_ai_audit_log(path: Path, now: datetime) -> None:
+    if not path.exists():
+        return
+
+    cutoff = now - _AUDIT_RETENTION
+    kept_lines: list[str] = []
+    changed = False
+
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.rstrip("\n")
+            if not line.strip():
+                changed = True
+                continue
+            if _is_audit_line_expired(line, cutoff):
+                changed = True
+                continue
+            kept_lines.append(line)
+
+    if not changed:
+        return
+
+    with path.open("w", encoding="utf-8") as handle:
+        for line in kept_lines:
+            handle.write(line)
+            handle.write("\n")
+
+
+def _is_audit_line_expired(line: str, cutoff: datetime) -> bool:
+    try:
+        parsed = json.loads(line)
+        created_at = parsed.get("created_at")
+        if not isinstance(created_at, str):
+            return False
+        created = datetime.fromisoformat(created_at)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return created.astimezone(timezone.utc) < cutoff
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _quote_choice_audit_payload(quote_choice: QuoteContextChoice | None) -> dict[str, Any] | None:
+    if not quote_choice:
+        return None
+    return {
+        "primary_id": quote_choice.primary_id,
+        "context_ids": quote_choice.context_ids,
+        "context_needed": quote_choice.context_needed,
+    }
+
+
+def _day_verdict_audit_payload(verdict: DayVerdict | None) -> dict[str, Any] | None:
+    if not verdict:
+        return None
+    return {
+        "should_publish": verdict.should_publish,
+        "reason_code": verdict.reason_code,
+        "reason_text": verdict.reason_text,
+    }
 
 
 def _normalize_scores(

@@ -18,6 +18,7 @@
 - 🧵 **Опциональный контекст цитаты** — добавляет до 5 последовательных или reply-связанных сообщений только когда нужно
 - 😴 **Проверка скучного дня** — если день вышел плоским, бот честно скажет об этом вместо слабой цитаты
 - ❤️ **Контекст реакций** — передаёт эмодзи-реакции ИИ по каждому сообщению
+- 🧾 **AI audit log** — пишет точное тело запроса OpenRouter и сырой ответ в `logs/ai_audit.jsonl` за последние 7 дней
 - 📏 **Контекст текста** — сохраняет длину сообщения для прозрачных деталей
 - 🔎 **Админский AI-preview** — `/quote` показывает текущего лидера администраторам без публикации и очистки данных
 - 📌 **Автозакрепление** — закрепляет цитату-победителя в чате
@@ -90,7 +91,7 @@ BOT_TOKEN=your_telegram_bot_token
 BOT_USERNAME=your_bot_username
 DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
-OPENROUTER_MODEL=google/gemma-3-1b-it:free
+OPENROUTER_MODEL=x-ai/grok-4.3
 OPENROUTER_REASONING_EFFORT=
 DEVELOPER_IDS=[1234567890]
 QUOTE_HOUR=21
