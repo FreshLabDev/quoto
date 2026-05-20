@@ -28,6 +28,26 @@ class _DummySession:
         self.added.append(value)
 
 
+class _DummyResult:
+    def __init__(self, value: object | None) -> None:
+        self.value = value
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return self.value
+
+
+class _UpdateSession(_DummySession):
+    def __init__(self, value: object | None) -> None:
+        super().__init__()
+        self.value = value
+
+    async def execute(self, _stmt):
+        return _DummyResult(self.value)
+
+
 class CoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_save_message_uses_telegram_message_timestamp(self) -> None:
         session = _DummySession()
@@ -52,3 +72,44 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved.reply_to_message_id, 76)
         self.assertEqual(saved.chat_id, -100123456)
         self.assertEqual(saved.user_id, 5)
+
+    async def test_update_message_updates_text_without_changing_created_at(self) -> None:
+        created_at = datetime(2026, 3, 27, 20, 30, tzinfo=timezone.utc)
+        db_message = SimpleNamespace(
+            message_id=77,
+            chat_id=-100123456,
+            text="old",
+            reply_to_message_id=None,
+            created_at=created_at,
+        )
+        session = _UpdateSession(db_message)
+        edited = SimpleNamespace(
+            text="new text",
+            message_id=77,
+            chat=SimpleNamespace(id=-100123456),
+            reply_to_message=SimpleNamespace(message_id=76),
+        )
+
+        with patch.object(core, "SessionLocal", return_value=session):
+            result = await core.update_message(edited)
+
+        self.assertIs(result, db_message)
+        self.assertEqual(db_message.text, "new text")
+        self.assertEqual(db_message.reply_to_message_id, 76)
+        self.assertEqual(db_message.created_at, created_at)
+        session.commit.assert_awaited_once()
+
+    async def test_update_message_does_not_create_unknown_message(self) -> None:
+        session = _UpdateSession(None)
+        edited = SimpleNamespace(
+            text="new text",
+            message_id=77,
+            chat=SimpleNamespace(id=-100123456),
+            reply_to_message=None,
+        )
+
+        with patch.object(core, "SessionLocal", return_value=session):
+            result = await core.update_message(edited)
+
+        self.assertIsNone(result)
+        session.commit.assert_not_awaited()

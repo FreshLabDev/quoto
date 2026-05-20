@@ -93,6 +93,47 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ai_payload[0]["reactions"], {"😂": 3, "❤️": 1})
         self.assertNotIn("reactions", ai_payload[1])
 
+    async def test_pick_best_quote_filters_only_exact_quoto_hashtag_before_ai(self) -> None:
+        messages = [
+            _message(1, 11, "previous report #quoto", "Alice"),
+            _message(2, 12, "plain quoto word stays", "Bob"),
+            _message(3, 13, "Подробности дня #60 stays", "Cara"),
+            _message(4, 14, "other #quotoday stays", "Dan"),
+            _message(5, 15, "mixed #QuOtO punctuation", "Eve"),
+        ]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(
+            scores={2: 0.6, 3: 0.7, 4: 0.8},
+            actual_model="openrouter/test",
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)) as evaluate,
+        ):
+            result = await scoring.pick_best_quote(-100123456, window)
+
+        self.assertEqual(result.best_message.id, 4)
+        ai_payload = evaluate.await_args.args[0]
+        self.assertEqual([item["id"] for item in ai_payload], [2, 3, 4])
+
+    async def test_pick_best_quote_skips_ai_when_all_messages_filtered(self) -> None:
+        messages = [
+            _message(1, 11, "#quoto", "Alice"),
+            _message(2, 12, "daily card #QUOTO", "Bob"),
+        ]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock()) as evaluate,
+        ):
+            result = await scoring.pick_best_quote(-100123456, window)
+
+        self.assertEqual(result.message_count, 0)
+        self.assertEqual(result.source_message_count, 2)
+        evaluate.assert_not_awaited()
+
     async def test_pick_best_quote_uses_ai_primary_and_valid_contiguous_context(self) -> None:
         messages = [
             _message(1, 11, "setup", "Alice"),
@@ -113,11 +154,55 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
             patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)),
+            patch.object(scoring.ai_reports, "save_evaluation_report", new=AsyncMock()),
         ):
             result = await scoring.pick_best_quote(-100123456, window)
 
         self.assertEqual(result.best_message.id, 3)
         self.assertEqual([message.id for message in result.context_messages], [1, 2, 3])
+
+    async def test_pick_best_quote_persists_daily_evaluation_report(self) -> None:
+        messages = [
+            _message(1, 11, "setup #quoto", "Alice"),
+            _message(2, 12, "real setup", "Bob"),
+            _message(3, 13, "real punchline", "Cara", reply_to=12),
+        ]
+        window = SimpleNamespace(
+            quote_day="2026-05-20",
+            start_utc=1,
+            end_utc=2,
+            start_local=1,
+            end_local=2,
+        )
+        evaluation_result = ai.EvaluationResult(
+            scores={2: 0.4, 3: 0.9},
+            actual_model="openrouter/test",
+            requested_model="openrouter/requested",
+            quote_choice=ai.QuoteContextChoice(
+                primary_id=3,
+                context_ids=[2, 3],
+                context_needed=True,
+            ),
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)),
+            patch.object(scoring.ai_reports, "save_evaluation_report", new=AsyncMock()) as save_report,
+        ):
+            result = await scoring.pick_best_quote(
+                -100123456,
+                window,
+                include_day_verdict=True,
+                group_id=42,
+            )
+
+        self.assertEqual(result.best_message.id, 3)
+        save_report.assert_awaited_once()
+        kwargs = save_report.await_args.kwargs
+        self.assertEqual(kwargs["group_id"], 42)
+        self.assertEqual([message.id for message in kwargs["source_messages"]], [1, 2, 3])
+        self.assertEqual([message.id for message in kwargs["scored_messages"]], [2, 3])
 
     def test_context_validator_accepts_reply_connected_noncontiguous_thread(self) -> None:
         messages = [

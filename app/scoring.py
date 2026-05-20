@@ -1,16 +1,18 @@
 import logging
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from . import ai
+from . import ai, ai_reports
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .models import Message
 from .windows import QuoteWindow
 
 log = setup_logging(logging.getLogger(__name__))
+_QUOTO_HASHTAG_RE = re.compile(r"(?<![\w])#quoto(?![\w])", re.IGNORECASE)
 
 
 def create_bar(current: int, total: int = 100, width: int = 6, style: str = "circles") -> str:
@@ -60,6 +62,7 @@ class QuoteEvaluation:
     breakdown: ScoreBreakdown = field(default_factory=ScoreBreakdown)
     context_messages: list[Message] = field(default_factory=list)
     message_count: int = 0
+    source_message_count: int = 0
     should_publish: bool = True
     day_reason_code: str | None = None
     day_reason_text: str = ""
@@ -91,6 +94,7 @@ async def pick_best_quote(
     window: QuoteWindow,
     include_day_verdict: bool = False,
     day_verdict_min_messages: int | None = None,
+    group_id: int | None = None,
 ) -> QuoteEvaluation:
     async with SessionLocal() as session:
         stmt = (
@@ -104,11 +108,26 @@ async def pick_best_quote(
             .order_by(Message.created_at.asc())
         )
         result = await session.execute(stmt)
-        messages = result.scalars().all()
+        source_messages = result.scalars().all()
 
-    if not messages:
+    if not source_messages:
         log.debug(f"{chat_id} | 📭 Нет сообщений за день {window.start_local} -> {window.end_local}")
         return QuoteEvaluation(message_count=0)
+
+    messages = [message for message in source_messages if not _contains_quoto_hashtag(message.text)]
+    if not messages:
+        log.debug(
+            f"{chat_id} | 📭 Нет сообщений для AI после фильтра #quoto "
+            f"за день {window.start_local} -> {window.end_local}"
+        )
+        return QuoteEvaluation(message_count=0, source_message_count=len(source_messages))
+
+    if day_verdict_min_messages is not None and len(messages) < day_verdict_min_messages:
+        log.debug(
+            f"{chat_id} | 🤫 Сообщений для AI после фильтра #quoto "
+            f"{len(messages)} < {day_verdict_min_messages}"
+        )
+        return QuoteEvaluation(message_count=len(messages), source_message_count=len(source_messages))
 
     reaction_totals: dict[int, int] = {
         msg.id: sum(r.count for r in msg.reactions)
@@ -174,11 +193,24 @@ async def pick_best_quote(
             f"с оценкой {round(best_breakdown.total, 2)}"
         )
 
+    if include_day_verdict and group_id is not None:
+        await ai_reports.save_evaluation_report(
+            group_id=group_id,
+            chat_id=chat_id,
+            window=window,
+            source_messages=source_messages,
+            scored_messages=messages,
+            reaction_totals=reaction_totals,
+            evaluation=evaluation,
+            selected_message=best_msg,
+        )
+
     return QuoteEvaluation(
         best_message=best_msg,
         breakdown=best_breakdown,
         context_messages=context_messages,
         message_count=len(messages),
+        source_message_count=len(source_messages),
         should_publish=should_publish,
         day_reason_code=day_verdict.reason_code if day_verdict else None,
         day_reason_text=day_verdict.reason_text if day_verdict else "",
@@ -192,6 +224,12 @@ def _message_reactions_payload(message: Message) -> dict[str, int]:
         for reaction in message.reactions
         if reaction.count > 0
     }
+
+
+def _contains_quoto_hashtag(text: str | None) -> bool:
+    if not text:
+        return False
+    return bool(_QUOTO_HASHTAG_RE.search(text))
 
 
 def _valid_primary_id(

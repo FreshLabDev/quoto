@@ -198,3 +198,27 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         user_get_or_create.assert_not_awaited()
         group_get_or_create.assert_not_awaited()
         save_message.assert_not_awaited()
+
+    async def test_edited_group_message_updates_existing_record(self) -> None:
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=777, is_bot=False),
+            text="edited text",
+            chat=SimpleNamespace(id=-100123456, type="supergroup"),
+        )
+
+        with patch.object(handlers.core, "update_message", new=AsyncMock()) as update_message:
+            await handlers.edited_group_message_handler(message)
+
+        update_message.assert_awaited_once_with(message)
+
+    async def test_edited_group_message_ignores_bot_edits(self) -> None:
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=777, is_bot=True),
+            text="bot edit",
+            chat=SimpleNamespace(id=-100123456, type="supergroup"),
+        )
+
+        with patch.object(handlers.core, "update_message", new=AsyncMock()) as update_message:
+            await handlers.edited_group_message_handler(message)
+
+        update_message.assert_not_awaited()

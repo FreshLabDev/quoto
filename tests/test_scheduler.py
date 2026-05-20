@@ -123,7 +123,31 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             self.window,
             include_day_verdict=True,
             day_verdict_min_messages=scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
+            group_id=self.group.id,
         )
+
+    async def test_process_group_clears_window_when_all_messages_filtered_before_ai(self) -> None:
+        source_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+        evaluation = scoring.QuoteEvaluation(message_count=0, source_message_count=source_count)
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=source_count)),
+            patch.object(
+                scheduler.core,
+                "clear_window_messages",
+                new=AsyncMock(return_value=source_count),
+            ) as clear_messages,
+            patch.object(
+                scheduler.scoring,
+                "pick_best_quote",
+                new=AsyncMock(return_value=evaluation),
+            ),
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        clear_messages.assert_awaited_once_with(self.group.chat_id, self.window)
 
     async def test_send_boring_notice_escapes_ai_reason_html(self) -> None:
         bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=101)))

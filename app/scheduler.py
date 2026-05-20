@@ -93,9 +93,17 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         window,
         include_day_verdict=True,
         day_verdict_min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
+        group_id=group.id,
     )
 
     if evaluation.message_count == 0:
+        if evaluation.source_message_count:
+            deleted = await core.clear_window_messages(group.chat_id, window)
+            log.info(
+                f"{group.chat_id} | 📭 День {window.quote_day} пустой после фильтра #quoto. "
+                f"Очищено {deleted} сообщений."
+            )
+            return
         log.info(f"{group.chat_id} | 📭 День {window.quote_day} пустой")
         return
 

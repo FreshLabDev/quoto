@@ -123,6 +123,35 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
             return None
 
 
+async def update_message(message: types.Message) -> models.Message | None:
+    if not message.text:
+        return None
+
+    reply_to_message = getattr(message, "reply_to_message", None)
+    reply_to_message_id = getattr(reply_to_message, "message_id", None) if reply_to_message else None
+
+    async with SessionLocal() as session:
+        try:
+            result = await session.execute(
+                select(models.Message).where(
+                    models.Message.message_id == message.message_id,
+                    models.Message.chat_id == message.chat.id,
+                )
+            )
+            db_msg = result.scalars().first()
+            if not db_msg:
+                return None
+
+            db_msg.text = message.text
+            db_msg.reply_to_message_id = reply_to_message_id
+            await session.commit()
+            await session.refresh(db_msg)
+            return db_msg
+        except Exception as e:
+            log.error(f"❌ Ошибка обновления сообщения {message.message_id}: {e}")
+            return None
+
+
 async def sync_reactions(chat_id: int, message_id: int, emoji_counts: dict[str, int]) -> None:
     async with SessionLocal() as session:
         result = await session.execute(

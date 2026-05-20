@@ -17,6 +17,19 @@ from app.ai import DayVerdictParseError, _parse_day_payload
 from app.quote_status import REASON_BORING_DAY
 
 
+class PromptTests(unittest.TestCase):
+    def test_day_prompt_uses_live_curator_policy(self) -> None:
+        self.assertIn("live Telegram group quote curator", ai._DAY_PROMPT)
+        self.assertIn("not a literary critic", ai._DAY_PROMPT)
+        self.assertIn("Do not require polished jokes", ai._DAY_PROMPT)
+        self.assertIn("full minimal context block", ai._DAY_PROMPT)
+        self.assertIn("Set should_publish to false only when the best candidate is truly nothing", ai._DAY_PROMPT)
+
+    def test_score_prompt_requires_model_owned_context(self) -> None:
+        self.assertIn("full minimal context block", ai._SCORE_PROMPT)
+        self.assertIn("set `context_needed` to true when the selected moment needs more than one message", ai._SCORE_PROMPT)
+
+
 class DayVerdictParsingTests(unittest.TestCase):
     def test_string_false_is_parsed_strictly(self) -> None:
         entries, verdict, quote_choice = _parse_day_payload(

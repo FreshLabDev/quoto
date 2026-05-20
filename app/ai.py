@@ -21,15 +21,18 @@ _AUDIT_RETENTION = timedelta(days=7)
 _audit_log_lock = Lock()
 
 _SCORE_PROMPT = (
-    "You are a humor and wit judge for a Telegram group chat. "
+    "You are a live Telegram group quote curator, not a literary critic. "
     "You will receive a JSON array of messages. Each message has an internal `id`; use ONLY that `id` "
     "for `primary_id`, `context_ids`, and message scores. `message_id` is Telegram metadata for reference only. "
     "Use reactions as lightweight context when present. "
-    "Rate each message on a scale from 0 to 10 based on humor, wit, insight, memorability, and originality. "
-    "A quote can be one standalone message or a short dialogue. If the punchline depends on setup, "
-    "a previous line, or a reply chain, include the minimal context block instead of publishing the punchline alone. "
+    "Rate each message on a scale from 0 to 10 based on how quotable it feels inside this chat: a funny word, "
+    "absurd phrase, rude but memorable line, chaotic combination, dry reply, local meme, or short dialogue can win. "
+    "Do not require polished jokes. Slang, typos, profanity, dumb-funny phrasing, and local chaos are valid. "
+    "A quote can be one standalone message or a short dialogue. If the selected quote is short, a reply, "
+    "a punchline, a refusal, a reaction, or only funny because of setup, include the full minimal context block "
+    "instead of publishing the punchline alone. "
     "Use `context_ids` only for consecutive messages or a real reply thread. Keep them in reading order, include "
-    "`primary_id`, and set `context_needed` to true when `context_ids` contains more than one id. "
+    "`primary_id`, and set `context_needed` to true when the selected moment needs more than one message. "
     "Never combine unrelated messages. Max 5 context messages. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
@@ -37,18 +40,23 @@ _SCORE_PROMPT = (
 )
 
 _DAY_PROMPT = (
-    "You are a humor and wit judge for a Telegram group chat. "
+    "You are a live Telegram group quote curator, not a literary critic. "
     "You will receive a JSON array of messages from one quote day. Each message has an internal `id`; use ONLY "
     "that `id` for `primary_id`, `context_ids`, and message scores. `message_id` is Telegram metadata for "
     "reference only. "
     "Use reactions as lightweight context when present. "
-    "First, rate every message from 0 to 10 based on humor, wit, insight, memorability, and originality. "
+    "First, rate every message from 0 to 10 based on how quotable it feels inside this chat: a funny word, "
+    "absurd phrase, rude but memorable line, chaotic combination, dry reply, local meme, or short dialogue can win. "
+    "Do not require polished jokes. Slang, typos, profanity, dumb-funny phrasing, and local chaos are valid. "
     "Then decide whether the day is worthy of a public 'quote of the day' announcement. "
-    "If the conversation feels flat, repetitive, generic, or lacking a truly quotable line, set should_publish to false. "
-    "A quote can be one standalone message or a short dialogue. If the punchline depends on setup, "
-    "a previous line, or a reply chain, include the minimal context block instead of publishing the punchline alone. "
+    "Prefer publishing if there is at least one mildly funny, weird, memorable, or locally quotable moment. "
+    "Set should_publish to false only when the best candidate is truly nothing: generic small talk, link-only noise, "
+    "admin/meta noise, empty reaction noise, or a phrase that would look dull as quote of the day. "
+    "A quote can be one standalone message or a short dialogue. If the selected quote is short, a reply, "
+    "a punchline, a refusal, a reaction, or only funny because of setup, include the full minimal context block "
+    "instead of publishing the punchline alone. "
     "Use `context_ids` only for consecutive messages or a real reply thread. Keep them in reading order, include "
-    "`primary_id`, and set `context_needed` to true when `context_ids` contains more than one id. "
+    "`primary_id`, and set `context_needed` to true when the selected moment needs more than one message. "
     "Never combine unrelated messages. Max 5 context messages. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
@@ -76,6 +84,9 @@ class QuoteContextChoice:
 class EvaluationResult:
     scores: dict[int, float]
     actual_model: str
+    requested_model: str | None = None
+    status: str = "parsed"
+    request_id: str | None = None
     day_verdict: DayVerdict | None = None
     day_verdict_error: str | None = None
     quote_choice: QuoteContextChoice | None = None
@@ -94,7 +105,12 @@ async def evaluate_messages(
     include_day_verdict: bool = False,
 ) -> EvaluationResult:
     if not messages:
-        return EvaluationResult(scores={}, actual_model=settings.OPENROUTER_MODEL)
+        return EvaluationResult(
+            scores={},
+            actual_model=settings.OPENROUTER_MODEL,
+            requested_model=settings.OPENROUTER_MODEL,
+            status="empty",
+        )
 
     neutral_scores = {int(msg["id"]): 0.5 for msg in messages}
     default_model = settings.OPENROUTER_MODEL
@@ -105,6 +121,8 @@ async def evaluate_messages(
         return EvaluationResult(
             scores=neutral_scores,
             actual_model=default_model,
+            requested_model=default_model,
+            status="ai_failed",
             day_verdict=default_verdict if not include_day_verdict else None,
             day_verdict_error=(
                 "OPENROUTER_API_KEY is not configured for automatic day verdict evaluation."
@@ -186,6 +204,9 @@ async def evaluate_messages(
                 return EvaluationResult(
                     scores=neutral_scores,
                     actual_model=actual_model,
+                    requested_model=default_model,
+                    status="ai_failed",
+                    request_id=request_id,
                     day_verdict=default_verdict if not include_day_verdict else None,
                     day_verdict_error=(
                         "AI returned an empty response for automatic day verdict evaluation."
@@ -215,6 +236,9 @@ async def evaluate_messages(
             return EvaluationResult(
                 scores=scores,
                 actual_model=actual_model,
+                requested_model=default_model,
+                status="parsed",
+                request_id=request_id,
                 day_verdict=verdict,
                 day_verdict_error=verdict_error,
                 quote_choice=quote_choice,
@@ -268,9 +292,19 @@ async def evaluate_messages(
 
         break
 
+    failure_status = "parse_failed" if "audit_record" in locals() and audit_record.get("error", {}).get("type") in {
+        "JSONDecodeError",
+        "KeyError",
+        "IndexError",
+        "ValueError",
+    } else "ai_failed"
+
     return EvaluationResult(
         scores=neutral_scores,
         actual_model=default_model,
+        requested_model=default_model,
+        status=failure_status,
+        request_id=request_id if "request_id" in locals() else None,
         day_verdict=default_verdict if not include_day_verdict else None,
         day_verdict_error=(
             "AI evaluation failed before a valid automatic day verdict was produced."

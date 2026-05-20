@@ -387,6 +387,16 @@ async def group_message_handler(message: types.Message):
     await core.save_message(message, user)
 
 
+@router.edited_message(F.chat.type.in_({"group", "supergroup"}), F.text)
+async def edited_group_message_handler(message: types.Message):
+    if not message.from_user:
+        return
+    if message.from_user.is_bot:
+        return
+
+    await core.update_message(message)
+
+
 @router.message_reaction()
 async def reaction_handler(event: types.MessageReactionUpdated):
     emoji_deltas: Counter[str] = Counter()
