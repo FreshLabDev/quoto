@@ -4,6 +4,7 @@
 logs
 .env
 .collaborator
+._*
 __pycache__
 */__pycache__
 *.pyc

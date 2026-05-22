@@ -28,9 +28,9 @@ class Settings(BaseSettings):
 
     # -- AI SETTINGS --
     OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "x-ai/grok-4.3"
+    OPENROUTER_MODEL: str = "google/gemini-3.5-flash"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
-    OPENROUTER_REASONING_EFFORT: str = ""
+    OPENROUTER_REASONING_EFFORT: str = "medium"
 
     # -- SCORING WEIGHTS --
     WEIGHT_REACTIONS: float = 0.0
