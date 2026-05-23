@@ -99,7 +99,7 @@ async def pick_best_quote(
     async with SessionLocal() as session:
         stmt = (
             select(Message)
-            .options(selectinload(Message.reactions), selectinload(Message.author))
+            .options(selectinload(Message.reactions), selectinload(Message.author), selectinload(Message.media_items))
             .where(
                 Message.chat_id == chat_id,
                 Message.created_at >= window.start_utc,
@@ -134,18 +134,27 @@ async def pick_best_quote(
         for msg in messages
     }
     max_reactions = max(reaction_totals.values(), default=0)
+    telegram_to_internal = {msg.message_id: msg.id for msg in messages}
 
     ai_payload = []
     for msg in messages:
         payload = {
             "id": msg.id,
-            "message_id": msg.message_id,
-            "text": msg.text,
             "author": msg.author.name if msg.author else "Unknown",
+            "kind": getattr(msg, "content_type", None) or "text",
         }
-        reply_to_message_id = getattr(msg, "reply_to_message_id", None)
-        if reply_to_message_id is not None:
-            payload["reply_to_message_id"] = reply_to_message_id
+        text_payload = _message_text_payload(msg)
+        if text_payload:
+            payload["text"] = text_payload
+        caption = getattr(msg, "caption", None)
+        if caption:
+            payload["caption"] = caption
+        media_description = _message_media_description(msg)
+        if media_description:
+            payload["desc"] = media_description
+        reply_to_id = telegram_to_internal.get(getattr(msg, "reply_to_message_id", None))
+        if reply_to_id is not None:
+            payload["reply_to_id"] = reply_to_id
         reactions = _message_reactions_payload(msg)
         if reactions:
             payload["reactions"] = reactions
@@ -224,6 +233,23 @@ def _message_reactions_payload(message: Message) -> dict[str, int]:
         for reaction in message.reactions
         if reaction.count > 0
     }
+
+
+def _message_text_payload(message: Message) -> str:
+    if getattr(message, "content_type", None) == "text":
+        return message.text
+    return ""
+
+
+def _message_media_description(message: Message) -> str | None:
+    media_items = getattr(message, "media_items", None) or []
+    for item in media_items:
+        description = getattr(item, "description_snapshot", None)
+        if description:
+            return str(description)
+    if getattr(message, "content_type", None) != "text" and message.text:
+        return message.text
+    return None
 
 
 def _contains_quoto_hashtag(text: str | None) -> bool:
