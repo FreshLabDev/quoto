@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     OPENROUTER_REASONING_EFFORT: str = "medium"
     OPENROUTER_EVAL_REASONING_EFFORT: str = "medium"
     OPENROUTER_MEDIA_REASONING_EFFORT: str = "medium"
-    OPENROUTER_EVAL_MAX_TOKENS: int = 4096
+    OPENROUTER_EVAL_MAX_TOKENS: int = 12000
 
     # -- MEDIA SETTINGS --
     MEDIA_ANALYSIS_ENABLED: bool = True

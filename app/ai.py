@@ -213,8 +213,9 @@ async def evaluate_messages(
         ],
         "response_format": _response_format(include_day_verdict),
     }
-    if settings.OPENROUTER_EVAL_MAX_TOKENS > 0:
-        body["max_tokens"] = settings.OPENROUTER_EVAL_MAX_TOKENS
+    max_tokens = _eval_max_tokens(len(messages), include_day_verdict=include_day_verdict)
+    if max_tokens > 0:
+        body["max_tokens"] = max_tokens
     if settings.OPENROUTER_EVAL_REASONING_EFFORT:
         body["reasoning"] = {
             "enabled": True,
@@ -405,6 +406,16 @@ def _write_ai_audit_record(record: dict[str, Any]) -> None:
                 handle.write("\n")
     except Exception:
         pass
+
+
+def _eval_max_tokens(message_count: int, *, include_day_verdict: bool) -> int:
+    ceiling = settings.OPENROUTER_EVAL_MAX_TOKENS
+    if ceiling <= 0:
+        return 0
+    budget = 2048 + max(0, message_count) * 48
+    if include_day_verdict:
+        budget += 512
+    return min(ceiling, max(4096, budget))
 
 
 def _prune_ai_audit_log(path: Path, now: datetime) -> None:
