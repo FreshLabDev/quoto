@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     OPENROUTER_MEDIA_MODEL: str = "google/gemini-3.1-flash-lite"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
     OPENROUTER_REASONING_EFFORT: str = "medium"
-    OPENROUTER_EVAL_REASONING_EFFORT: str = "high"
+    OPENROUTER_EVAL_REASONING_EFFORT: str = "medium"
     OPENROUTER_MEDIA_REASONING_EFFORT: str = "medium"
+    OPENROUTER_EVAL_MAX_TOKENS: int = 4096
 
     # -- MEDIA SETTINGS --
     MEDIA_ANALYSIS_ENABLED: bool = True

@@ -101,7 +101,8 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
             patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
-            patch.object(ai.settings, "OPENROUTER_EVAL_REASONING_EFFORT", "high"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_REASONING_EFFORT", "medium"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 4096),
             patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
         ):
             result = await ai.evaluate_messages(
@@ -122,8 +123,9 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(captured_body)
         self.assertEqual(
             captured_body["reasoning"],
-            {"enabled": True, "effort": "high", "exclude": True},
+            {"enabled": True, "effort": "medium", "exclude": True},
         )
+        self.assertEqual(captured_body["max_tokens"], 4096)
         user_payload = json.loads(captured_body["messages"][1]["content"])
         self.assertEqual(user_payload[0]["i"], 1)
         self.assertEqual(user_payload[0]["rp"], 2)
@@ -132,6 +134,8 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("re", user_payload[1])
         self.assertNotIn("rp", user_payload[1])
         self.assertEqual(captured_body["response_format"]["type"], "json_schema")
+        day_schema = ai._response_format(include_day_verdict=True)["json_schema"]["schema"]
+        self.assertEqual(day_schema["properties"]["day"]["properties"]["reason_text"]["maxLength"], 200)
 
     async def test_evaluate_messages_retries_request_errors(self) -> None:
         attempts = 0

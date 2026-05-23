@@ -68,7 +68,7 @@ _DAY_PROMPT = (
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
     "\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
     "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
-    "Respond in the language of the messages for reason_text."
+    "Keep reason_text under 160 characters. Respond in the language of the messages for reason_text."
 )
 
 _MEDIA_DESCRIPTION_PROMPT = (
@@ -118,7 +118,7 @@ _DAY_RESPONSE_SCHEMA = {
             "properties": {
                 "should_publish": {"type": "boolean"},
                 "reason_code": {"type": "string"},
-                "reason_text": {"type": "string"},
+                "reason_text": {"type": "string", "maxLength": 200},
             },
             "required": ["should_publish", "reason_code", "reason_text"],
         },
@@ -213,6 +213,8 @@ async def evaluate_messages(
         ],
         "response_format": _response_format(include_day_verdict),
     }
+    if settings.OPENROUTER_EVAL_MAX_TOKENS > 0:
+        body["max_tokens"] = settings.OPENROUTER_EVAL_MAX_TOKENS
     if settings.OPENROUTER_EVAL_REASONING_EFFORT:
         body["reasoning"] = {
             "enabled": True,
