@@ -24,6 +24,17 @@ def _has_unique_constraint(inspector: sa.Inspector, table_name: str, constraint_
     return any(constraint["name"] == constraint_name for constraint in inspector.get_unique_constraints(table_name))
 
 
+def _add_column_if_missing(
+    table_name: str,
+    column_name: str,
+    column: sa.Column,
+    *,
+    existing_columns: set[str],
+) -> None:
+    if column_name not in existing_columns:
+        op.add_column(table_name, column)
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -131,6 +142,41 @@ def upgrade() -> None:
     if not _has_index(inspector, "message_media", "ix_message_media_sha256"):
         op.create_index("ix_message_media_sha256", "message_media", ["sha256"])
 
+    tables = set(sa.inspect(bind).get_table_names())
+    if "message_ai_scores" in tables:
+        score_columns = {column["name"] for column in inspector.get_columns("message_ai_scores")}
+        _add_column_if_missing(
+            "message_ai_scores",
+            "content_type",
+            sa.Column("content_type", sa.String(), nullable=False, server_default="text"),
+            existing_columns=score_columns,
+        )
+        if "content_type" not in score_columns:
+            op.alter_column("message_ai_scores", "content_type", server_default=None)
+        for column_name, column in (
+            ("caption_snapshot", sa.Column("caption_snapshot", sa.Text(), nullable=True)),
+            ("media_status", sa.Column("media_status", sa.String(), nullable=True)),
+            ("media_description_snapshot", sa.Column("media_description_snapshot", sa.Text(), nullable=True)),
+            ("media_kind", sa.Column("media_kind", sa.String(), nullable=True)),
+            ("telegram_file_id", sa.Column("telegram_file_id", sa.String(), nullable=True)),
+            ("telegram_file_unique_id", sa.Column("telegram_file_unique_id", sa.String(), nullable=True)),
+            ("mime_type", sa.Column("mime_type", sa.String(), nullable=True)),
+            ("file_name", sa.Column("file_name", sa.String(), nullable=True)),
+            ("file_size", sa.Column("file_size", sa.BigInteger(), nullable=True)),
+            ("width", sa.Column("width", sa.Integer(), nullable=True)),
+            ("height", sa.Column("height", sa.Integer(), nullable=True)),
+            ("duration", sa.Column("duration", sa.Float(), nullable=True)),
+            ("sha256", sa.Column("sha256", sa.String(), nullable=True)),
+            ("phash", sa.Column("phash", sa.String(), nullable=True)),
+            ("media_cache_id", sa.Column("media_cache_id", sa.BigInteger(), nullable=True)),
+        ):
+            _add_column_if_missing(
+                "message_ai_scores",
+                column_name,
+                column,
+                existing_columns=score_columns,
+            )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
@@ -157,3 +203,26 @@ def downgrade() -> None:
         quote_columns = {column["name"] for column in inspector.get_columns("quotes")}
         if "content_type" in quote_columns:
             op.drop_column("quotes", "content_type")
+
+    if "message_ai_scores" in tables:
+        score_columns = {column["name"] for column in inspector.get_columns("message_ai_scores")}
+        for column_name in (
+            "media_cache_id",
+            "phash",
+            "sha256",
+            "duration",
+            "height",
+            "width",
+            "file_size",
+            "file_name",
+            "mime_type",
+            "telegram_file_unique_id",
+            "telegram_file_id",
+            "media_kind",
+            "media_description_snapshot",
+            "media_status",
+            "caption_snapshot",
+            "content_type",
+        ):
+            if column_name in score_columns:
+                op.drop_column("message_ai_scores", column_name)
