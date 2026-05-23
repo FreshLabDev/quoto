@@ -37,6 +37,10 @@ class _DummySession:
     def __init__(self, results: list[list[object]]) -> None:
         self.results = results
         self.calls = 0
+        self.commit = AsyncMock()
+        self.refresh = AsyncMock()
+        self.rollback = AsyncMock()
+        self.added: list[object] = []
 
     async def __aenter__(self):
         return self
@@ -48,6 +52,9 @@ class _DummySession:
         result = self.results[self.calls] if self.calls < len(self.results) else []
         self.calls += 1
         return _DummyResult(result)
+
+    def add(self, value: object) -> None:
+        self.added.append(value)
 
 
 class MediaSourceTests(unittest.TestCase):
@@ -86,6 +93,44 @@ class MediaSourceTests(unittest.TestCase):
         self.assertIn("document", media.initial_message_text(message))
         self.assertIn("report.pdf", media.initial_message_text(message))
 
+    def test_source_from_media_item_reconstructs_retry_source(self) -> None:
+        item = SimpleNamespace(
+            media_kind="photo",
+            telegram_file_id="file-1",
+            telegram_file_unique_id="unique-1",
+            mime_type="image/jpeg",
+            file_name=None,
+            file_size=123,
+            width=640,
+            height=480,
+            duration=None,
+        )
+
+        source = media._source_from_media_item(item)
+
+        self.assertEqual(source.kind, "photo")
+        self.assertEqual(source.file_id, "file-1")
+        self.assertEqual(source.file_unique_id, "unique-1")
+        self.assertTrue(source.supports_analysis)
+
+    def test_source_from_tgs_sticker_item_is_unsupported(self) -> None:
+        item = SimpleNamespace(
+            media_kind="sticker",
+            telegram_file_id="file-1",
+            telegram_file_unique_id="unique-1",
+            mime_type="application/x-tgsticker",
+            file_name=None,
+            file_size=123,
+            width=512,
+            height=512,
+            duration=None,
+        )
+
+        source = media._source_from_media_item(item)
+
+        self.assertEqual(source.kind, "sticker")
+        self.assertFalse(source.supports_analysis)
+
 
 class MediaCacheTests(unittest.IsolatedAsyncioTestCase):
     async def test_find_cache_hits_file_unique_id(self) -> None:
@@ -121,6 +166,90 @@ class MediaCacheTests(unittest.IsolatedAsyncioTestCase):
             result = await media._find_cache(source, phash="000000000000001f")
 
         self.assertIs(result, cache)
+
+
+class MediaPendingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_process_pending_media_retries_pending_items(self) -> None:
+        item = SimpleNamespace(
+            message_db_id=55,
+            media_kind="photo",
+            telegram_file_id="file-1",
+            telegram_file_unique_id="unique-1",
+            mime_type="image/jpeg",
+            file_name=None,
+            file_size=123,
+            width=640,
+            height=480,
+            duration=None,
+        )
+        bot = SimpleNamespace()
+
+        with (
+            patch.object(media, "_load_pending_media_items", new=AsyncMock(return_value=[item])),
+            patch.object(media, "_process_media_source", new=AsyncMock()) as process_media_source,
+            patch.object(media, "_mark_orphan_pending_messages_failed", new=AsyncMock(return_value=0)),
+        ):
+            processed = await media.process_pending_media(bot, limit=10)
+
+        self.assertEqual(processed, 1)
+        process_media_source.assert_awaited_once()
+        self.assertEqual(process_media_source.await_args.kwargs["db_message_id"], 55)
+        self.assertEqual(process_media_source.await_args.kwargs["source"].kind, "photo")
+        self.assertEqual(process_media_source.await_args.kwargs["source"].file_id, "file-1")
+
+    async def test_store_media_result_updates_existing_pending_item(self) -> None:
+        message = SimpleNamespace(id=55, caption=None, text="old", media_status="pending")
+        media_item = SimpleNamespace(
+            id=1,
+            message_db_id=55,
+            media_cache_id=None,
+            media_kind="photo",
+            telegram_file_id="old-file",
+            telegram_file_unique_id="old-unique",
+            mime_type="image/jpeg",
+            file_name=None,
+            file_size=None,
+            width=None,
+            height=None,
+            duration=None,
+            sha256=None,
+            phash=None,
+            analysis_status="pending",
+            analysis_error=None,
+            description_snapshot=None,
+        )
+        session = _DummySession([[message], [media_item]])
+        source = media.MediaSource(
+            kind="photo",
+            file_id="file-1",
+            file_unique_id="unique-1",
+            mime_type="image/jpeg",
+            file_size=123,
+            width=640,
+            height=480,
+            supports_analysis=True,
+        )
+
+        with patch.object(media, "SessionLocal", return_value=session):
+            await media._store_media_result(
+                db_message_id=55,
+                source=source,
+                status="analyzed",
+                description="человек держит табличку",
+                sha256="a" * 64,
+                phash="b" * 16,
+            )
+
+        self.assertEqual(message.media_status, "analyzed")
+        self.assertEqual(message.text, "photo: человек держит табличку")
+        self.assertEqual(media_item.analysis_status, "analyzed")
+        self.assertEqual(media_item.telegram_file_id, "file-1")
+        self.assertEqual(media_item.telegram_file_unique_id, "unique-1")
+        self.assertEqual(media_item.sha256, "a" * 64)
+        self.assertEqual(media_item.phash, "b" * 16)
+        self.assertEqual(media_item.description_snapshot, "человек держит табличку")
+        self.assertEqual(session.added, [])
+        session.commit.assert_awaited_once()
 
 
 class MediaNormalizationTests(unittest.TestCase):

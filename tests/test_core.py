@@ -14,6 +14,7 @@ from app import core
 class _DummySession:
     def __init__(self) -> None:
         self.commit = AsyncMock()
+        self.flush = AsyncMock()
         self.refresh = AsyncMock()
         self.rollback = AsyncMock()
         self.added: list[object] = []
@@ -72,6 +73,36 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved.reply_to_message_id, 76)
         self.assertEqual(saved.chat_id, -100123456)
         self.assertEqual(saved.user_id, 5)
+        session.flush.assert_not_awaited()
+
+    async def test_save_message_creates_pending_media_metadata_row(self) -> None:
+        session = _DummySession()
+        message = SimpleNamespace(
+            text=None,
+            caption="caption",
+            photo=[SimpleNamespace(file_id="file-1", file_unique_id="unique-1", file_size=10, width=100, height=100)],
+            date=datetime(2026, 3, 27, 20, 30, tzinfo=timezone.utc),
+            message_id=77,
+            chat=SimpleNamespace(id=-100123456),
+            reply_to_message=None,
+        )
+        user = SimpleNamespace(id=5)
+
+        with (
+            patch.object(core, "SessionLocal", return_value=session),
+            patch.object(core.models, "Message", side_effect=lambda **kwargs: SimpleNamespace(id=88, **kwargs)),
+        ):
+            saved = await core.save_message(message, user)
+
+        self.assertEqual(saved.media_status, "pending")
+        session.flush.assert_awaited_once()
+        self.assertEqual(len(session.added), 2)
+        media_item = session.added[1]
+        self.assertEqual(media_item.message_db_id, 88)
+        self.assertEqual(media_item.media_kind, "photo")
+        self.assertEqual(media_item.telegram_file_id, "file-1")
+        self.assertEqual(media_item.telegram_file_unique_id, "unique-1")
+        self.assertEqual(media_item.analysis_status, "pending")
 
     async def test_update_message_updates_text_without_changing_created_at(self) -> None:
         created_at = datetime(2026, 3, 27, 20, 30, tzinfo=timezone.utc)

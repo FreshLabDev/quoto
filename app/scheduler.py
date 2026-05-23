@@ -5,10 +5,11 @@ from html import escape
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
 from sqlalchemy import select
 
-from . import core, scoring
+from . import core, media, scoring
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .models import Group, Quote
@@ -58,6 +59,20 @@ async def quote_of_the_day_job(bot: Bot) -> None:
             await _process_group(bot, group, window)
         except Exception as e:
             log.error(f"❌ Ошибка при обработке группы {group.chat_id}: {e}")
+
+
+async def recover_pending_media_job(bot: Bot) -> None:
+    try:
+        processed = await media.process_pending_media(
+            bot,
+            limit=settings.MEDIA_PENDING_RETRY_BATCH_SIZE,
+        )
+    except Exception as exc:
+        log.warning(f"⚠️ Ошибка восстановления pending media: {exc}")
+        return
+
+    if processed:
+        log.info(f"♻️ Обработано pending media: {processed}")
 
 
 async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = None) -> None:
@@ -602,6 +617,20 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
         id="quote_of_the_day",
         name="Цитата дня",
         replace_existing=True,
+    )
+    scheduler.add_job(
+        recover_pending_media_job,
+        trigger=IntervalTrigger(
+            seconds=settings.MEDIA_PENDING_RETRY_INTERVAL_SECONDS,
+            timezone=settings.TIMEZONE,
+        ),
+        args=[bot],
+        id="pending_media_recovery",
+        name="Повторная обработка pending media",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        next_run_time=utc_now() + timedelta(seconds=settings.MEDIA_PENDING_RETRY_INTERVAL_SECONDS),
     )
 
     log.info(

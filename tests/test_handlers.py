@@ -223,6 +223,70 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         save_message.assert_awaited_once()
         process_media.assert_awaited_once_with(bot, message, db_message)
 
+    async def test_group_message_handler_ignores_link_only_text(self) -> None:
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=777, is_bot=False),
+            text="https://vt.tiktok.com/ZSx5TH1DA/",
+            entities=[SimpleNamespace(type="url", offset=0, length=31)],
+            chat=SimpleNamespace(id=-100123456, type="supergroup"),
+        )
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()) as user_get_or_create,
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock()) as group_get_or_create,
+            patch.object(handlers.core, "save_message", new=AsyncMock()) as save_message,
+            patch.object(handlers.media, "process_message_media", new=AsyncMock()) as process_media,
+        ):
+            await handlers.group_message_handler(message, SimpleNamespace())
+
+        user_get_or_create.assert_not_awaited()
+        group_get_or_create.assert_not_awaited()
+        save_message.assert_not_awaited()
+        process_media.assert_not_awaited()
+
+    async def test_group_message_handler_accepts_text_with_link(self) -> None:
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=777, is_bot=False),
+            text="глянь https://example.com",
+            entities=[SimpleNamespace(type="url", offset=6, length=19)],
+            chat=SimpleNamespace(id=-100123456, type="supergroup"),
+        )
+        db_message = SimpleNamespace(id=88)
+        bot = SimpleNamespace()
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock(return_value=SimpleNamespace(id=7))),
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock()),
+            patch.object(handlers.core, "save_message", new=AsyncMock(return_value=db_message)) as save_message,
+            patch.object(handlers.media, "process_message_media", new=AsyncMock()) as process_media,
+        ):
+            await handlers.group_message_handler(message, bot)
+
+        save_message.assert_awaited_once()
+        process_media.assert_awaited_once_with(bot, message, db_message)
+
+    async def test_group_message_handler_accepts_media_with_link_caption(self) -> None:
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=777, is_bot=False),
+            text=None,
+            caption="https://example.com",
+            photo=[SimpleNamespace(file_id="f1", file_unique_id="u1", file_size=10, width=100, height=100)],
+            chat=SimpleNamespace(id=-100123456, type="supergroup"),
+        )
+        db_message = SimpleNamespace(id=88)
+        bot = SimpleNamespace()
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock(return_value=SimpleNamespace(id=7))),
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock()),
+            patch.object(handlers.core, "save_message", new=AsyncMock(return_value=db_message)) as save_message,
+            patch.object(handlers.media, "process_message_media", new=AsyncMock()) as process_media,
+        ):
+            await handlers.group_message_handler(message, bot)
+
+        save_message.assert_awaited_once()
+        process_media.assert_awaited_once_with(bot, message, db_message)
+
     async def test_group_message_handler_ignores_bots(self) -> None:
         message = SimpleNamespace(
             from_user=SimpleNamespace(id=777, is_bot=True),

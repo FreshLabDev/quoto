@@ -97,6 +97,7 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
         message_created_at = message_created_at.astimezone(timezone.utc)
     reply_to_message = getattr(message, "reply_to_message", None)
     reply_to_message_id = getattr(reply_to_message, "message_id", None) if reply_to_message else None
+    source = media.extract_media_source(message)
 
     async with SessionLocal() as session:
         try:
@@ -107,11 +108,14 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
                 text=media.initial_message_text(message),
                 content_type=media.message_content_type(message),
                 caption=media.message_caption(message),
-                media_status="pending" if media.extract_media_source(message) else None,
+                media_status="pending" if source else None,
                 reply_to_message_id=reply_to_message_id,
                 created_at=message_created_at,
             )
             session.add(db_msg)
+            if source:
+                await session.flush()
+                session.add(media.message_media_from_source(db_msg.id, source, status="pending"))
             await session.commit()
             await session.refresh(db_msg)
             return db_msg

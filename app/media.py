@@ -4,6 +4,7 @@ import hashlib
 import logging
 import math
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import shutil
 import subprocess
@@ -177,15 +178,67 @@ def initial_message_text(message: types.Message) -> str:
     return f"{message_content_type(message)}: сообщение без текста"
 
 
+def message_media_from_source(
+    db_message_id: int,
+    source: MediaSource,
+    *,
+    status: str,
+    description: str | None = None,
+    cache: models.MediaCache | None = None,
+    sha256: str | None = None,
+    phash: str | None = None,
+    error: str | None = None,
+) -> models.MessageMedia:
+    return models.MessageMedia(
+        message_db_id=db_message_id,
+        media_cache_id=cache.id if cache else None,
+        media_kind=source.kind,
+        telegram_file_id=source.file_id,
+        telegram_file_unique_id=source.file_unique_id,
+        mime_type=source.mime_type,
+        file_name=source.file_name,
+        file_size=source.file_size,
+        width=source.width,
+        height=source.height,
+        duration=source.duration,
+        sha256=sha256 or (cache.sha256 if cache else None),
+        phash=phash or (cache.phash if cache else None),
+        analysis_status=status,
+        analysis_error=error,
+        description_snapshot=description,
+    )
+
+
 async def process_message_media(bot: Bot, message: types.Message, db_message: models.Message) -> None:
     source = extract_media_source(message)
     if not source:
         return
 
+    await _ensure_message_media_item(db_message.id, source)
+    await _process_media_source(bot, db_message_id=db_message.id, source=source)
+
+
+async def process_pending_media(bot: Bot, *, limit: int = 10) -> int:
+    pending_items = await _load_pending_media_items(limit=limit)
+    processed = 0
+
+    for item in pending_items:
+        source = _source_from_media_item(item)
+        await _process_media_source(bot, db_message_id=item.message_db_id, source=source)
+        processed += 1
+
+    remaining = max(0, limit - processed)
+    if remaining:
+        processed += await _mark_orphan_pending_messages_failed(limit=remaining)
+
+    return processed
+
+
+async def _process_media_source(bot: Bot, *, db_message_id: int, source: MediaSource) -> None:
     if not settings.MEDIA_ANALYSIS_ENABLED or not source.supports_analysis:
         description = _metadata_description(source)
         await _store_media_result(
-            db_message_id=db_message.id,
+            db_message_id=db_message_id,
             source=source,
             status="unsupported",
             description=description,
@@ -195,7 +248,7 @@ async def process_message_media(bot: Bot, message: types.Message, db_message: mo
     cache = await _find_cache(source)
     if cache:
         await _store_media_result(
-            db_message_id=db_message.id,
+            db_message_id=db_message_id,
             source=source,
             status="cached",
             description=cache.description,
@@ -210,7 +263,7 @@ async def process_message_media(bot: Bot, message: types.Message, db_message: mo
             cache = await _find_cache(source, sha256=normalized.sha256, phash=normalized.phash)
             if cache:
                 await _store_media_result(
-                    db_message_id=db_message.id,
+                    db_message_id=db_message_id,
                     source=source,
                     status="cached",
                     description=cache.description,
@@ -227,7 +280,7 @@ async def process_message_media(bot: Bot, message: types.Message, db_message: mo
             )
             cache = await _create_cache(source, normalized, description_result)
             await _store_media_result(
-                db_message_id=db_message.id,
+                db_message_id=db_message_id,
                 source=source,
                 status="analyzed",
                 description=description_result.description,
@@ -236,14 +289,97 @@ async def process_message_media(bot: Bot, message: types.Message, db_message: mo
                 phash=normalized.phash,
             )
     except Exception as exc:
-        log.warning(f"Media analysis failed for message {db_message.message_id}: {exc}")
+        log.warning(f"Media analysis failed for db message {db_message_id}: {exc}")
         await _store_media_result(
-            db_message_id=db_message.id,
+            db_message_id=db_message_id,
             source=source,
             status="failed",
             description=_metadata_description(source),
             error=str(exc)[:500],
         )
+
+
+async def _ensure_message_media_item(db_message_id: int, source: MediaSource) -> None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.MessageMedia)
+            .where(models.MessageMedia.message_db_id == db_message_id)
+            .limit(1)
+        )
+        if result.scalars().first():
+            return
+
+        session.add(message_media_from_source(db_message_id, source, status="pending"))
+        await session.commit()
+
+
+async def _load_pending_media_items(*, limit: int) -> list[models.MessageMedia]:
+    cutoff = _pending_retry_cutoff()
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.MessageMedia)
+            .where(models.MessageMedia.analysis_status == "pending")
+            .where(models.MessageMedia.created_at <= cutoff)
+            .order_by(models.MessageMedia.created_at.asc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+
+async def _mark_orphan_pending_messages_failed(*, limit: int) -> int:
+    if limit <= 0:
+        return 0
+
+    async with SessionLocal() as session:
+        cutoff = _pending_retry_cutoff()
+        has_media_item = (
+            select(models.MessageMedia.id)
+            .where(models.MessageMedia.message_db_id == models.Message.id)
+            .exists()
+        )
+        orphan_stmt = (
+            select(models.Message)
+            .where(models.Message.media_status == "pending")
+            .where(models.Message.created_at <= cutoff)
+            .where(~has_media_item)
+            .order_by(models.Message.created_at.asc())
+            .limit(limit)
+        )
+        result = await session.execute(orphan_stmt)
+        messages = list(result.scalars().all())
+        for message in messages:
+            message.media_status = "failed"
+        if messages:
+            await session.commit()
+            log.warning(f"Marked {len(messages)} orphan pending media messages as failed; file metadata is unavailable.")
+        return len(messages)
+
+
+def _source_from_media_item(item: models.MessageMedia) -> MediaSource:
+    return MediaSource(
+        kind=str(item.media_kind),
+        file_id=item.telegram_file_id,
+        file_unique_id=item.telegram_file_unique_id,
+        mime_type=item.mime_type,
+        file_name=item.file_name,
+        file_size=item.file_size,
+        width=item.width,
+        height=item.height,
+        duration=item.duration,
+        supports_analysis=_supports_analysis(str(item.media_kind), item.mime_type),
+    )
+
+
+def _supports_analysis(kind: str, mime_type: str | None) -> bool:
+    if kind in {"photo", "image", "video", "animation", "video_note", "voice", "audio"}:
+        return True
+    if kind == "sticker":
+        return mime_type != "application/x-tgsticker"
+    return False
+
+
+def _pending_retry_cutoff() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(seconds=settings.MEDIA_PENDING_RETRY_INTERVAL_SECONDS)
 
 
 async def _download_telegram_file(bot: Bot, source: MediaSource, tempdir: Path) -> Path:
@@ -510,26 +646,32 @@ async def _store_media_result(
         if description:
             message.text = _canonical_text(source.kind, message.caption, description)
         message.media_status = status
-        session.add(
-            models.MessageMedia(
-                message_db_id=db_message_id,
-                media_cache_id=cache.id if cache else None,
-                media_kind=source.kind,
-                telegram_file_id=source.file_id,
-                telegram_file_unique_id=source.file_unique_id,
-                mime_type=source.mime_type,
-                file_name=source.file_name,
-                file_size=source.file_size,
-                width=source.width,
-                height=source.height,
-                duration=source.duration,
-                sha256=sha256 or (cache.sha256 if cache else None),
-                phash=phash or (cache.phash if cache else None),
-                analysis_status=status,
-                analysis_error=error,
-                description_snapshot=description,
-            )
+        result = await session.execute(
+            select(models.MessageMedia)
+            .where(models.MessageMedia.message_db_id == db_message_id)
+            .order_by(models.MessageMedia.id.asc())
+            .limit(1)
         )
+        media_item = result.scalars().first()
+        if not media_item:
+            media_item = message_media_from_source(db_message_id, source, status=status)
+            session.add(media_item)
+
+        media_item.media_cache_id = cache.id if cache else None
+        media_item.media_kind = source.kind
+        media_item.telegram_file_id = source.file_id
+        media_item.telegram_file_unique_id = source.file_unique_id
+        media_item.mime_type = source.mime_type
+        media_item.file_name = source.file_name
+        media_item.file_size = source.file_size
+        media_item.width = source.width
+        media_item.height = source.height
+        media_item.duration = source.duration
+        media_item.sha256 = sha256 or (cache.sha256 if cache else None)
+        media_item.phash = phash or (cache.phash if cache else None)
+        media_item.analysis_status = status
+        media_item.analysis_error = error
+        media_item.description_snapshot = description
         await session.commit()
 
 

@@ -1,4 +1,5 @@
 import logging
+import re
 from collections import Counter
 from html import escape
 
@@ -20,10 +21,42 @@ from .windows import get_open_window
 
 router = Router()
 log = setup_logging(logging.getLogger(__name__))
+_LINK_ONLY_RE = re.compile(
+    r"^(?:(?:https?://|tg://|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?)$",
+    re.IGNORECASE,
+)
 
 
 def _html(value: object) -> str:
     return escape(str(value))
+
+
+def _is_command_message(message: types.Message) -> bool:
+    return bool(getattr(message, "text", None) and str(message.text).startswith("/"))
+
+
+def _is_link_only_message(message: types.Message) -> bool:
+    if media.extract_media_source(message):
+        return False
+
+    text = str(getattr(message, "text", "") or "").strip()
+    if not text:
+        return False
+
+    if _LINK_ONLY_RE.fullmatch(text):
+        return True
+
+    entities = list(getattr(message, "entities", None) or [])
+    if len(entities) != 1:
+        return False
+
+    entity = entities[0]
+    entity_type = str(getattr(entity, "type", ""))
+    return (
+        entity_type in {"url", "text_link"}
+        and int(getattr(entity, "offset", -1) or -1) == 0
+        and int(getattr(entity, "length", 0) or 0) >= len(text)
+    )
 
 
 def _format_context_lines(context_messages: list[dict[str, object]]) -> str:
@@ -379,7 +412,9 @@ async def group_message_handler(message: types.Message, bot: Bot):
         return
     if message.from_user.is_bot:
         return
-    if getattr(message, "text", None) and message.text.startswith("/"):
+    if _is_command_message(message):
+        return
+    if _is_link_only_message(message):
         return
 
     user = await core.user_getOrCreate(message.from_user)
@@ -395,7 +430,9 @@ async def edited_group_message_handler(message: types.Message):
         return
     if message.from_user.is_bot:
         return
-    if getattr(message, "text", None) and message.text.startswith("/"):
+    if _is_command_message(message):
+        return
+    if _is_link_only_message(message):
         return
 
     await core.update_message(message)

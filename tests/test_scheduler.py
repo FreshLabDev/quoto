@@ -343,6 +343,22 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         mark_status.assert_not_awaited()
         append_error.assert_not_awaited()
 
+    async def test_recover_pending_media_job_uses_configured_batch_size(self) -> None:
+        bot = SimpleNamespace()
+
+        with (
+            patch.object(scheduler.settings, "MEDIA_PENDING_RETRY_BATCH_SIZE", 7),
+            patch.object(scheduler.media, "process_pending_media", new=AsyncMock(return_value=2)) as process_pending,
+        ):
+            await scheduler.recover_pending_media_job(bot)
+
+        process_pending.assert_awaited_once_with(bot, limit=7)
+
+    def test_setup_scheduler_registers_pending_media_recovery_job(self) -> None:
+        sched = scheduler.setup_scheduler(SimpleNamespace())
+
+        self.assertIsNotNone(sched.get_job("pending_media_recovery"))
+
 
 class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
     def _make_quote(self) -> SimpleNamespace:
