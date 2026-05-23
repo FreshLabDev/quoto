@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     MEDIA_VIDEO_FPS: int = 12
     MEDIA_AUDIO_BITRATE: str = "64k"
     MEDIA_AUDIO_SAMPLE_RATE: int = 24000
+    MEDIA_COMMAND_TIMEOUT_SECONDS: int = 300
 
     # -- SCORING WEIGHTS --
     WEIGHT_REACTIONS: float = 0.0

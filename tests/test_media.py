@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -172,6 +173,19 @@ class MediaNormalizationTests(unittest.TestCase):
         self.assertEqual(commands[0][commands[0].index("-ac") + 1], "1")
         self.assertIn("-af", commands[0])
         self.assertIn("silenceremove=", commands[0][commands[0].index("-af") + 1])
+
+    def test_run_raises_runtime_error_on_command_timeout(self) -> None:
+        with (
+            patch.object(media.shutil, "which", return_value="/usr/bin/ffmpeg"),
+            patch.object(media.settings, "MEDIA_COMMAND_TIMEOUT_SECONDS", 1),
+            patch.object(
+                media.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=1),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "timed out after 1s"):
+                media._run(["ffmpeg", "-version"])
 
 
 class AIMediaPayloadTests(unittest.TestCase):

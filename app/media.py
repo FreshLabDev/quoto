@@ -605,6 +605,7 @@ def _probe_duration(path: Path) -> float | None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=settings.MEDIA_COMMAND_TIMEOUT_SECONDS,
         )
         return _float_or_none(result.stdout.strip())
     except Exception:
@@ -614,12 +615,18 @@ def _probe_duration(path: Path) -> float | None:
 def _run(command: list[str]) -> None:
     if not shutil.which(command[0]):
         raise RuntimeError(f"{command[0]} is not installed.")
-    subprocess.run(
-        command,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=settings.MEDIA_COMMAND_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"Command timed out after {settings.MEDIA_COMMAND_TIMEOUT_SECONDS}s: {command[0]}"
+        ) from exc
 
 
 def _suffix_for_mime(mime_type: str | None) -> str:
