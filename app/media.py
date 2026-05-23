@@ -385,8 +385,8 @@ def _image_phash(path: Path) -> str:
 
     with Image.open(path) as image:
         image = image.convert("L").resize((32, 32))
-        data = image.get_flattened_data() if hasattr(image, "get_flattened_data") else image.getdata()
-        pixels = list(data)
+        flattened_data = getattr(image, "get_flattened_data", None)
+        pixels = list(flattened_data() if callable(flattened_data) else image.getdata())
 
     matrix = [pixels[row * 32 : (row + 1) * 32] for row in range(32)]
     coeffs: list[float] = []

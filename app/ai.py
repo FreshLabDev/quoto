@@ -555,7 +555,7 @@ def _media_content_part(*, path: Path, mime_type: str, media_kind: str) -> dict[
                 "format": _audio_format(mime_type, path),
             },
         }
-    raise ValueError(f"Unsupported media kind for Gemini Lite: {media_kind}")
+    raise ValueError(f"Unsupported media kind for {settings.OPENROUTER_MEDIA_MODEL}: {media_kind}")
 
 
 def _audio_format(mime_type: str, path: Path) -> str:
