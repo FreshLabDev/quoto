@@ -43,6 +43,15 @@ def upgrade() -> None:
             op.add_column("messages", sa.Column("media_status", sa.String(), nullable=True))
         op.alter_column("messages", "text", type_=sa.Text(), existing_nullable=False)
 
+    if "quotes" in tables:
+        quote_columns = {column["name"] for column in inspector.get_columns("quotes")}
+        if "content_type" not in quote_columns:
+            op.add_column(
+                "quotes",
+                sa.Column("content_type", sa.String(), nullable=False, server_default="text"),
+            )
+            op.alter_column("quotes", "content_type", server_default=None)
+
     tables = set(sa.inspect(bind).get_table_names())
     if "media_cache" not in tables:
         op.create_table(
@@ -143,3 +152,8 @@ def downgrade() -> None:
         if "content_type" in message_columns:
             op.drop_column("messages", "content_type")
         op.alter_column("messages", "text", type_=sa.String(), existing_nullable=False)
+
+    if "quotes" in tables:
+        quote_columns = {column["name"] for column in inspector.get_columns("quotes")}
+        if "content_type" in quote_columns:
+            op.drop_column("quotes", "content_type")

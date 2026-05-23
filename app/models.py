@@ -151,6 +151,7 @@ class Quote(Base):
     length_score = Column(Float, default=0.0)
     reaction_count = Column(Integer, default=0)
     message_id = Column(BigInteger)
+    content_type = Column(String, nullable=False, default="text")
     bot_message_id = Column(BigInteger)
     notice_message_id = Column(BigInteger)
     ai_model = Column(String, nullable=True)

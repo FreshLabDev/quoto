@@ -210,6 +210,98 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         mark_status.assert_not_awaited()
         append_error.assert_not_awaited()
 
+    async def test_publish_quote_message_copies_media_with_day_title(self) -> None:
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=404)),
+            copy_message=AsyncMock(return_value=SimpleNamespace(message_id=204)),
+            pin_chat_message=AsyncMock(),
+        )
+        quote = SimpleNamespace(
+            id=10,
+            quote_day=self.window.quote_day,
+            text="photo: человек держит табличку",
+            message_id=57,
+            content_type="photo",
+            decision_reason=None,
+        )
+        breakdown = scoring.ScoreBreakdown(reaction=0.2, ai=0.7, length=0.1, reaction_count=1)
+
+        with (
+            patch.object(scheduler.core, "update_quote_publication", new=AsyncMock()) as update_publication,
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+            patch.object(scheduler.core, "append_quote_operation_error", new=AsyncMock()) as append_error,
+        ):
+            result = await scheduler._publish_quote_message(
+                bot=bot,
+                group=self.group,
+                quote=quote,
+                author_name="Bob",
+                breakdown=breakdown,
+                forced_by_admin=False,
+                clear_window_after=False,
+            )
+
+        self.assertTrue(result)
+        bot.send_message.assert_not_awaited()
+        bot.copy_message.assert_awaited_once()
+        copy_kwargs = bot.copy_message.await_args.kwargs
+        self.assertEqual(copy_kwargs["from_chat_id"], self.group.chat_id)
+        self.assertEqual(copy_kwargs["message_id"], 57)
+        self.assertIn("📷 <b>Фото дня</b>", copy_kwargs["caption"])
+        update_publication.assert_awaited_once_with(
+            quote_id=quote.id,
+            bot_message_id=204,
+            forced_by_admin=False,
+            decision_reason=None,
+        )
+        mark_status.assert_not_awaited()
+        append_error.assert_not_awaited()
+
+    async def test_publish_quote_message_falls_back_to_text_when_media_copy_fails(self) -> None:
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=205)),
+            copy_message=AsyncMock(side_effect=RuntimeError("copy failed")),
+            pin_chat_message=AsyncMock(),
+        )
+        quote = SimpleNamespace(
+            id=11,
+            quote_day=self.window.quote_day,
+            text="voice: смешная фраза",
+            message_id=58,
+            content_type="voice",
+            decision_reason=None,
+        )
+        breakdown = scoring.ScoreBreakdown(reaction=0.2, ai=0.7, length=0.1, reaction_count=1)
+
+        with (
+            patch.object(scheduler.core, "update_quote_publication", new=AsyncMock()) as update_publication,
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+            patch.object(scheduler.core, "append_quote_operation_error", new=AsyncMock()) as append_error,
+        ):
+            result = await scheduler._publish_quote_message(
+                bot=bot,
+                group=self.group,
+                quote=quote,
+                author_name="Alice",
+                breakdown=breakdown,
+                forced_by_admin=False,
+                clear_window_after=False,
+            )
+
+        self.assertTrue(result)
+        bot.copy_message.assert_awaited_once()
+        bot.send_message.assert_awaited_once()
+        sent_text = bot.send_message.await_args.kwargs["text"]
+        self.assertIn("🎙 <b>Голосовое дня</b>", sent_text)
+        update_publication.assert_awaited_once_with(
+            quote_id=quote.id,
+            bot_message_id=205,
+            forced_by_admin=False,
+            decision_reason=None,
+        )
+        mark_status.assert_not_awaited()
+        append_error.assert_any_await(quote.id, "Media copy failed, text fallback used: copy failed")
+
     async def test_publish_quote_message_renders_context_dialog(self) -> None:
         bot = SimpleNamespace(
             send_message=AsyncMock(return_value=SimpleNamespace(message_id=203)),

@@ -13,6 +13,7 @@ from .windows import QuoteWindow
 
 log = setup_logging(logging.getLogger(__name__))
 _QUOTO_HASHTAG_RE = re.compile(r"(?<![\w])#quoto(?![\w])", re.IGNORECASE)
+_PRIMARY_EXCLUDED_CONTENT_TYPES = {"sticker"}
 
 
 def create_bar(current: int, total: int = 100, width: int = 6, style: str = "circles") -> str:
@@ -168,7 +169,7 @@ async def pick_best_quote(
         include_day_verdict=should_request_day_verdict,
     )
 
-    fallback_best_id = max(evaluation.scores, key=evaluation.scores.get) if evaluation.scores else None
+    fallback_best_id = _fallback_primary_id(evaluation.scores, messages)
     ai_best_msg = next((m for m in messages if m.id == fallback_best_id), None) if fallback_best_id else None
     primary_id = _valid_primary_id(evaluation.quote_choice, messages) or fallback_best_id
 
@@ -264,8 +265,26 @@ def _valid_primary_id(
 ) -> int | None:
     if not quote_choice or quote_choice.primary_id is None:
         return None
-    known_ids = {message.id for message in messages}
-    return quote_choice.primary_id if quote_choice.primary_id in known_ids else None
+    by_id = {message.id: message for message in messages}
+    message = by_id.get(quote_choice.primary_id)
+    if not message or not _is_primary_eligible(message):
+        return None
+    return quote_choice.primary_id
+
+
+def _fallback_primary_id(scores: dict[int, float], messages: list[Message]) -> int | None:
+    eligible_ids = {message.id for message in messages if _is_primary_eligible(message)}
+    eligible_scores = {
+        message_id: score
+        for message_id, score in scores.items()
+        if message_id in eligible_ids
+    }
+    return max(eligible_scores, key=eligible_scores.get) if eligible_scores else None
+
+
+def _is_primary_eligible(message: Message) -> bool:
+    content_type = str(getattr(message, "content_type", "") or "text")
+    return content_type not in _PRIMARY_EXCLUDED_CONTENT_TYPES
 
 
 def _valid_context_messages(

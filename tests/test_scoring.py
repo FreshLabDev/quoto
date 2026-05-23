@@ -154,6 +154,34 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("text", payload[1])
         self.assertNotIn("message_id", payload[1])
 
+    async def test_pick_best_quote_does_not_allow_sticker_as_primary(self) -> None:
+        messages = [
+            _message(1, 11, "normal text", "Alice"),
+            _message(
+                2,
+                12,
+                "sticker: смешной стикер",
+                "Bob",
+                content_type="sticker",
+                media_items=[SimpleNamespace(description_snapshot="смешной стикер")],
+            ),
+        ]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(
+            scores={1: 0.4, 2: 0.95},
+            actual_model="openrouter/test",
+            quote_choice=ai.QuoteContextChoice(primary_id=2, context_ids=[1, 2], context_needed=True),
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)),
+        ):
+            result = await scoring.pick_best_quote(-100123456, window)
+
+        self.assertEqual(result.best_message.id, 1)
+        self.assertEqual([message.id for message in result.context_messages], [1, 2])
+
     async def test_pick_best_quote_skips_ai_when_all_messages_filtered(self) -> None:
         messages = [
             _message(1, 11, "#quoto", "Alice"),
