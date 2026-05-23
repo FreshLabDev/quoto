@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from . import models
+from . import media, models
 from .config import setup_logging
 from .db import SessionLocal
 from .quote_status import (
@@ -90,9 +90,6 @@ async def group_getOrCreate(chat: types.Chat) -> models.Group:
 
 
 async def save_message(message: types.Message, user: models.User) -> models.Message | None:
-    if not message.text:
-        return None
-
     message_created_at = getattr(message, "date", None) or utc_now()
     if message_created_at.tzinfo is None:
         message_created_at = message_created_at.replace(tzinfo=timezone.utc)
@@ -107,7 +104,10 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
                 message_id=message.message_id,
                 chat_id=message.chat.id,
                 user_id=user.id,
-                text=message.text,
+                text=media.initial_message_text(message),
+                content_type=media.message_content_type(message),
+                caption=media.message_caption(message),
+                media_status="pending" if media.extract_media_source(message) else None,
                 reply_to_message_id=reply_to_message_id,
                 created_at=message_created_at,
             )
@@ -124,9 +124,6 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
 
 
 async def update_message(message: types.Message) -> models.Message | None:
-    if not message.text:
-        return None
-
     reply_to_message = getattr(message, "reply_to_message", None)
     reply_to_message_id = getattr(reply_to_message, "message_id", None) if reply_to_message else None
 
@@ -142,7 +139,9 @@ async def update_message(message: types.Message) -> models.Message | None:
             if not db_msg:
                 return None
 
-            db_msg.text = message.text
+            db_msg.text = media.initial_message_text(message)
+            db_msg.content_type = media.message_content_type(message)
+            db_msg.caption = media.message_caption(message)
             db_msg.reply_to_message_id = reply_to_message_id
             await session.commit()
             await session.refresh(db_msg)
@@ -280,6 +279,7 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "context_message_ids": _load_context_message_ids(quote.context_message_ids),
             "context_messages": _load_context_snapshot(quote.context_snapshot),
             "message_id": quote.message_id,
+            "content_type": quote.content_type,
             "chat_id": quote.group.chat_id if quote.group else None,
             "decision_status": quote.decision_status,
             "decision_reason": quote.decision_reason,
@@ -509,6 +509,7 @@ async def create_quote_record(
                 length_score=breakdown.length,
                 reaction_count=breakdown.reaction_count,
                 message_id=best_message.message_id,
+                content_type=getattr(best_message, "content_type", None) or "text",
                 ai_model=breakdown.ai_model,
                 ai_best_text=breakdown.ai_best_text,
                 context_message_ids=context_message_ids,

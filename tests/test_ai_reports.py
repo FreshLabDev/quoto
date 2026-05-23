@@ -19,15 +19,23 @@ def _message(
     author: str,
     reply_to: int | None = None,
     reactions: list[SimpleNamespace] | None = None,
+    content_type: str = "text",
+    caption: str | None = None,
+    media_status: str | None = None,
+    media_items: list[SimpleNamespace] | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=internal_id,
         message_id=telegram_id,
         user_id=internal_id + 100,
         text=text,
+        content_type=content_type,
+        caption=caption,
+        media_status=media_status,
         author=SimpleNamespace(name=author),
         reply_to_message_id=reply_to,
         reactions=reactions or [],
+        media_items=media_items or [],
     )
 
 
@@ -59,7 +67,33 @@ class AIReportTests(unittest.IsolatedAsyncioTestCase):
         session = _DummySession()
         messages = [
             _message(1, 11, "setup", "Alice", reactions=[SimpleNamespace(emoji="😂", count=2)]),
-            _message(2, 12, "punchline", "Bob", reply_to=11),
+            _message(
+                2,
+                12,
+                "photo: человек держит табличку",
+                "Bob",
+                reply_to=11,
+                content_type="photo",
+                caption="смотри",
+                media_status="analyzed",
+                media_items=[
+                    SimpleNamespace(
+                        media_cache_id=77,
+                        media_kind="photo",
+                        telegram_file_id="file-1",
+                        telegram_file_unique_id="unique-1",
+                        mime_type="image/jpeg",
+                        file_name=None,
+                        file_size=12345,
+                        width=640,
+                        height=480,
+                        duration=None,
+                        sha256="a" * 64,
+                        phash="b" * 16,
+                        description_snapshot="человек держит табличку",
+                    )
+                ],
+            ),
         ]
         window = SimpleNamespace(
             quote_day=date(2026, 5, 20),
@@ -111,7 +145,23 @@ class AIReportTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(selected.is_selected_primary)
         self.assertTrue(selected.is_selected_context)
         self.assertEqual(selected.ai_score_raw, 9.0)
+        self.assertEqual(selected.content_type, "photo")
+        self.assertEqual(selected.caption_snapshot, "смотри")
+        self.assertEqual(selected.media_status, "analyzed")
+        self.assertEqual(selected.media_description_snapshot, "человек держит табличку")
+        self.assertEqual(selected.media_kind, "photo")
+        self.assertEqual(selected.telegram_file_id, "file-1")
+        self.assertEqual(selected.telegram_file_unique_id, "unique-1")
+        self.assertEqual(selected.mime_type, "image/jpeg")
+        self.assertEqual(selected.file_size, 12345)
+        self.assertEqual(selected.width, 640)
+        self.assertEqual(selected.height, 480)
+        self.assertEqual(selected.sha256, "a" * 64)
+        self.assertEqual(selected.phash, "b" * 16)
+        self.assertEqual(selected.media_cache_id, 77)
         reacted = next(row for row in rows if row.telegram_message_id == 11)
+        self.assertEqual(reacted.content_type, "text")
+        self.assertIsNone(reacted.media_description_snapshot)
         self.assertEqual(json.loads(reacted.reactions_snapshot), {"😂": 2})
         self.assertEqual(reacted.reaction_count, 2)
 

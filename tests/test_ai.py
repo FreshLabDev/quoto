@@ -100,21 +100,20 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
-            patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
-            patch.object(ai.settings, "OPENROUTER_REASONING_EFFORT", "low"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_REASONING_EFFORT", "high"),
             patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
         ):
             result = await ai.evaluate_messages(
                 [
                     {
                         "id": 1,
-                        "message_id": 11,
                         "author": "Alice",
                         "text": "reacted quote",
-                        "reply_to_message_id": 10,
+                        "reply_to_id": 2,
                         "reactions": {"😂": 3, "❤️": 1},
                     },
-                    {"id": 2, "message_id": 12, "author": "Bob", "text": "plain quote"},
+                    {"id": 2, "author": "Bob", "text": "plain quote"},
                 ],
                 include_day_verdict=False,
             )
@@ -123,14 +122,16 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(captured_body)
         self.assertEqual(
             captured_body["reasoning"],
-            {"enabled": True, "effort": "low", "exclude": True},
+            {"enabled": True, "effort": "high", "exclude": True},
         )
         user_payload = json.loads(captured_body["messages"][1]["content"])
-        self.assertEqual(user_payload[0]["message_id"], 11)
-        self.assertEqual(user_payload[0]["reply_to_message_id"], 10)
-        self.assertEqual(user_payload[0]["reactions"], {"😂": 3, "❤️": 1})
-        self.assertNotIn("reactions", user_payload[1])
-        self.assertNotIn("reply_to_message_id", user_payload[1])
+        self.assertEqual(user_payload[0]["i"], 1)
+        self.assertEqual(user_payload[0]["rp"], 2)
+        self.assertEqual(user_payload[0]["re"], {"😂": 3, "❤️": 1})
+        self.assertNotIn("message_id", user_payload[0])
+        self.assertNotIn("re", user_payload[1])
+        self.assertNotIn("rp", user_payload[1])
+        self.assertEqual(captured_body["response_format"]["type"], "json_schema")
 
     async def test_evaluate_messages_retries_request_errors(self) -> None:
         attempts = 0
@@ -166,7 +167,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
-            patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
             patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
             patch.object(ai.asyncio, "sleep", new=sleep),
         ):
@@ -215,13 +216,13 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
             with (
                 patch.object(ai.settings, "LOGS_PATH", tempdir),
                 patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
-                patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+                patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
                 patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
             ):
                 result = await ai.evaluate_messages(
                     [
-                        {"id": 1, "message_id": 11, "author": "Alice", "text": "setup"},
-                        {"id": 2, "message_id": 12, "author": "Bob", "text": "punchline"},
+                        {"id": 1, "author": "Alice", "text": "setup"},
+                        {"id": 2, "author": "Bob", "text": "punchline"},
                     ],
                     include_day_verdict=False,
                 )
@@ -231,7 +232,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.quote_choice.context_ids, [1, 2])
         self.assertEqual(audit_record["request"]["body"]["model"], "openrouter/test")
-        self.assertIn("use ONLY that `id`", audit_record["request"]["body"]["messages"][0]["content"])
+        self.assertIn("use ONLY `i`", audit_record["request"]["body"]["messages"][0]["content"])
         self.assertEqual(audit_record["response"]["content"], response_content)
         self.assertEqual(audit_record["result"]["quote_choice"]["context_ids"], [1, 2])
         self.assertNotIn("headers", audit_record["request"])
@@ -277,11 +278,11 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
             with (
                 patch.object(ai.settings, "LOGS_PATH", tempdir),
                 patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
-                patch.object(ai.settings, "OPENROUTER_MODEL", "openrouter/test"),
+                patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
                 patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
             ):
                 await ai.evaluate_messages(
-                    [{"id": 1, "message_id": 11, "author": "Alice", "text": "hello"}],
+                    [{"id": 1, "author": "Alice", "text": "hello"}],
                     include_day_verdict=False,
                 )
 

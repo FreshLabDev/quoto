@@ -117,6 +117,7 @@ def _score_rows(
     for message in messages:
         ai_score = max(0.0, min(1.0, float(scores.get(message.id, 0.5))))
         reactions = _message_reactions_payload(message)
+        media_item = _primary_media_item(message)
         rows.append(
             models.MessageAIScore(
                 run_id=run_id,
@@ -129,12 +130,30 @@ def _score_rows(
                 user_id=getattr(message, "user_id", None),
                 author_name_snapshot=message.author.name if message.author else "Unknown",
                 text_snapshot=message.text,
+                content_type=getattr(message, "content_type", None) or "text",
+                caption_snapshot=getattr(message, "caption", None),
                 reactions_snapshot=(
                     json.dumps(reactions, ensure_ascii=False, separators=(",", ":"))
                     if reactions
                     else None
                 ),
                 reaction_count=reaction_totals.get(message.id, 0),
+                media_status=getattr(message, "media_status", None),
+                media_description_snapshot=getattr(media_item, "description_snapshot", None) if media_item else None,
+                media_kind=getattr(media_item, "media_kind", None) if media_item else None,
+                telegram_file_id=getattr(media_item, "telegram_file_id", None) if media_item else None,
+                telegram_file_unique_id=(
+                    getattr(media_item, "telegram_file_unique_id", None) if media_item else None
+                ),
+                mime_type=getattr(media_item, "mime_type", None) if media_item else None,
+                file_name=getattr(media_item, "file_name", None) if media_item else None,
+                file_size=getattr(media_item, "file_size", None) if media_item else None,
+                width=getattr(media_item, "width", None) if media_item else None,
+                height=getattr(media_item, "height", None) if media_item else None,
+                duration=getattr(media_item, "duration", None) if media_item else None,
+                sha256=getattr(media_item, "sha256", None) if media_item else None,
+                phash=getattr(media_item, "phash", None) if media_item else None,
+                media_cache_id=getattr(media_item, "media_cache_id", None) if media_item else None,
                 ai_score=ai_score,
                 ai_score_raw=ai_score * 10.0,
                 rank=ranked_ids[message.id],
@@ -144,6 +163,11 @@ def _score_rows(
             )
         )
     return rows
+
+
+def _primary_media_item(message: models.Message) -> models.MessageMedia | None:
+    media_items = list(getattr(message, "media_items", None) or [])
+    return media_items[0] if media_items else None
 
 
 def _context_internal_ids(quote_choice: Any) -> list[int]:

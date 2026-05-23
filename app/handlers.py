@@ -6,7 +6,7 @@ from aiogram import Bot, F, Router, types
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from . import core, scheduler, scoring
+from . import core, media, scheduler, scoring
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
@@ -373,25 +373,29 @@ async def user_stats_handler(message: types.Message):
     await message.answer(text)
 
 
-@router.message(F.chat.type.in_({"group", "supergroup"}), F.text)
-async def group_message_handler(message: types.Message):
+@router.message(F.chat.type.in_({"group", "supergroup"}))
+async def group_message_handler(message: types.Message, bot: Bot):
     if not message.from_user:
         return
     if message.from_user.is_bot:
         return
-    if message.text.startswith("/"):
+    if getattr(message, "text", None) and message.text.startswith("/"):
         return
 
     user = await core.user_getOrCreate(message.from_user)
     await core.group_getOrCreate(message.chat)
-    await core.save_message(message, user)
+    db_message = await core.save_message(message, user)
+    if db_message:
+        await media.process_message_media(bot, message, db_message)
 
 
-@router.edited_message(F.chat.type.in_({"group", "supergroup"}), F.text)
+@router.edited_message(F.chat.type.in_({"group", "supergroup"}))
 async def edited_group_message_handler(message: types.Message):
     if not message.from_user:
         return
     if message.from_user.is_bot:
+        return
+    if getattr(message, "text", None) and message.text.startswith("/"):
         return
 
     await core.update_message(message)

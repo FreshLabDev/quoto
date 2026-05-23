@@ -34,6 +34,8 @@ _MANUAL_PUBLISH_PUBLISHED = "published"
 _MANUAL_PUBLISH_FAILED = "failed"
 _MANUAL_PUBLISH_ALREADY_SENT = "already_sent"
 _PUBLISH_UNKNOWN_SENT_PREFIX = "Telegram message was sent, but DB finalization failed:"
+_MEDIA_COPY_CONTENT_TYPES = {"photo", "image", "video", "animation", "video_note", "voice", "audio"}
+_MEDIA_CAPTION_LIMIT = 1024
 
 
 async def quote_of_the_day_job(bot: Bot) -> None:
@@ -261,28 +263,39 @@ async def _publish_quote_message(
     msg_link = _message_link(group.chat_id, quote.message_id)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
     forced_line = "\n⚙️ <i>Опубликовано администратором вручную.</i>" if forced_by_admin else ""
-    quote_text = escape(quote.text)
-    safe_author_name = escape(author_name)
-    context_lines = _load_quote_context_lines(quote)
-
-    if context_lines:
-        quote_body = _format_context_quote_body(context_lines)
-    else:
-        quote_body = (
-            f"💬 <i>«{quote_text}»</i>\n"
-            f"— <b>{safe_author_name}</b>"
-        )
-
-    text = (
-        "🏆 <b>Цитата дня</b>\n\n"
-        f"{quote_body}\n\n"
-        f"{info_line}\n\n"
-        f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
-        f"{forced_line}"
+    text = _build_quote_post_text(
+        quote=quote,
+        author_name=author_name,
+        info_line=info_line,
+        msg_link=msg_link,
+        details_link=details_link,
+        forced_line=forced_line,
     )
 
+    media_copy_error: str | None = None
     try:
-        sent = await bot.send_message(chat_id=group.chat_id, text=text)
+        if _can_copy_media_quote(quote):
+            try:
+                sent = await bot.copy_message(
+                    chat_id=group.chat_id,
+                    from_chat_id=group.chat_id,
+                    message_id=quote.message_id,
+                    caption=_build_quote_post_text(
+                        quote=quote,
+                        author_name=author_name,
+                        info_line=info_line,
+                        msg_link=msg_link,
+                        details_link=details_link,
+                        forced_line=forced_line,
+                        media_caption=True,
+                    ),
+                )
+            except Exception as exc:
+                media_copy_error = str(exc)[:200]
+                log.warning(f"⚠️ Не удалось скопировать медиа цитаты в {group.chat_id}: {exc}")
+                sent = await bot.send_message(chat_id=group.chat_id, text=text)
+        else:
+            sent = await bot.send_message(chat_id=group.chat_id, text=text)
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,
@@ -307,6 +320,12 @@ async def _publish_quote_message(
         )
         log.error(f"❌ Цитата отправлена, но не удалось зафиксировать статус в БД для {group.chat_id}: {e}")
         return False
+
+    if media_copy_error:
+        try:
+            await core.append_quote_operation_error(quote.id, f"Media copy failed, text fallback used: {media_copy_error}")
+        except Exception as exc:
+            log.warning(f"⚠️ Не удалось сохранить ошибку копирования медиа для quote #{quote.id}: {exc}")
 
     try:
         await bot.pin_chat_message(
@@ -446,11 +465,104 @@ def _load_quote_context_lines(quote: Quote) -> list[dict[str, object]]:
     return lines if len(lines) > 1 else []
 
 
-def _format_context_quote_body(context_lines: list[dict[str, object]]) -> str:
+def _build_quote_post_text(
+    *,
+    quote: Quote,
+    author_name: str,
+    info_line: str,
+    msg_link: str,
+    details_link: str,
+    forced_line: str,
+    media_caption: bool = False,
+) -> str:
+    quote_text = _display_quote_text(quote.text, media_caption=media_caption)
+    safe_author_name = escape(author_name)
+    context_lines = _load_quote_context_lines(quote)
+
+    if context_lines and not media_caption:
+        quote_body = _format_context_quote_body(context_lines)
+    elif context_lines:
+        quote_body = _format_context_quote_body(context_lines, text_limit=140)
+    else:
+        quote_body = (
+            f"💬 <i>«{escape(quote_text)}»</i>\n"
+            f"— <b>{safe_author_name}</b>"
+        )
+
+    text = (
+        f"{_quote_day_title(quote)}\n\n"
+        f"{quote_body}\n\n"
+        f"{info_line}\n\n"
+        f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
+        f"{forced_line}"
+    )
+    if not media_caption or len(text) <= _MEDIA_CAPTION_LIMIT:
+        return text
+
+    for limit in (320, 220, 140, 80):
+        shortened = (
+            f"💬 <i>«{escape(_truncate_text(str(quote.text or ''), limit))}»</i>\n"
+            f"— <b>{safe_author_name}</b>"
+        )
+        text = (
+            f"{_quote_day_title(quote)}\n\n"
+            f"{shortened}\n\n"
+            f"{info_line}\n\n"
+            f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
+            f"{forced_line}"
+        )
+        if len(text) <= _MEDIA_CAPTION_LIMIT:
+            return text
+
+    return (
+        f"{_quote_day_title(quote)}\n\n"
+        f"— <b>{safe_author_name}</b>\n\n"
+        f"{info_line}\n\n"
+        f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
+        f"{forced_line}"
+    )
+
+
+def _quote_day_title(quote: Quote) -> str:
+    content_type = str(getattr(quote, "content_type", "") or "text")
+    if content_type in {"photo", "image"}:
+        return "📷 <b>Фото дня</b>"
+    if content_type in {"video", "animation", "video_note"}:
+        return "🎬 <b>Видео дня</b>"
+    if content_type == "voice":
+        return "🎙 <b>Голосовое дня</b>"
+    if content_type == "audio":
+        return "🎧 <b>Аудио дня</b>"
+    return "🏆 <b>Цитата дня</b>"
+
+
+def _can_copy_media_quote(quote: Quote) -> bool:
+    content_type = str(getattr(quote, "content_type", "") or "text")
+    return content_type in _MEDIA_COPY_CONTENT_TYPES and bool(getattr(quote, "message_id", None))
+
+
+def _display_quote_text(text: str | None, *, media_caption: bool) -> str:
+    raw = str(text or "").strip()
+    if not media_caption:
+        return raw
+    return _truncate_text(raw, 520)
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _format_context_quote_body(context_lines: list[dict[str, object]], text_limit: int | None = None) -> str:
     rendered: list[str] = []
     for line in context_lines:
         author = escape(str(line["author"]))
-        text = escape(str(line["text"]))
+        line_text = str(line["text"])
+        if text_limit is not None:
+            line_text = _truncate_text(line_text, text_limit)
+        text = escape(line_text)
         if line.get("is_primary"):
             rendered.append(f"💬 <b>{author}:</b> <i>«{text}»</i>")
         else:

@@ -17,15 +17,21 @@ def _message(
     author: str = "Alice",
     reply_to: int | None = None,
     reactions: list[SimpleNamespace] | None = None,
+    content_type: str = "text",
+    caption: str | None = None,
+    media_items: list[SimpleNamespace] | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=internal_id,
         message_id=telegram_id,
         user_id=internal_id + 1000,
         text=text,
+        content_type=content_type,
+        caption=caption,
         author=SimpleNamespace(name=author),
         reply_to_message_id=reply_to,
         reactions=reactions or [],
+        media_items=media_items or [],
     )
 
 
@@ -89,7 +95,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.best_message.id, 2)
         self.assertEqual(result.breakdown.total, 0.9)
         ai_payload = evaluate.await_args.args[0]
-        self.assertEqual(ai_payload[0]["message_id"], 11)
+        self.assertNotIn("message_id", ai_payload[0])
         self.assertEqual(ai_payload[0]["reactions"], {"😂": 3, "❤️": 1})
         self.assertNotIn("reactions", ai_payload[1])
 
@@ -116,6 +122,65 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.best_message.id, 4)
         ai_payload = evaluate.await_args.args[0]
         self.assertEqual([item["id"] for item in ai_payload], [2, 3, 4])
+
+    async def test_pick_best_quote_sends_internal_reply_id_and_media_description(self) -> None:
+        messages = [
+            _message(1, 11, "setup", "Alice"),
+            _message(
+                2,
+                12,
+                "photo: человек показывает табличку",
+                "Bob",
+                reply_to=11,
+                content_type="photo",
+                caption="смотри",
+                media_items=[SimpleNamespace(description_snapshot="человек показывает табличку")],
+            ),
+        ]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(scores={1: 0.2, 2: 0.9}, actual_model="openrouter/test")
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)) as evaluate,
+        ):
+            await scoring.pick_best_quote(-100123456, window)
+
+        payload = evaluate.await_args.args[0]
+        self.assertEqual(payload[1]["reply_to_id"], 1)
+        self.assertEqual(payload[1]["kind"], "photo")
+        self.assertEqual(payload[1]["caption"], "смотри")
+        self.assertEqual(payload[1]["desc"], "человек показывает табличку")
+        self.assertNotIn("text", payload[1])
+        self.assertNotIn("message_id", payload[1])
+
+    async def test_pick_best_quote_does_not_allow_sticker_as_primary(self) -> None:
+        messages = [
+            _message(1, 11, "normal text", "Alice"),
+            _message(
+                2,
+                12,
+                "sticker: смешной стикер",
+                "Bob",
+                content_type="sticker",
+                media_items=[SimpleNamespace(description_snapshot="смешной стикер")],
+            ),
+        ]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(
+            scores={1: 0.4, 2: 0.95},
+            actual_model="openrouter/test",
+            quote_choice=ai.QuoteContextChoice(primary_id=2, context_ids=[1, 2], context_needed=True),
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)),
+        ):
+            result = await scoring.pick_best_quote(-100123456, window)
+
+        self.assertEqual(result.best_message.id, 1)
+        self.assertEqual([message.id for message in result.context_messages], [1, 2])
 
     async def test_pick_best_quote_skips_ai_when_all_messages_filtered(self) -> None:
         messages = [

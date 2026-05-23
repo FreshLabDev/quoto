@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from datetime import datetime, timedelta, timezone
 import json
 import logging
@@ -22,8 +23,10 @@ _audit_log_lock = Lock()
 
 _SCORE_PROMPT = (
     "You are a live Telegram group quote curator, not a literary critic. "
-    "You will receive a JSON array of messages. Each message has an internal `id`; use ONLY that `id` "
-    "for `primary_id`, `context_ids`, and message scores. `message_id` is Telegram metadata for reference only. "
+    "You will receive a JSON array of compact message objects. `i` is the internal message id; use ONLY `i` "
+    "as output `id`, `primary_id`, and `context_ids`. `rp` is the internal id of the replied-to message. "
+    "`kind` is the Telegram message format. `desc` is a neutral media description prepared by another model. "
+    "`caption`/`t` are user text. Judge the whole moment: text, caption, media description, reactions, and reply context. "
     "Use reactions as lightweight context when present. "
     "Rate each message on a scale from 0 to 10 based on how quotable it feels inside this chat: a funny word, "
     "absurd phrase, rude but memorable line, chaotic combination, dry reply, local meme, or short dialogue can win. "
@@ -33,6 +36,7 @@ _SCORE_PROMPT = (
     "instead of publishing the punchline alone. "
     "Use `context_ids` only for consecutive messages or a real reply thread. Keep them in reading order, include "
     "`primary_id`, and set `context_needed` to true when the selected moment needs more than one message. "
+    "A `kind=sticker` message may only support the context; never choose a sticker as `primary_id`. "
     "Never combine unrelated messages. Max 5 context messages. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
@@ -41,9 +45,10 @@ _SCORE_PROMPT = (
 
 _DAY_PROMPT = (
     "You are a live Telegram group quote curator, not a literary critic. "
-    "You will receive a JSON array of messages from one quote day. Each message has an internal `id`; use ONLY "
-    "that `id` for `primary_id`, `context_ids`, and message scores. `message_id` is Telegram metadata for "
-    "reference only. "
+    "You will receive a JSON array of compact message objects from one quote day. `i` is the internal message id; "
+    "use ONLY `i` as output `id`, `primary_id`, and `context_ids`. `rp` is the internal id of the replied-to message. "
+    "`kind` is the Telegram message format. `desc` is a neutral media description prepared by another model. "
+    "`caption`/`t` are user text. Judge the whole moment: text, caption, media description, reactions, and reply context. "
     "Use reactions as lightweight context when present. "
     "First, rate every message from 0 to 10 based on how quotable it feels inside this chat: a funny word, "
     "absurd phrase, rude but memorable line, chaotic combination, dry reply, local meme, or short dialogue can win. "
@@ -57,6 +62,7 @@ _DAY_PROMPT = (
     "instead of publishing the punchline alone. "
     "Use `context_ids` only for consecutive messages or a real reply thread. Keep them in reading order, include "
     "`primary_id`, and set `context_needed` to true when the selected moment needs more than one message. "
+    "A `kind=sticker` message may only support the context; never choose a sticker as `primary_id`. "
     "Never combine unrelated messages. Max 5 context messages. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
@@ -64,6 +70,62 @@ _DAY_PROMPT = (
     "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
     "Respond in the language of the messages for reason_text."
 )
+
+_MEDIA_DESCRIPTION_PROMPT = (
+    "Опиши содержимое этого медиа для человека, который его не видит или не слышит. "
+    "Одним цельным текстом: кто или что изображено/звучит, что происходит, действия, обстановка, "
+    "важные детали, эмоции, заметный текст/надписи, речь/звуки и последовательность событий для видео "
+    "или анимации. Пиши кратко, но достаточно полно. Ответ должен состоять только из описания."
+)
+
+_SCORE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "quote": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "primary_id": {"type": ["integer", "null"]},
+                "context_ids": {"type": "array", "items": {"type": "integer"}},
+                "context_needed": {"type": "boolean"},
+            },
+            "required": ["primary_id", "context_ids", "context_needed"],
+        },
+        "messages": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "integer"},
+                    "score": {"type": "number", "minimum": 0, "maximum": 10},
+                },
+                "required": ["id", "score"],
+            },
+        },
+    },
+    "required": ["quote", "messages"],
+}
+
+_DAY_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "day": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "should_publish": {"type": "boolean"},
+                "reason_code": {"type": "string"},
+                "reason_text": {"type": "string"},
+            },
+            "required": ["should_publish", "reason_code", "reason_text"],
+        },
+        **_SCORE_RESPONSE_SCHEMA["properties"],
+    },
+    "required": ["day", "quote", "messages"],
+}
 
 
 @dataclass
@@ -96,6 +158,15 @@ class DayVerdictParseError(ValueError):
     pass
 
 
+@dataclass
+class MediaDescriptionResult:
+    description: str
+    actual_model: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+
+
 def _is_retryable_http_status(status_code: int) -> bool:
     return status_code == 429 or 500 <= status_code < 600
 
@@ -107,13 +178,13 @@ async def evaluate_messages(
     if not messages:
         return EvaluationResult(
             scores={},
-            actual_model=settings.OPENROUTER_MODEL,
-            requested_model=settings.OPENROUTER_MODEL,
+            actual_model=settings.OPENROUTER_EVAL_MODEL,
+            requested_model=settings.OPENROUTER_EVAL_MODEL,
             status="empty",
         )
 
     neutral_scores = {int(msg["id"]): 0.5 for msg in messages}
-    default_model = settings.OPENROUTER_MODEL
+    default_model = settings.OPENROUTER_EVAL_MODEL
     default_verdict = DayVerdict()
 
     if not settings.OPENROUTER_API_KEY:
@@ -135,16 +206,17 @@ async def evaluate_messages(
     user_payload = json.dumps([_message_payload(m) for m in messages], ensure_ascii=False)
 
     body = {
-        "model": settings.OPENROUTER_MODEL,
+        "model": settings.OPENROUTER_EVAL_MODEL,
         "messages": [
             {"role": "system", "content": _DAY_PROMPT if include_day_verdict else _SCORE_PROMPT},
             {"role": "user", "content": user_payload},
         ],
+        "response_format": _response_format(include_day_verdict),
     }
-    if settings.OPENROUTER_REASONING_EFFORT:
+    if settings.OPENROUTER_EVAL_REASONING_EFFORT:
         body["reasoning"] = {
             "enabled": True,
-            "effort": settings.OPENROUTER_REASONING_EFFORT,
+            "effort": settings.OPENROUTER_EVAL_REASONING_EFFORT,
             "exclude": True,
         }
 
@@ -181,7 +253,7 @@ async def evaluate_messages(
                 response.raise_for_status()
 
             data = response.json()
-            actual_model = data.get("model", settings.OPENROUTER_MODEL)
+            actual_model = data.get("model", settings.OPENROUTER_EVAL_MODEL)
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             content = content.strip()
             audit_record["response"]["model"] = actual_model
@@ -395,6 +467,120 @@ def _day_verdict_audit_payload(verdict: DayVerdict | None) -> dict[str, Any] | N
     }
 
 
+def _response_format(include_day_verdict: bool) -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "quoto_day_verdict" if include_day_verdict else "quoto_scores",
+            "strict": True,
+            "schema": _DAY_RESPONSE_SCHEMA if include_day_verdict else _SCORE_RESPONSE_SCHEMA,
+        },
+    }
+
+
+async def describe_media_file(
+    *,
+    path: Path,
+    mime_type: str,
+    media_kind: str,
+) -> MediaDescriptionResult:
+    if not settings.OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is not configured for media analysis.")
+
+    media_part = _media_content_part(path=path, mime_type=mime_type, media_kind=media_kind)
+    body: dict[str, Any] = {
+        "model": settings.OPENROUTER_MEDIA_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": _MEDIA_DESCRIPTION_PROMPT},
+                    media_part,
+                ],
+            }
+        ],
+    }
+    if settings.OPENROUTER_MEDIA_REASONING_EFFORT:
+        body["reasoning"] = {
+            "enabled": True,
+            "effort": settings.OPENROUTER_MEDIA_REASONING_EFFORT,
+            "exclude": True,
+        }
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        response = await client.post(
+            settings.OPENROUTER_BASE_URL,
+            json=body,
+            headers=headers,
+        )
+        response.raise_for_status()
+
+    data = response.json()
+    content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
+    usage = data.get("usage") or {}
+    description = str(content).strip()
+    if not description:
+        raise RuntimeError("Media model returned an empty description.")
+    return MediaDescriptionResult(
+        description=description,
+        actual_model=data.get("model", settings.OPENROUTER_MEDIA_MODEL),
+        prompt_tokens=_optional_int(usage.get("prompt_tokens")),
+        completion_tokens=_optional_int(usage.get("completion_tokens")),
+        total_tokens=_optional_int(usage.get("total_tokens")),
+    )
+
+
+def _media_content_part(*, path: Path, mime_type: str, media_kind: str) -> dict[str, Any]:
+    raw = path.read_bytes()
+    encoded = base64.b64encode(raw).decode("ascii")
+    if media_kind in {"photo", "image", "sticker"}:
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
+        }
+    if media_kind in {"video", "animation", "video_note"}:
+        return {
+            "type": "video_url",
+            "video_url": {"url": f"data:{mime_type};base64,{encoded}"},
+        }
+    if media_kind in {"voice", "audio"}:
+        return {
+            "type": "input_audio",
+            "input_audio": {
+                "data": encoded,
+                "format": _audio_format(mime_type, path),
+            },
+        }
+    raise ValueError(f"Unsupported media kind for {settings.OPENROUTER_MEDIA_MODEL}: {media_kind}")
+
+
+def _audio_format(mime_type: str, path: Path) -> str:
+    if "wav" in mime_type:
+        return "wav"
+    if "mpeg" in mime_type or "mp3" in mime_type:
+        return "mp3"
+    if "ogg" in mime_type or path.suffix.lower() == ".ogg":
+        return "ogg"
+    if "flac" in mime_type:
+        return "flac"
+    if "aac" in mime_type:
+        return "aac"
+    if "mp4" in mime_type or "m4a" in mime_type or path.suffix.lower() in {".m4a", ".mp4"}:
+        return "m4a"
+    return path.suffix.lower().lstrip(".") or "mp3"
+
+
+def _optional_int(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _normalize_scores(
     messages: list[dict[str, Any]],
     entries: list[dict],
@@ -419,17 +605,22 @@ def _normalize_scores(
 
 def _message_payload(message: dict[str, Any]) -> dict[str, Any]:
     payload = {
-        "id": message["id"],
-        "author": message["author"],
-        "text": message["text"],
+        "i": message["id"],
+        "a": message["author"],
     }
+    if message.get("text"):
+        payload["t"] = message["text"]
+    if message.get("caption"):
+        payload["caption"] = message["caption"]
+    if message.get("kind") and message.get("kind") != "text":
+        payload["kind"] = message["kind"]
+    if message.get("desc"):
+        payload["desc"] = message["desc"]
+    if message.get("reply_to_id") is not None:
+        payload["rp"] = message["reply_to_id"]
     reactions = message.get("reactions")
     if reactions:
-        payload["reactions"] = reactions
-    if message.get("message_id") is not None:
-        payload["message_id"] = message["message_id"]
-    if message.get("reply_to_message_id") is not None:
-        payload["reply_to_message_id"] = message["reply_to_message_id"]
+        payload["re"] = reactions
     return payload
 
 

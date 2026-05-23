@@ -29,8 +29,27 @@ class Settings(BaseSettings):
     # -- AI SETTINGS --
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "google/gemini-3.5-flash"
+    OPENROUTER_EVAL_MODEL: str = ""
+    OPENROUTER_MEDIA_MODEL: str = "google/gemini-3.1-flash-lite"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
     OPENROUTER_REASONING_EFFORT: str = "medium"
+    OPENROUTER_EVAL_REASONING_EFFORT: str = "high"
+    OPENROUTER_MEDIA_REASONING_EFFORT: str = "medium"
+
+    # -- MEDIA SETTINGS --
+    MEDIA_ANALYSIS_ENABLED: bool = True
+    MEDIA_PHASH_DISTANCE: int = 5
+    MEDIA_CACHE_PROMPT_VERSION: str = "v1"
+    MEDIA_IMAGE_MAX_SIDE: int = 1280
+    MEDIA_IMAGE_QUALITY: int = 82
+    MEDIA_VIDEO_MAX_SECONDS: int = 3600
+    MEDIA_VIDEO_LOW_RES_MAX_SECONDS: int = 10800
+    MEDIA_VIDEO_MAX_HEIGHT: int = 720
+    MEDIA_VIDEO_CRF: int = 30
+    MEDIA_VIDEO_FPS: int = 12
+    MEDIA_AUDIO_BITRATE: str = "64k"
+    MEDIA_AUDIO_SAMPLE_RATE: int = 24000
+    MEDIA_COMMAND_TIMEOUT_SECONDS: int = 300
 
     # -- SCORING WEIGHTS --
     WEIGHT_REACTIONS: float = 0.0
@@ -180,6 +199,9 @@ def _load_settings() -> Settings:
     loaded.BOT_USERNAME = loaded.BOT_USERNAME.strip().lstrip("@")
     if not loaded.BOT_USERNAME:
         raise ValueError("BOT_USERNAME must be configured with the bot public username.")
+    if not getattr(loaded, "OPENROUTER_EVAL_MODEL", ""):
+        loaded.OPENROUTER_EVAL_MODEL = getattr(loaded, "OPENROUTER_MODEL", "google/gemini-3.5-flash")
+    loaded.OPENROUTER_MODEL = loaded.OPENROUTER_EVAL_MODEL
     return loaded
 
 
