@@ -102,7 +102,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
             patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
             patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
             patch.object(ai.settings, "OPENROUTER_EVAL_REASONING_EFFORT", "medium"),
-            patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 12000),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 32000),
             patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
         ):
             result = await ai.evaluate_messages(
@@ -125,7 +125,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
             captured_body["reasoning"],
             {"enabled": True, "effort": "medium", "exclude": True},
         )
-        self.assertEqual(captured_body["max_tokens"], 4096)
+        self.assertEqual(captured_body["max_tokens"], 32000)
         user_payload = json.loads(captured_body["messages"][1]["content"])
         self.assertEqual(user_payload[0]["i"], 1)
         self.assertEqual(user_payload[0]["rp"], 2)
@@ -137,11 +137,11 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         day_schema = ai._response_format(include_day_verdict=True)["json_schema"]["schema"]
         self.assertEqual(day_schema["properties"]["day"]["properties"]["reason_text"]["maxLength"], 200)
 
-    async def test_eval_max_tokens_scales_with_message_count(self) -> None:
-        with patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 12000):
-            self.assertEqual(ai._eval_max_tokens(2, include_day_verdict=False), 4096)
-            self.assertEqual(ai._eval_max_tokens(84, include_day_verdict=True), 6592)
-            self.assertEqual(ai._eval_max_tokens(500, include_day_verdict=True), 12000)
+    async def test_eval_max_tokens_is_high_guardrail(self) -> None:
+        with patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 32000):
+            self.assertEqual(ai._eval_max_tokens(2, include_day_verdict=False), 32000)
+            self.assertEqual(ai._eval_max_tokens(84, include_day_verdict=True), 32000)
+            self.assertEqual(ai._eval_max_tokens(500, include_day_verdict=True), 32000)
 
         with patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 0):
             self.assertEqual(ai._eval_max_tokens(500, include_day_verdict=True), 0)

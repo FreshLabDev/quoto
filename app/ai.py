@@ -409,13 +409,10 @@ def _write_ai_audit_record(record: dict[str, Any]) -> None:
 
 
 def _eval_max_tokens(message_count: int, *, include_day_verdict: bool) -> int:
-    ceiling = settings.OPENROUTER_EVAL_MAX_TOKENS
-    if ceiling <= 0:
+    del message_count, include_day_verdict
+    if settings.OPENROUTER_EVAL_MAX_TOKENS <= 0:
         return 0
-    budget = 2048 + max(0, message_count) * 48
-    if include_day_verdict:
-        budget += 512
-    return min(ceiling, max(4096, budget))
+    return settings.OPENROUTER_EVAL_MAX_TOKENS
 
 
 def _prune_ai_audit_log(path: Path, now: datetime) -> None:
