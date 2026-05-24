@@ -72,6 +72,7 @@ class DayVerdictParsingTests(unittest.TestCase):
 class AIRetryTests(unittest.IsolatedAsyncioTestCase):
     async def test_evaluate_messages_sends_reactions_when_present(self) -> None:
         captured_body: dict | None = None
+        captured_headers: dict | None = None
 
         class FakeResponse:
             status_code = 200
@@ -94,8 +95,9 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
                 return False
 
             async def post(self, *_args, **kwargs):
-                nonlocal captured_body
+                nonlocal captured_body, captured_headers
                 captured_body = kwargs["json"]
+                captured_headers = kwargs["headers"]
                 return FakeResponse()
 
         with (
@@ -126,6 +128,8 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
             {"enabled": True, "effort": "medium", "exclude": True},
         )
         self.assertEqual(captured_body["max_tokens"], 32000)
+        self.assertEqual(captured_headers["HTTP-Referer"], "https://t.me/quototbot")
+        self.assertEqual(captured_headers["X-OpenRouter-Title"], "Quoto")
         user_payload = json.loads(captured_body["messages"][1]["content"])
         self.assertEqual(user_payload[0]["i"], 1)
         self.assertEqual(user_payload[0]["rp"], 2)

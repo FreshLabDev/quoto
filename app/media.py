@@ -435,7 +435,9 @@ def _normalize_video(raw_path: Path, tempdir: Path, source: MediaSource) -> Norm
         "-t",
         str(seconds),
         "-vf",
-        f"fps={settings.MEDIA_VIDEO_FPS},scale=-2:{settings.MEDIA_VIDEO_MAX_HEIGHT}:force_original_aspect_ratio=decrease",
+        f"fps={settings.MEDIA_VIDEO_FPS},"
+        f"scale=-2:{settings.MEDIA_VIDEO_MAX_HEIGHT}:"
+        "force_original_aspect_ratio=decrease:force_divisible_by=2",
         "-c:v",
         "libx264",
         "-preset",
@@ -763,8 +765,17 @@ def _run(command: list[str]) -> None:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,
             timeout=settings.MEDIA_COMMAND_TIMEOUT_SECONDS,
         )
+    except subprocess.CalledProcessError as exc:
+        stderr = str(exc.stderr or "").strip()
+        if len(stderr) > 1000:
+            stderr = stderr[-1000:]
+        details = f": {stderr}" if stderr else ""
+        raise RuntimeError(
+            f"Command failed with exit status {exc.returncode}: {command[0]}{details}"
+        ) from exc
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(
             f"Command timed out after {settings.MEDIA_COMMAND_TIMEOUT_SECONDS}s: {command[0]}"

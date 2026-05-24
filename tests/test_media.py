@@ -284,6 +284,7 @@ class MediaNormalizationTests(unittest.TestCase):
         self.assertEqual(normalized.mime_type, "video/mp4")
         self.assertIn("-t", commands[0])
         self.assertEqual(commands[0][commands[0].index("-t") + 1], "10800")
+        self.assertIn("force_divisible_by=2", commands[0][commands[0].index("-vf") + 1])
 
     def test_audio_normalization_uses_mono_mp3_and_silence_trim(self) -> None:
         commands: list[list[str]] = []
@@ -316,6 +317,20 @@ class MediaNormalizationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "timed out after 1s"):
                 media._run(["ffmpeg", "-version"])
 
+    def test_run_includes_stderr_on_command_failure(self) -> None:
+        error = subprocess.CalledProcessError(
+            returncode=187,
+            cmd=["ffmpeg", "-i", "broken.mp4"],
+            stderr="invalid media data",
+        )
+
+        with (
+            patch.object(media.shutil, "which", return_value="/usr/bin/ffmpeg"),
+            patch.object(media.subprocess, "run", side_effect=error),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "invalid media data"):
+                media._run(["ffmpeg", "-i", "broken.mp4"])
+
 
 class AIMediaPayloadTests(unittest.TestCase):
     def test_media_content_parts_use_openrouter_raw_schema(self) -> None:
@@ -336,37 +351,38 @@ class AIMediaPayloadTests(unittest.TestCase):
     def test_media_description_prompt_is_audio_only_for_voice(self) -> None:
         prompt = ai._media_description_prompt("voice")
 
-        self.assertIn("только аудио без изображения", prompt)
-        self.assertIn("Запрещено описывать внешность", prompt)
-        self.assertIn("камеру", prompt)
-        self.assertIn("видеоряд", prompt)
+        self.assertIn("Только аудио", prompt)
+        self.assertIn("Опиши слышимое", prompt)
         self.assertIn("транскрипт", prompt)
+        self.assertNotIn("Запрещено", prompt)
 
     def test_media_description_prompt_is_visual_only_for_photo(self) -> None:
         prompt = ai._media_description_prompt("photo")
 
-        self.assertIn("статичное изображение", prompt)
-        self.assertIn("только то, что реально видно", prompt)
-        self.assertIn("Не выдумывай звук", prompt)
+        self.assertIn("Статичное изображение", prompt)
+        self.assertIn("Опиши видимое", prompt)
+        self.assertIn("надписи", prompt)
+        self.assertNotIn("Не выдумывай", prompt)
 
     def test_media_description_prompt_is_video_specific_for_video_note(self) -> None:
         prompt = ai._media_description_prompt("video_note")
 
-        self.assertIn("видео, анимация или видеокружок", prompt)
-        self.assertIn("последовательность событий", prompt)
-        self.assertIn("речь и звуки", prompt)
+        self.assertIn("Видео, анимация или видеокружок", prompt)
+        self.assertIn("по порядку", prompt)
+        self.assertIn("речь, звуки", prompt)
 
     def test_media_description_prompt_is_sticker_specific(self) -> None:
         prompt = ai._media_description_prompt("sticker")
 
         self.assertIn("Telegram-стикер", prompt)
         self.assertIn("мем", prompt)
-        self.assertIn("Не выдумывай звук", prompt)
+        self.assertIn("Опиши видимое", prompt)
 
 
 class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
     async def test_describe_media_file_uses_media_model_and_medium_reasoning(self) -> None:
         captured_body: dict | None = None
+        captured_headers: dict | None = None
 
         class FakeResponse:
             status_code = 200
@@ -392,8 +408,9 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
                 return False
 
             async def post(self, *_args, **kwargs):
-                nonlocal captured_body
+                nonlocal captured_body, captured_headers
                 captured_body = kwargs["json"]
+                captured_headers = kwargs["headers"]
                 return FakeResponse()
 
         with tempfile.TemporaryDirectory() as tempdir:
@@ -415,8 +432,10 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.prompt_tokens, 100)
         self.assertEqual(captured_body["model"], "google/gemini-3.1-flash-lite")
         self.assertEqual(captured_body["reasoning"], {"enabled": True, "effort": "medium", "exclude": True})
-        self.assertIn("статичное изображение", captured_body["messages"][0]["content"][0]["text"])
+        self.assertIn("Статичное изображение", captured_body["messages"][0]["content"][0]["text"])
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "image_url")
+        self.assertEqual(captured_headers["HTTP-Referer"], "https://t.me/quototbot")
+        self.assertEqual(captured_headers["X-OpenRouter-Title"], "Quoto")
 
     async def test_describe_media_file_uses_audio_only_prompt_for_voice(self) -> None:
         captured_body: dict | None = None
@@ -466,6 +485,6 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.description, "Слышен мужской голос: «тест». Фон тихий.")
         prompt = captured_body["messages"][0]["content"][0]["text"]
-        self.assertIn("только аудио без изображения", prompt)
-        self.assertIn("Запрещено описывать внешность", prompt)
+        self.assertIn("Только аудио", prompt)
+        self.assertIn("Опиши слышимое", prompt)
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "input_audio")

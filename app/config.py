@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     OPENROUTER_EVAL_MODEL: str = ""
     OPENROUTER_MEDIA_MODEL: str = "google/gemini-3.1-flash-lite"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
+    OPENROUTER_HTTP_REFERER: str = "https://t.me/quototbot"
+    OPENROUTER_APP_TITLE: str = "Quoto"
     OPENROUTER_REASONING_EFFORT: str = "medium"
     OPENROUTER_EVAL_REASONING_EFFORT: str = "medium"
     OPENROUTER_MEDIA_REASONING_EFFORT: str = "medium"
