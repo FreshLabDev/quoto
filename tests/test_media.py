@@ -333,6 +333,36 @@ class AIMediaPayloadTests(unittest.TestCase):
         self.assertIn("input_audio", audio_part)
         self.assertNotIn("inputAudio", audio_part)
 
+    def test_media_description_prompt_is_audio_only_for_voice(self) -> None:
+        prompt = ai._media_description_prompt("voice")
+
+        self.assertIn("только аудио без изображения", prompt)
+        self.assertIn("Запрещено описывать внешность", prompt)
+        self.assertIn("камеру", prompt)
+        self.assertIn("видеоряд", prompt)
+        self.assertIn("транскрипт", prompt)
+
+    def test_media_description_prompt_is_visual_only_for_photo(self) -> None:
+        prompt = ai._media_description_prompt("photo")
+
+        self.assertIn("статичное изображение", prompt)
+        self.assertIn("только то, что реально видно", prompt)
+        self.assertIn("Не выдумывай звук", prompt)
+
+    def test_media_description_prompt_is_video_specific_for_video_note(self) -> None:
+        prompt = ai._media_description_prompt("video_note")
+
+        self.assertIn("видео, анимация или видеокружок", prompt)
+        self.assertIn("последовательность событий", prompt)
+        self.assertIn("речь и звуки", prompt)
+
+    def test_media_description_prompt_is_sticker_specific(self) -> None:
+        prompt = ai._media_description_prompt("sticker")
+
+        self.assertIn("Telegram-стикер", prompt)
+        self.assertIn("мем", prompt)
+        self.assertIn("Не выдумывай звук", prompt)
+
 
 class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
     async def test_describe_media_file_uses_media_model_and_medium_reasoning(self) -> None:
@@ -385,4 +415,57 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.prompt_tokens, 100)
         self.assertEqual(captured_body["model"], "google/gemini-3.1-flash-lite")
         self.assertEqual(captured_body["reasoning"], {"enabled": True, "effort": "medium", "exclude": True})
+        self.assertIn("статичное изображение", captured_body["messages"][0]["content"][0]["text"])
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "image_url")
+
+    async def test_describe_media_file_uses_audio_only_prompt_for_voice(self) -> None:
+        captured_body: dict | None = None
+
+        class FakeResponse:
+            status_code = 200
+            text = json.dumps(
+                {
+                    "model": "google/gemini-3.1-flash-lite",
+                    "choices": [{"message": {"content": "Слышен мужской голос: «тест». Фон тихий."}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                }
+            )
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal captured_body
+                captured_body = kwargs["json"]
+                return FakeResponse()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            audio_path = Path(tempdir) / "voice.mp3"
+            audio_path.write_bytes(b"audio")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "google/gemini-3.1-flash-lite"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_REASONING_EFFORT", "medium"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            ):
+                result = await ai.describe_media_file(
+                    path=audio_path,
+                    mime_type="audio/mpeg",
+                    media_kind="voice",
+                )
+
+        self.assertEqual(result.description, "Слышен мужской голос: «тест». Фон тихий.")
+        prompt = captured_body["messages"][0]["content"][0]["text"]
+        self.assertIn("только аудио без изображения", prompt)
+        self.assertIn("Запрещено описывать внешность", prompt)
+        self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "input_audio")

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # -- MEDIA SETTINGS --
     MEDIA_ANALYSIS_ENABLED: bool = True
     MEDIA_PHASH_DISTANCE: int = 5
-    MEDIA_CACHE_PROMPT_VERSION: str = "v1"
+    MEDIA_CACHE_PROMPT_VERSION: str = "v2"
     MEDIA_IMAGE_MAX_SIDE: int = 1280
     MEDIA_IMAGE_QUALITY: int = 82
     MEDIA_VIDEO_MAX_SECONDS: int = 3600
