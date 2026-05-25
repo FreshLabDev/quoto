@@ -352,16 +352,18 @@ class AIMediaPayloadTests(unittest.TestCase):
         prompt = ai._media_description_prompt("voice")
 
         self.assertIn("Только аудио", prompt)
-        self.assertIn("Опиши слышимое", prompt)
-        self.assertIn("транскрипт", prompt)
+        self.assertIn("ключевыми фразами", prompt)
+        self.assertIn("1-4 коротких предложения", prompt)
         self.assertNotIn("Запрещено", prompt)
 
     def test_media_description_prompt_is_visual_only_for_photo(self) -> None:
         prompt = ai._media_description_prompt("photo")
 
         self.assertIn("Статичное изображение", prompt)
-        self.assertIn("Опиши видимое", prompt)
+        self.assertIn("Опиши только факты", prompt)
         self.assertIn("надписи", prompt)
+        self.assertIn("2-4 коротких предложения", prompt)
+        self.assertNotIn("атмосфер", prompt.lower())
         self.assertNotIn("Не выдумывай", prompt)
 
     def test_media_description_prompt_is_video_specific_for_video_note(self) -> None:
@@ -369,14 +371,16 @@ class AIMediaPayloadTests(unittest.TestCase):
 
         self.assertIn("Видео, анимация или видеокружок", prompt)
         self.assertIn("по порядку", prompt)
-        self.assertIn("речь, звуки", prompt)
+        self.assertIn("речь и звуки", prompt)
+        self.assertIn("4-6 коротких предложений", prompt)
 
     def test_media_description_prompt_is_sticker_specific(self) -> None:
         prompt = ai._media_description_prompt("sticker")
 
         self.assertIn("Telegram-стикер", prompt)
         self.assertIn("мем", prompt)
-        self.assertIn("Опиши видимое", prompt)
+        self.assertIn("эмоцию", prompt)
+        self.assertIn("1-2 коротких предложения", prompt)
 
 
 class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
@@ -433,6 +437,7 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(captured_body["model"], "google/gemini-3.1-flash-lite")
         self.assertEqual(captured_body["reasoning"], {"enabled": True, "effort": "medium", "exclude": True})
         self.assertIn("Статичное изображение", captured_body["messages"][0]["content"][0]["text"])
+        self.assertIn("2-4 коротких предложения", captured_body["messages"][0]["content"][0]["text"])
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "image_url")
         self.assertEqual(captured_headers["HTTP-Referer"], "https://t.me/quototbot")
         self.assertEqual(captured_headers["X-OpenRouter-Title"], "Quoto")
@@ -486,5 +491,6 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.description, "Слышен мужской голос: «тест». Фон тихий.")
         prompt = captured_body["messages"][0]["content"][0]["text"]
         self.assertIn("Только аудио", prompt)
-        self.assertIn("Опиши слышимое", prompt)
+        self.assertIn("ключевыми фразами", prompt)
+        self.assertIn("1-4 коротких предложения", prompt)
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "input_audio")

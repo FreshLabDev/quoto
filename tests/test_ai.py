@@ -24,6 +24,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Do not require polished jokes", ai._DAY_PROMPT)
         self.assertIn("full minimal context block", ai._DAY_PROMPT)
         self.assertIn("Set should_publish to false only when the best candidate is truly nothing", ai._DAY_PROMPT)
+        self.assertIn("main language used in the chat that day", ai._DAY_PROMPT)
 
     def test_score_prompt_requires_model_owned_context(self) -> None:
         self.assertIn("full minimal context block", ai._SCORE_PROMPT)
