@@ -9,6 +9,7 @@ os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
 
 from app import scheduler, scoring
+from app.quote_status import STATUS_SKIPPED_BORING
 
 def _make_window() -> SimpleNamespace:
     start_utc = datetime(2026, 3, 26, 20, 0, tzinfo=timezone.utc)
@@ -121,6 +122,26 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             detect_interface_language=True,
         )
 
+    async def test_process_group_uses_group_min_messages_setting(self) -> None:
+        self.group.min_messages = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW + 5
+        message_count = self.group.min_messages - 1
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
+            patch.object(
+                scheduler.core,
+                "clear_window_messages",
+                new=AsyncMock(return_value=message_count),
+            ) as clear_messages,
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock()) as pick_best_quote,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        clear_messages.assert_awaited_once_with(self.group.chat_id, self.window)
+        pick_best_quote.assert_not_awaited()
+
     async def test_process_group_does_not_detect_language_when_already_set(self) -> None:
         self.group.language_code = "en"
         message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
@@ -166,6 +187,62 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         set_language.assert_awaited_once_with(self.group.id, "uk")
         self.assertEqual(self.group.language_code, "uk")
         publish.assert_awaited_once()
+
+    async def test_process_group_disables_quote_context_storage(self) -> None:
+        self.group.quote_context_enabled = False
+        message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+        best_message = SimpleNamespace(author=SimpleNamespace(name="Alice"))
+        context_message = SimpleNamespace()
+        evaluation = scoring.QuoteEvaluation(
+            message_count=message_count,
+            best_message=best_message,
+            context_messages=[context_message],
+            should_publish=True,
+        )
+        quote = SimpleNamespace(id=5)
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
+            patch.object(scheduler.core, "create_quote_record", new=AsyncMock(return_value=(quote, True))) as create_quote,
+            patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)),
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        self.assertEqual(create_quote.await_args.kwargs["context_messages"], [])
+
+    async def test_process_group_skips_boring_notice_when_disabled(self) -> None:
+        self.group.boring_notice_enabled = False
+        message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+        best_message = SimpleNamespace(author=SimpleNamespace(name="Alice"))
+        evaluation = scoring.QuoteEvaluation(
+            message_count=message_count,
+            best_message=best_message,
+            should_publish=False,
+            day_reason_text="boring",
+        )
+        quote = SimpleNamespace(id=6)
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
+            patch.object(scheduler.core, "create_quote_record", new=AsyncMock(return_value=(quote, True))) as create_quote,
+            patch.object(
+                scheduler.core,
+                "clear_window_messages",
+                new=AsyncMock(return_value=message_count),
+            ) as clear_messages,
+            patch.object(scheduler, "_send_boring_notice", new=AsyncMock()) as send_notice,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        self.assertEqual(create_quote.await_args.kwargs["decision_status"], STATUS_SKIPPED_BORING)
+        clear_messages.assert_awaited_once_with(self.group.chat_id, self.window)
+        send_notice.assert_not_awaited()
 
     async def test_process_group_clears_window_when_all_messages_filtered_before_ai(self) -> None:
         source_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
@@ -375,6 +452,39 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("💬 <b>Bob:</b> <i>«punch &lt;line&gt;»</i>", sent_text)
         update_publication.assert_awaited_once()
         mark_status.assert_not_awaited()
+        append_error.assert_not_awaited()
+
+    async def test_publish_quote_message_can_skip_pin(self) -> None:
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=202)),
+            pin_chat_message=AsyncMock(),
+        )
+        quote = SimpleNamespace(
+            id=12,
+            quote_day=self.window.quote_day,
+            text="quote",
+            message_id=60,
+            decision_reason=None,
+        )
+        breakdown = scoring.ScoreBreakdown(ai=0.7)
+
+        with (
+            patch.object(scheduler.core, "update_quote_publication", new=AsyncMock()),
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()),
+            patch.object(scheduler.core, "append_quote_operation_error", new=AsyncMock()) as append_error,
+        ):
+            result = await scheduler._publish_quote_message(
+                bot=bot,
+                group=self.group,
+                quote=quote,
+                author_name="Alice",
+                breakdown=breakdown,
+                clear_window_after=False,
+                pin_enabled=False,
+            )
+
+        self.assertTrue(result)
+        bot.pin_chat_message.assert_not_awaited()
         append_error.assert_not_awaited()
 
     async def test_recover_pending_media_job_uses_configured_batch_size(self) -> None:

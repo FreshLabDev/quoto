@@ -154,7 +154,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(
             labels,
-            ["👤 Моя статистика", "📊 Статистика чата", "🌐 Язык группы", "Закрыть"],
+            ["👤 Моя статистика", "📊 Статистика чата", "⚙️ Настройки", "Закрыть"],
         )
 
     async def test_close_panel_deletes_panel_and_command_message(self) -> None:
@@ -210,6 +210,70 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
 
         set_language.assert_awaited_once_with(1, "uk")
         self.assertIn("Мова групи", panel.edits[0])
+        callback.answer.assert_awaited()
+
+    async def test_group_settings_explains_quote_context(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:settings",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(
+                    return_value=SimpleNamespace(
+                        id=1,
+                        language_code="ru",
+                        language_source=None,
+                        quote_context_enabled=True,
+                    )
+                ),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+        ):
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+
+        self.assertIn("Настройки группы", panel.edits[0])
+        self.assertIn("несколько соседних или reply-связанных сообщений", panel.edits[0])
+        labels = [
+            button.text
+            for row in panel.edit_markups[0].inline_keyboard
+            for button in row
+        ]
+        self.assertIn("◉ Контекст", labels)
+
+    async def test_private_language_callback_sets_manual_user_language(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=777, type="private", title=None),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:p:setplang:de",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                handlers.core,
+                "user_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(language_code=None, language_source=None)),
+            ),
+            patch.object(handlers.core, "set_user_language_manual", new=AsyncMock()) as set_language,
+        ):
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+
+        set_language.assert_awaited_once_with(777, "de")
+        self.assertIn("Sprache im privaten Chat", panel.edits[0])
         callback.answer.assert_awaited()
 
     async def test_private_quote_details_renders_context_messages(self) -> None:

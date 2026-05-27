@@ -24,6 +24,8 @@ class User(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     telegram_id = Column(BigInteger, unique=True, index=True, nullable=False)
     name = Column(String)
+    language_code = Column(String, nullable=True)
+    language_source = Column(String, nullable=True)
 
     quotes = relationship("Quote", back_populates="author")
     messages = relationship("Message", back_populates="author")
@@ -37,6 +39,12 @@ class Group(Base):
     name = Column(String)
     language_code = Column(String, nullable=True)
     language_source = Column(String, nullable=True)
+    quote_hour = Column(Integer, nullable=True)
+    quote_minute = Column(Integer, nullable=True)
+    min_messages = Column(Integer, nullable=True)
+    boring_notice_enabled = Column(Boolean, nullable=True)
+    pin_enabled = Column(Boolean, nullable=True)
+    quote_context_enabled = Column(Boolean, nullable=True)
 
     quotes = relationship("Quote", back_populates="group")
 

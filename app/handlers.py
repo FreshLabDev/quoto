@@ -31,13 +31,18 @@ def _html(value: object) -> str:
     return escape(str(value))
 
 
-def _message_language(message: types.Message) -> str:
+def _private_message_language(message: types.Message, db_user=None) -> str:
     user = getattr(message, "from_user", None)
-    return i18n.language_or_default(getattr(user, "language_code", None))
+    return core.effective_user_language(db_user, getattr(user, "language_code", None))
 
 
-def _time_label() -> str:
-    return f"{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d}"
+def _private_language_source(db_user) -> str | None:
+    return getattr(db_user, "language_source", None)
+
+
+def _time_label(group=None) -> str:
+    hour, minute = core.effective_group_quote_time(group)
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _is_command_message(message: types.Message) -> bool:
@@ -216,11 +221,12 @@ async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> No
         return
 
     if message.chat.type == "private":
-        await core.user_getOrCreate(message.from_user)
-        language = _message_language(message)
+        db_user = await core.user_getOrCreate(message.from_user)
+        language = _private_message_language(message, db_user)
         text, reply_markup = menu.build_private_home(
             owner_id=message.from_user.id,
             language=language,
+            language_source=_private_language_source(db_user),
             bot_username=settings.BOT_USERNAME,
         )
     else:
@@ -235,8 +241,11 @@ async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> No
             group_language=language,
             group_language_source=group.language_source,
             is_admin=is_admin,
-            quote_time=_time_label(),
-            min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
+            quote_time=_time_label(group),
+            min_messages=core.effective_group_min_messages(group),
+            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
+            pin_enabled=core.effective_group_pin_enabled(group),
+            quote_context_enabled=core.effective_group_quote_context_enabled(group),
         )
 
     panel = await message.answer(text, reply_markup=reply_markup)
@@ -284,8 +293,8 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
 
 @router.message(or_f(and_f(F.chat.type == "private", CommandStart()), F.chat.type == "private"))
 async def private_handler(message: types.Message, command: CommandObject = None):
-    await core.user_getOrCreate(message.from_user)
-    language = _message_language(message)
+    db_user = await core.user_getOrCreate(message.from_user)
+    language = _private_message_language(message, db_user)
 
     if command and command.args:
         args = command.args
@@ -489,15 +498,75 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         return
 
     if parsed.scope == menu.SCOPE_PRIVATE:
-        if parsed.action != menu.ACTION_HOME:
+        db_user = await core.user_getOrCreate(user)
+        language = core.effective_user_language(db_user, getattr(user, "language_code", None))
+        language_source = _private_language_source(db_user)
+
+        if parsed.action == menu.ACTION_HOME:
+            text, reply_markup = menu.build_private_home(
+                owner_id=parsed.owner_id,
+                language=language,
+                language_source=language_source,
+                bot_username=settings.BOT_USERNAME,
+            )
+            await _edit_panel(callback, text, reply_markup)
             await callback.answer()
             return
-        text, reply_markup = menu.build_private_home(
-            owner_id=parsed.owner_id,
-            language=language,
-            bot_username=settings.BOT_USERNAME,
-        )
-        await _edit_panel(callback, text, reply_markup)
+
+        if parsed.action == menu.ACTION_SETTINGS:
+            text, reply_markup = menu.build_private_settings(
+                owner_id=parsed.owner_id,
+                language=language,
+                language_source=language_source,
+                bot_username=settings.BOT_USERNAME,
+            )
+            await _edit_panel(callback, text, reply_markup)
+            await callback.answer()
+            return
+
+        if parsed.action == menu.ACTION_PRIVATE_LANGUAGE:
+            text, reply_markup = menu.build_private_language(
+                owner_id=parsed.owner_id,
+                language=language,
+                current_language=language,
+                language_source=language_source,
+            )
+            await _edit_panel(callback, text, reply_markup)
+            await callback.answer()
+            return
+
+        if parsed.action == menu.ACTION_SET_PRIVATE_LANGUAGE:
+            selected_language = i18n.normalize_language_code(parsed.payload)
+            if not selected_language:
+                await callback.answer(i18n.t(language, "menu.language.invalid"), show_alert=True)
+                return
+            await core.set_user_language_manual(user.id, selected_language)
+            language = selected_language
+            text, reply_markup = menu.build_private_language(
+                owner_id=parsed.owner_id,
+                language=language,
+                current_language=language,
+                language_source=i18n.LANGUAGE_SOURCE_MANUAL,
+            )
+            await _edit_panel(callback, text, reply_markup)
+            await callback.answer(
+                i18n.t(language, "menu.language.updated", language_name=i18n.language_name(language))
+            )
+            return
+
+        if parsed.action == menu.ACTION_AUTO_PRIVATE_LANGUAGE:
+            await core.clear_user_language(user.id)
+            language = i18n.language_or_default(getattr(user, "language_code", None))
+            text, reply_markup = menu.build_private_language(
+                owner_id=parsed.owner_id,
+                language=language,
+                current_language=language,
+                language_source=None,
+            )
+            await _edit_panel(callback, text, reply_markup)
+            await callback.answer(i18n.t(language, "settings.updated"))
+            return
+
         await callback.answer()
         return
 
@@ -514,18 +583,44 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
             group_language=language,
             group_language_source=group.language_source,
             is_admin=is_admin,
-            quote_time=_time_label(),
-            min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
+            quote_time=_time_label(group),
+            min_messages=core.effective_group_min_messages(group),
+            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
+            pin_enabled=core.effective_group_pin_enabled(group),
+            quote_context_enabled=core.effective_group_quote_context_enabled(group),
         )
         await _edit_panel(callback, text, reply_markup)
         await callback.answer()
         return
 
     if parsed.action in {
+        menu.ACTION_SETTINGS,
         menu.ACTION_GROUP_LANGUAGE,
         menu.ACTION_SET_GROUP_LANGUAGE,
+        menu.ACTION_AUTO_GROUP_LANGUAGE,
+        menu.ACTION_GROUP_TIME,
+        menu.ACTION_GROUP_TIME_ADJUST,
+        menu.ACTION_GROUP_MIN_MESSAGES,
+        menu.ACTION_GROUP_MIN_ADJUST,
+        menu.ACTION_TOGGLE_GROUP_SETTING,
     } and not is_admin:
         await callback.answer(i18n.t(language, "admin.admin_only"), show_alert=True)
+        return
+
+    if parsed.action == menu.ACTION_SETTINGS:
+        text, reply_markup = menu.build_group_settings(
+            owner_id=parsed.owner_id,
+            language=language,
+            group_language=language,
+            group_language_source=group.language_source,
+            quote_time=_time_label(group),
+            min_messages=core.effective_group_min_messages(group),
+            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
+            pin_enabled=core.effective_group_pin_enabled(group),
+            quote_context_enabled=core.effective_group_quote_context_enabled(group),
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer()
         return
 
     if parsed.action == menu.ACTION_GROUP_LANGUAGE:
@@ -557,6 +652,94 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         await callback.answer(
             i18n.t(language, "menu.language.updated", language_name=i18n.language_name(language))
         )
+        return
+
+    if parsed.action == menu.ACTION_AUTO_GROUP_LANGUAGE:
+        await core.clear_group_language(group.id)
+        group = await core.get_group_by_chat_id(panel.chat.id) or group
+        language = i18n.group_language(group)
+        text, reply_markup = menu.build_group_language(
+            owner_id=parsed.owner_id,
+            language=language,
+            current_language=language,
+            language_source=group.language_source,
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer(i18n.t(language, "settings.group.language_auto_updated"))
+        return
+
+    if parsed.action == menu.ACTION_GROUP_TIME:
+        text, reply_markup = menu.build_group_time(
+            owner_id=parsed.owner_id,
+            language=language,
+            quote_time=_time_label(group),
+            timezone_name=settings.TIMEZONE,
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer()
+        return
+
+    if parsed.action == menu.ACTION_GROUP_TIME_ADJUST:
+        try:
+            delta_minutes = int(parsed.payload or "0")
+        except ValueError:
+            await callback.answer(i18n.t(language, "settings.invalid"), show_alert=True)
+            return
+        group = await core.adjust_group_quote_time(group.id, delta_minutes) or group
+        language = i18n.group_language(group)
+        text, reply_markup = menu.build_group_time(
+            owner_id=parsed.owner_id,
+            language=language,
+            quote_time=_time_label(group),
+            timezone_name=settings.TIMEZONE,
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer(i18n.t(language, "settings.updated"))
+        return
+
+    if parsed.action == menu.ACTION_GROUP_MIN_MESSAGES:
+        text, reply_markup = menu.build_group_min_messages(
+            owner_id=parsed.owner_id,
+            language=language,
+            min_messages=core.effective_group_min_messages(group),
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer()
+        return
+
+    if parsed.action == menu.ACTION_GROUP_MIN_ADJUST:
+        try:
+            delta = int(parsed.payload or "0")
+        except ValueError:
+            await callback.answer(i18n.t(language, "settings.invalid"), show_alert=True)
+            return
+        group = await core.adjust_group_min_messages(group.id, delta) or group
+        language = i18n.group_language(group)
+        text, reply_markup = menu.build_group_min_messages(
+            owner_id=parsed.owner_id,
+            language=language,
+            min_messages=core.effective_group_min_messages(group),
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer(i18n.t(language, "settings.updated"))
+        return
+
+    if parsed.action == menu.ACTION_TOGGLE_GROUP_SETTING:
+        group = await core.toggle_group_setting(group.id, parsed.payload or "") or group
+        language = i18n.group_language(group)
+        text, reply_markup = menu.build_group_settings(
+            owner_id=parsed.owner_id,
+            language=language,
+            group_language=language,
+            group_language_source=group.language_source,
+            quote_time=_time_label(group),
+            min_messages=core.effective_group_min_messages(group),
+            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
+            pin_enabled=core.effective_group_pin_enabled(group),
+            quote_context_enabled=core.effective_group_quote_context_enabled(group),
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer(i18n.t(language, "settings.updated"))
         return
 
     if parsed.action == menu.ACTION_CHAT_STATS:

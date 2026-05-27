@@ -9,13 +9,14 @@
     "ai": "KI"
   },
   "menu": {
-    "button": {
-      "user_stats": "👤 Meine Statistik",
-      "chat_stats": "📊 Chat-Statistik",
-      "group_language": "🌐 Gruppensprache",
-      "back": "‹ Zurück",
-      "close": "Schließen"
-    },
+        "button": {
+            "user_stats": "👤 Meine Statistik",
+            "chat_stats": "📊 Chat-Statistik",
+            "group_language": "🌐 Gruppensprache",
+            "settings": "⚙️ Einstellungen",
+            "back": "‹ Zurück",
+            "close": "Schließen"
+        },
     "private": {
       "title": "🏆 <b>Quoto</b>",
       "body": "Ich verwalte Zitat-des-Tages-Fenster in Gruppenchats. Füge mich zu einer Gruppe hinzu und nutze dort /start für die Steuerung.",
@@ -24,7 +25,7 @@
     },
     "group": {
       "title": "🏆 <b>Quoto-Steuerung</b>",
-      "admin_body": "Mit den Buttons unten verwaltest du Zitate, Statistik und Gruppensprache.",
+      "admin_body": "Mit den Buttons unten verwaltest du Zitate, Statistik und Gruppeneinstellungen.",
       "user_body": "Mit den Buttons unten öffnest du die Zitat-Statistik.",
       "language_line": "Sprache: <b>{language_name}</b>",
       "schedule_line": "Tägliche Auswahl: <b>{time}</b>; Überspringen bei weniger als <b>{min_messages}</b> Nachrichten."
@@ -38,10 +39,67 @@
       "updated": "Sprache auf {language_name} gesetzt.",
       "invalid": "Nicht unterstützte Sprache."
     },
-    "other_user": "Öffne dein eigenes Menü mit /start.",
-    "group_context_required": "Öffne dies aus einem Gruppenchat."
-  },
-  "status": {
+        "other_user": "Öffne dein eigenes Menü mit /start.",
+        "group_context_required": "Öffne dies aus einem Gruppenchat."
+    },
+    "settings": {
+        "updated": "Einstellungen aktualisiert.",
+        "invalid": "Ungültiger Wert.",
+        "block": {
+            "interface": "Oberfläche",
+            "quote_day": "Zitat des Tages",
+            "behavior": "Verhalten"
+        },
+        "button": {
+            "language": "🌐 Sprache",
+            "time": "⏰ Zeit",
+            "min_messages": "💬 Minimum",
+            "context": "Kontext",
+            "boring_notice": "Langweiliger Tag",
+            "pin": "Anheften"
+        },
+        "private": {
+            "title": "⚙️ <b>Quoto-Einstellungen</b>",
+            "hint": "<i>Diese Einstellungen gelten nur in diesem privaten Chat.</i>",
+            "language_title": "🌐 <b>Sprache im privaten Chat</b>",
+            "language_hint": "<i>Nutze deine Telegram-Sprache oder wähle manuell.</i>",
+            "telegram_language": "Telegram-Sprache nutzen",
+            "language_source_manual": "Quelle: manuell gesetzt",
+            "language_source_telegram": "Quelle: Telegram-Sprache"
+        },
+        "group": {
+            "title": "⚙️ <b>Gruppeneinstellungen</b>",
+            "hint": "<i>Nur Admins ändern das Verhalten von Quoto in dieser Gruppe.</i>",
+            "language_auto": "Am nächsten Tag automatisch erkennen",
+            "language_auto_updated": "Die Sprache wird bei der nächsten Auswertung automatisch erkannt.",
+            "context": {
+                "short": "Zitat-Kontext",
+                "label": "Zitat-Kontext",
+                "title": "Was Kontext bedeutet",
+                "explain": "Zitat-Kontext sind einige benachbarte oder per Antwort verknüpfte Nachrichten rund um den Gewinner-Satz. So bleibt das Zitat ohne Scrollen verständlich."
+            },
+            "boring_notice": {
+                "short": "Hinweis zum langweiligen Tag",
+                "label": "Hinweis zum langweiligen Tag senden"
+            },
+            "pin": {
+                "short": "Zitat anheften",
+                "label": "Veröffentlichtes Zitat anheften"
+            },
+            "time": {
+                "title": "⏰ <b>Zeit für das Zitat</b>",
+                "hint": "<i>Zu dieser Zeit schließt Quoto den Tag und wählt das Zitat.</i>",
+                "line": "Tägliche Auswahl: <b>{time}</b>",
+                "timezone": "Zeitzone: <b>{timezone}</b>"
+            },
+            "min_messages": {
+                "title": "💬 <b>Mindestanzahl Nachrichten</b>",
+                "hint": "<i>Bei weniger Nachrichten wird der Tag ohne KI-Auswertung übersprungen.</i>",
+                "line": "Minimum für Auswertung: <b>{count}</b>"
+            }
+        }
+    },
+    "status": {
     "published": "✅ Veröffentlicht",
     "skipped_boring": "😴 Langweiliger Tag",
     "publish_failed": "⚠️ Veröffentlichung fehlgeschlagen",
@@ -53,7 +111,7 @@
     "admin_only": "🔒 Dieser Befehl ist nur für Chat-Admins verfügbar."
   },
   "chat_member": {
-    "added": "👋 Hallo, <b>{chat_title}</b>!\n\nIch bin <b>Quoto</b>. Um <b>{time}</b> wähle und veröffentliche ich das Zitat des Tages.\n\nNutze /start, um Statistik und Gruppensprache zu öffnen.",
+    "added": "👋 Hallo, <b>{chat_title}</b>!\n\nIch bin <b>Quoto</b>. Um <b>{time}</b> wähle und veröffentliche ich das Zitat des Tages.\n\nNutze /start, um Statistik und Gruppeneinstellungen zu öffnen.",
     "need_admin": "⚠️ Bitte <b>mache mich zum Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i>, damit ich das Ergebnis veröffentlichen kann.",
     "admin_granted": "✅ <b>Danke</b>, dass du mich zum Administrator gemacht hast!"
   },

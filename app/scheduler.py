@@ -1,10 +1,9 @@
 import logging
 import json
-from datetime import timedelta
+from datetime import time, timedelta
 from html import escape
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
 from sqlalchemy import select
@@ -21,6 +20,7 @@ from .quote_status import (
     STATUS_PUBLISH_FAILED,
     STATUS_PUBLISH_UNKNOWN,
     STATUS_PUBLISHING,
+    STATUS_SKIPPED_BORING,
 )
 from .windows import QuoteWindow, get_closed_window, utc_now
 from .windows import quote_timezone
@@ -33,11 +33,8 @@ _MEDIA_CAPTION_LIMIT = 1024
 
 
 async def quote_of_the_day_job(bot: Bot) -> None:
-    window = get_closed_window()
-    log.info(
-        f"⏰ Запуск выбора цитаты дня за день "
-        f"{window.start_local.isoformat()} -> {window.end_local.isoformat()}"
-    )
+    now = utc_now()
+    now_local = now.astimezone(quote_timezone())
 
     async with SessionLocal() as session:
         result = await session.execute(select(Group))
@@ -48,6 +45,15 @@ async def quote_of_the_day_job(bot: Bot) -> None:
         return
 
     for group in groups:
+        quote_hour, quote_minute = core.effective_group_quote_time(group)
+        if now_local.hour != quote_hour or now_local.minute != quote_minute:
+            continue
+
+        window = get_closed_window(now, at_time=time(hour=quote_hour, minute=quote_minute))
+        log.info(
+            f"{group.chat_id} | ⏰ Запуск выбора цитаты дня за день "
+            f"{window.start_local.isoformat()} -> {window.end_local.isoformat()}"
+        )
         try:
             await _process_group(bot, group, window)
         except Exception as e:
@@ -69,7 +75,10 @@ async def recover_pending_media_job(bot: Bot) -> None:
 
 
 async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = None) -> None:
-    window = window or get_closed_window()
+    quote_hour, quote_minute = core.effective_group_quote_time(group)
+    window = window or get_closed_window(at_time=time(hour=quote_hour, minute=quote_minute))
+    min_messages = core.effective_group_min_messages(group)
+    context_messages_enabled = core.effective_group_quote_context_enabled(group)
     log.debug(f"{group.chat_id} | ⏳ Обработка дня {window.quote_day} для группы {group.name}")
 
     await _recover_stale_quotes_for_chat(group.chat_id)
@@ -85,11 +94,11 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         log.info(f"{group.chat_id} | 📭 День {window.quote_day} пустой")
         return
 
-    if message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
+    if message_count < min_messages:
         deleted = await core.clear_window_messages(group.chat_id, window)
         log.info(
             f"{group.chat_id} | 🤫 День {window.quote_day} пропущен: "
-            f"сообщений {message_count} < {settings.MIN_MESSAGES_FOR_AUTO_REVIEW}. "
+            f"сообщений {message_count} < {min_messages}. "
             f"Очищено {deleted} сообщений."
         )
         return
@@ -98,7 +107,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         group.chat_id,
         window,
         include_day_verdict=True,
-        day_verdict_min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
+        day_verdict_min_messages=min_messages,
         group_id=group.id,
         detect_interface_language=not i18n.group_language_is_set(group),
     )
@@ -123,11 +132,11 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         log.info(f"{group.chat_id} | 📭 День {window.quote_day} пустой")
         return
 
-    if evaluation.message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
+    if evaluation.message_count < min_messages:
         deleted = await core.clear_window_messages(group.chat_id, window)
         log.info(
             f"{group.chat_id} | 🤫 День {window.quote_day} пропущен: "
-            f"сообщений {evaluation.message_count} < {settings.MIN_MESSAGES_FOR_AUTO_REVIEW}. "
+            f"сообщений {evaluation.message_count} < {min_messages}. "
             f"Очищено {deleted} сообщений."
         )
         return
@@ -144,7 +153,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             window=window,
             decision_status=STATUS_PUBLISH_FAILED,
             operation_error=evaluation.day_verdict_error,
-            context_messages=evaluation.context_messages,
+            context_messages=_quote_context_messages(evaluation, context_messages_enabled),
         )
         if created:
             log.error(
@@ -165,7 +174,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             window=window,
             decision_status=STATUS_PUBLISHING,
             decision_reason=evaluation.day_reason_text or None,
-            context_messages=evaluation.context_messages,
+            context_messages=_quote_context_messages(evaluation, context_messages_enabled),
         )
         if not created:
             log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
@@ -177,6 +186,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             author_name=author_name,
             breakdown=evaluation.breakdown,
             clear_window_after=True,
+            pin_enabled=core.effective_group_pin_enabled(group),
         )
         return
 
@@ -185,14 +195,32 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         best_message=evaluation.best_message,
         breakdown=evaluation.breakdown,
         window=window,
-        decision_status=STATUS_NOTIFYING_BORING,
+        decision_status=(
+            STATUS_NOTIFYING_BORING
+            if core.effective_group_boring_notice_enabled(group)
+            else STATUS_SKIPPED_BORING
+        ),
         decision_reason=evaluation.day_reason_text or None,
-        context_messages=evaluation.context_messages,
+        context_messages=_quote_context_messages(evaluation, context_messages_enabled),
     )
     if not created:
         log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
         return
+    if not core.effective_group_boring_notice_enabled(group):
+        deleted = await core.clear_window_messages(group.chat_id, window)
+        log.info(
+            f"{group.chat_id} | 😴 День {window.quote_day} помечен скучным без уведомления. "
+            f"Очищено {deleted} сообщений."
+        )
+        return
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
+
+
+def _quote_context_messages(
+    evaluation: scoring.QuoteEvaluation,
+    enabled: bool,
+) -> list:
+    return evaluation.context_messages if enabled else []
 
 
 async def _recover_stale_quotes_for_chat(chat_id: int) -> int:
@@ -216,6 +244,7 @@ async def _publish_quote_message(
     author_name: str,
     breakdown: scoring.ScoreBreakdown,
     clear_window_after: bool,
+    pin_enabled: bool = True,
 ) -> bool:
     language = i18n.group_language(group)
     info_parts = [breakdown.stars]
@@ -289,15 +318,16 @@ async def _publish_quote_message(
         except Exception as exc:
             log.warning(f"⚠️ Не удалось сохранить ошибку копирования медиа для quote #{quote.id}: {exc}")
 
-    try:
-        await bot.pin_chat_message(
-            chat_id=group.chat_id,
-            message_id=sent.message_id,
-            disable_notification=True,
-        )
-    except Exception as e:
-        await core.append_quote_operation_error(quote.id, f"Pin failed: {str(e)[:200]}")
-        log.warning(f"⚠️ Не удалось закрепить сообщение в {group.chat_id}: {e}")
+    if pin_enabled:
+        try:
+            await bot.pin_chat_message(
+                chat_id=group.chat_id,
+                message_id=sent.message_id,
+                disable_notification=True,
+            )
+        except Exception as e:
+            await core.append_quote_operation_error(quote.id, f"Pin failed: {str(e)[:200]}")
+            log.warning(f"⚠️ Не удалось закрепить сообщение в {group.chat_id}: {e}")
 
     if clear_window_after:
         try:
@@ -541,15 +571,16 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=settings.TIMEZONE)
     scheduler.add_job(
         quote_of_the_day_job,
-        trigger=CronTrigger(
-            hour=settings.QUOTE_HOUR,
-            minute=settings.QUOTE_MINUTE,
+        trigger=IntervalTrigger(
+            minutes=1,
             timezone=settings.TIMEZONE,
         ),
         args=[bot],
         id="quote_of_the_day",
         name="Цитата дня",
         replace_existing=True,
+        coalesce=True,
+        max_instances=1,
     )
     scheduler.add_job(
         recover_pending_media_job,
@@ -567,7 +598,7 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     )
 
     log.info(
-        f"📅 Планировщик настроен: цитата дня в "
-        f"{settings.QUOTE_HOUR:02d}:{settings.QUOTE_MINUTE:02d} ({settings.TIMEZONE})"
+        f"📅 Планировщик настроен: проверка цитаты дня каждую минуту "
+        f"({settings.TIMEZONE}); время выбирается из настроек каждой группы"
     )
     return scheduler

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from . import i18n, media, models
-from .config import setup_logging
+from .config import settings, setup_logging
 from .db import SessionLocal
 from .quote_status import (
     IN_PROGRESS_STATUSES,
@@ -21,6 +21,13 @@ from .windows import QuoteWindow, utc_now
 
 log = setup_logging(logging.getLogger(__name__))
 _UNSET = object()
+MIN_MESSAGES_MIN = 1
+MIN_MESSAGES_MAX = 200
+GROUP_TOGGLE_FIELDS = {
+    "context": "quote_context_enabled",
+    "boring": "boring_notice_enabled",
+    "pin": "pin_enabled",
+}
 
 
 async def user_getOrCreate(telegram_user: types.User) -> models.User:
@@ -131,6 +138,182 @@ async def set_group_language_manual(group_id: int, language_code: str | None) ->
         group.language_source = i18n.LANGUAGE_SOURCE_MANUAL
         await session.commit()
         return True
+
+
+async def clear_group_language(group_id: int) -> bool:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return False
+
+        group.language_code = None
+        group.language_source = None
+        await session.commit()
+        return True
+
+
+async def set_user_language_manual(telegram_id: int, language_code: str | None) -> bool:
+    normalized = i18n.normalize_language_code(language_code)
+    if not normalized:
+        return False
+
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.User).where(models.User.telegram_id == telegram_id)
+        )
+        user = result.scalars().first()
+        if not user:
+            return False
+
+        user.language_code = normalized
+        user.language_source = i18n.LANGUAGE_SOURCE_MANUAL
+        await session.commit()
+        return True
+
+
+async def clear_user_language(telegram_id: int) -> bool:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.User).where(models.User.telegram_id == telegram_id)
+        )
+        user = result.scalars().first()
+        if not user:
+            return False
+
+        user.language_code = None
+        user.language_source = None
+        await session.commit()
+        return True
+
+
+def effective_user_language(user: models.User | None, telegram_language_code: str | None) -> str:
+    manual_language = i18n.normalize_language_code(getattr(user, "language_code", None))
+    if manual_language:
+        return manual_language
+    return i18n.language_or_default(telegram_language_code)
+
+
+def effective_group_quote_hour(group: models.Group | None) -> int:
+    value = getattr(group, "quote_hour", None)
+    if value is None:
+        value = settings.QUOTE_HOUR
+    try:
+        return int(value) % 24
+    except (TypeError, ValueError):
+        return settings.QUOTE_HOUR % 24
+
+
+def effective_group_quote_minute(group: models.Group | None) -> int:
+    value = getattr(group, "quote_minute", None)
+    if value is None:
+        value = settings.QUOTE_MINUTE
+    try:
+        return int(value) % 60
+    except (TypeError, ValueError):
+        return settings.QUOTE_MINUTE % 60
+
+
+def effective_group_quote_time(group: models.Group | None) -> tuple[int, int]:
+    return effective_group_quote_hour(group), effective_group_quote_minute(group)
+
+
+def effective_group_min_messages(group: models.Group | None) -> int:
+    value = getattr(group, "min_messages", None)
+    if value is None:
+        value = settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+    return clamp_min_messages(value)
+
+
+def effective_group_boring_notice_enabled(group: models.Group | None) -> bool:
+    value = getattr(group, "boring_notice_enabled", None)
+    return True if value is None else bool(value)
+
+
+def effective_group_pin_enabled(group: models.Group | None) -> bool:
+    value = getattr(group, "pin_enabled", None)
+    return True if value is None else bool(value)
+
+
+def effective_group_quote_context_enabled(group: models.Group | None) -> bool:
+    value = getattr(group, "quote_context_enabled", None)
+    return True if value is None else bool(value)
+
+
+def clamp_min_messages(value: int | str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+    return max(MIN_MESSAGES_MIN, min(MIN_MESSAGES_MAX, parsed))
+
+
+def normalize_quote_time(hour: int, minute: int) -> tuple[int, int]:
+    total = (int(hour) * 60 + int(minute)) % (24 * 60)
+    return divmod(total, 60)
+
+
+async def adjust_group_quote_time(group_id: int, delta_minutes: int) -> models.Group | None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return None
+
+        hour, minute = effective_group_quote_time(group)
+        group.quote_hour, group.quote_minute = normalize_quote_time(hour, minute + int(delta_minutes))
+        await session.commit()
+        await session.refresh(group)
+        return group
+
+
+async def adjust_group_min_messages(group_id: int, delta: int) -> models.Group | None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return None
+
+        group.min_messages = clamp_min_messages(effective_group_min_messages(group) + int(delta))
+        await session.commit()
+        await session.refresh(group)
+        return group
+
+
+async def toggle_group_setting(group_id: int, setting_key: str) -> models.Group | None:
+    field_name = GROUP_TOGGLE_FIELDS.get(setting_key)
+    if not field_name:
+        return None
+
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return None
+
+        current = _effective_group_toggle(group, setting_key)
+        setattr(group, field_name, not current)
+        await session.commit()
+        await session.refresh(group)
+        return group
+
+
+def _effective_group_toggle(group: models.Group, setting_key: str) -> bool:
+    if setting_key == "context":
+        return effective_group_quote_context_enabled(group)
+    if setting_key == "boring":
+        return effective_group_boring_notice_enabled(group)
+    if setting_key == "pin":
+        return effective_group_pin_enabled(group)
+    return False
 
 
 async def save_message(message: types.Message, user: models.User) -> models.Message | None:

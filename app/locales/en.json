@@ -9,13 +9,14 @@
     "ai": "AI"
   },
   "menu": {
-    "button": {
-      "user_stats": "👤 My stats",
-      "chat_stats": "📊 Chat stats",
-      "group_language": "🌐 Group language",
-      "back": "‹ Back",
-      "close": "Close"
-    },
+        "button": {
+            "user_stats": "👤 My stats",
+            "chat_stats": "📊 Chat stats",
+            "group_language": "🌐 Group language",
+            "settings": "⚙️ Settings",
+            "back": "‹ Back",
+            "close": "Close"
+        },
     "private": {
       "title": "🏆 <b>Quoto</b>",
       "body": "I run quote-of-the-day windows in group chats. Add me to a group, then use /start there for controls.",
@@ -24,7 +25,7 @@
     },
     "group": {
       "title": "🏆 <b>Quoto control panel</b>",
-      "admin_body": "Use the buttons below to manage quotes, stats, and group language.",
+      "admin_body": "Use the buttons below to manage quotes, stats, and group settings.",
       "user_body": "Use the buttons below to view quote stats.",
       "language_line": "Language: <b>{language_name}</b>",
       "schedule_line": "Daily pick: <b>{time}</b>; skip if fewer than <b>{min_messages}</b> messages."
@@ -38,10 +39,67 @@
       "updated": "Language set to {language_name}.",
       "invalid": "Unsupported language."
     },
-    "other_user": "Open your own menu with /start.",
-    "group_context_required": "Open this from a group chat."
-  },
-  "status": {
+        "other_user": "Open your own menu with /start.",
+        "group_context_required": "Open this from a group chat."
+    },
+    "settings": {
+        "updated": "Settings updated.",
+        "invalid": "Invalid value.",
+        "block": {
+            "interface": "Interface",
+            "quote_day": "Quote of the day",
+            "behavior": "Behavior"
+        },
+        "button": {
+            "language": "🌐 Language",
+            "time": "⏰ Time",
+            "min_messages": "💬 Minimum",
+            "context": "Context",
+            "boring_notice": "Boring day",
+            "pin": "Pin"
+        },
+        "private": {
+            "title": "⚙️ <b>Quoto settings</b>",
+            "hint": "<i>These settings affect only this private chat.</i>",
+            "language_title": "🌐 <b>Private chat language</b>",
+            "language_hint": "<i>Keep your Telegram language or choose one manually.</i>",
+            "telegram_language": "Use Telegram language",
+            "language_source_manual": "Source: set manually",
+            "language_source_telegram": "Source: Telegram language"
+        },
+        "group": {
+            "title": "⚙️ <b>Group settings</b>",
+            "hint": "<i>Only admins can change Quoto behavior in this group.</i>",
+            "language_auto": "Detect automatically next day",
+            "language_auto_updated": "Language will be detected automatically during the next review.",
+            "context": {
+                "short": "Quote context",
+                "label": "Quote context",
+                "title": "What context means",
+                "explain": "Quote context is a few neighboring or reply-linked messages around the winning phrase. It makes the quote understandable without scrolling the chat."
+            },
+            "boring_notice": {
+                "short": "Boring-day notice",
+                "label": "Send boring-day notice"
+            },
+            "pin": {
+                "short": "Pin quote",
+                "label": "Pin the published quote"
+            },
+            "time": {
+                "title": "⏰ <b>Quote time</b>",
+                "hint": "<i>At this time Quoto closes the day and chooses the quote.</i>",
+                "line": "Daily pick: <b>{time}</b>",
+                "timezone": "Timezone: <b>{timezone}</b>"
+            },
+            "min_messages": {
+                "title": "💬 <b>Minimum messages</b>",
+                "hint": "<i>If there are fewer messages, the day is skipped without AI review.</i>",
+                "line": "Minimum for review: <b>{count}</b>"
+            }
+        }
+    },
+    "status": {
     "published": "✅ Published",
     "skipped_boring": "😴 Boring day",
     "publish_failed": "⚠️ Publishing failed",
@@ -53,7 +111,7 @@
     "admin_only": "🔒 This command is available only to chat admins."
   },
   "chat_member": {
-    "added": "👋 Hi, <b>{chat_title}</b>!\n\nI'm <b>Quoto</b>. At <b>{time}</b>, I pick and publish the quote of the day.\n\nUse /start to open stats and group language.",
+    "added": "👋 Hi, <b>{chat_title}</b>!\n\nI'm <b>Quoto</b>. At <b>{time}</b>, I pick and publish the quote of the day.\n\nUse /start to open stats and group settings.",
     "need_admin": "⚠️ Please <b>make me an administrator</b> with permission to <i>pin</i> messages so I can publish the result.",
     "admin_granted": "✅ <b>Thanks</b> for making me an administrator!"
   },
