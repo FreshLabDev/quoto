@@ -2,9 +2,10 @@ import logging
 import re
 from collections import Counter
 from html import escape
+from time import monotonic
 
 from aiogram import Bot, F, Router, types
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 
 from . import core, i18n, media, menu, scoring
@@ -21,6 +22,8 @@ from .quote_status import (
 router = Router()
 log = setup_logging(logging.getLogger(__name__))
 _PANEL_COMMAND_MESSAGES: dict[tuple[int, int], tuple[int, int]] = {}
+_MENU_CALLBACK_LAST_SEEN: dict[tuple[int, int, int], float] = {}
+_MENU_CALLBACK_THROTTLE_SECONDS = 0.7
 _LINK_ONLY_RE = re.compile(
     r"^(?:(?:https?://|tg://|www\.)\S+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?)$",
     re.IGNORECASE,
@@ -106,19 +109,60 @@ async def _edit_panel(
     callback: types.CallbackQuery,
     text: str,
     reply_markup: types.InlineKeyboardMarkup | None,
-) -> None:
+) -> bool:
     panel = callback.message
     if not panel or not getattr(panel, "chat", None) or not getattr(panel, "edit_text", None):
         await callback.answer()
-        return
+        return False
     try:
         await panel.edit_text(text, reply_markup=reply_markup)
+        return True
+    except TelegramRetryAfter as exc:
+        log.warning(
+            "%s | Menu edit flood-limited for %ss",
+            getattr(panel.chat, "id", "unknown"),
+            exc.retry_after,
+        )
+        return False
     except TelegramBadRequest as exc:
         if "message is not modified" in str(exc).lower():
-            return
-        await panel.answer(text, reply_markup=reply_markup)
-    except TelegramAPIError:
-        await panel.answer(text, reply_markup=reply_markup)
+            return True
+        log.warning(
+            "%s | Menu edit failed: %s",
+            getattr(panel.chat, "id", "unknown"),
+            str(exc)[:200],
+        )
+        return False
+    except TelegramAPIError as exc:
+        log.warning(
+            "%s | Menu edit failed: %s",
+            getattr(panel.chat, "id", "unknown"),
+            str(exc)[:200],
+        )
+        return False
+
+
+def _is_menu_callback_throttled(callback: types.CallbackQuery) -> bool:
+    panel = callback.message
+    chat_id = getattr(getattr(panel, "chat", None), "id", None)
+    message_id = getattr(panel, "message_id", None)
+    user_id = getattr(getattr(callback, "from_user", None), "id", None)
+    if chat_id is None or message_id is None or user_id is None:
+        return False
+
+    now = monotonic()
+    key = (int(chat_id), int(message_id), int(user_id))
+    last_seen = _MENU_CALLBACK_LAST_SEEN.get(key)
+    if last_seen is not None and now - last_seen < _MENU_CALLBACK_THROTTLE_SECONDS:
+        return True
+
+    _MENU_CALLBACK_LAST_SEEN[key] = now
+    if len(_MENU_CALLBACK_LAST_SEEN) > 1024:
+        stale_before = now - 60
+        for stale_key, seen_at in list(_MENU_CALLBACK_LAST_SEEN.items()):
+            if seen_at < stale_before:
+                _MENU_CALLBACK_LAST_SEEN.pop(stale_key, None)
+    return False
 
 
 def _format_context_lines(context_messages: list[dict[str, object]], language: str) -> str:
@@ -495,6 +539,10 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
 
     if parsed.action == menu.ACTION_CLOSE:
         await _close_panel(callback, bot)
+        return
+
+    if _is_menu_callback_throttled(callback):
+        await callback.answer(cache_time=1)
         return
 
     if parsed.scope == menu.SCOPE_PRIVATE:

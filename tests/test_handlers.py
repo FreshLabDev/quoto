@@ -52,6 +52,9 @@ class DummyMessage:
 
 
 class HandlerTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        handlers._MENU_CALLBACK_LAST_SEEN.clear()
+
     async def test_private_quote_details_escape_reason_and_operation_error(self) -> None:
         message = DummyMessage(chat_type="private", language_code="ru")
         detail = {
@@ -328,6 +331,62 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             for button in row
         ]
         self.assertEqual(labels, ["◉ 👤 Моя статистика", "◎ 📊 Статистика чата", "‹ Назад", "Закрыть"])
+
+    async def test_menu_callback_throttle_drops_fast_repeated_panel_clicks(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:userstats",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+        user_stats = {
+            "user_name": "Alice",
+            "wins": 2,
+            "avg_score": 0.8,
+            "rank": 1,
+            "total_participants": 5,
+            "best_quote": None,
+        }
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(id=1, language_code="ru", language_source=None)),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=False)),
+            patch.object(handlers.core, "get_user_stats", new=AsyncMock(return_value=user_stats)) as get_user_stats,
+        ):
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+
+        get_user_stats.assert_awaited_once()
+        self.assertEqual(len(panel.edits), 1)
+        self.assertEqual(callback.answer.await_count, 2)
+
+    async def test_edit_panel_does_not_send_fallback_message_when_flood_limited(self) -> None:
+        class FloodLimitedPanel(DummyResponse):
+            async def edit_text(self, text: str, reply_markup=None) -> None:
+                raise handlers.TelegramRetryAfter(
+                    method=SimpleNamespace(),
+                    message="Too Many Requests",
+                    retry_after=32,
+                )
+
+        panel = FloodLimitedPanel(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(message=panel, answer=AsyncMock())
+
+        edited = await handlers._edit_panel(callback, "text", None)
+
+        self.assertFalse(edited)
+        callback.answer.assert_not_awaited()
 
     async def test_private_language_callback_sets_manual_user_language(self) -> None:
         panel = DummyResponse(
