@@ -770,6 +770,36 @@ async def claim_latest_manual_publish_candidate(
         return quote, previous_status
 
 
+async def claim_manual_publish_candidate(
+    chat_id: int,
+    quote_id: int,
+) -> tuple[models.Quote | None, str | None]:
+    async with SessionLocal() as session:
+        async with session.begin():
+            result = await session.execute(
+                select(models.Quote)
+                .join(models.Group, models.Quote.group_id == models.Group.id)
+                .options(selectinload(models.Quote.author), selectinload(models.Quote.group))
+                .where(
+                    models.Group.chat_id == chat_id,
+                    models.Quote.id == quote_id,
+                    models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
+                )
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            )
+            quote = result.scalars().first()
+            if not quote:
+                return None, None
+
+            previous_status = quote.decision_status
+            quote.decision_status = STATUS_PUBLISHING
+            quote.status_changed_at = utc_now()
+            quote.operation_error = None
+
+        return quote, previous_status
+
+
 async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | None:
     async with SessionLocal() as session:
         result = await session.execute(
@@ -781,6 +811,22 @@ async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | No
                 models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
             )
             .order_by(models.Quote.window_end_at.desc())
+            .limit(1)
+        )
+        return result.scalars().first()
+
+
+async def get_manual_publish_candidate(chat_id: int, quote_id: int) -> models.Quote | None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Quote)
+            .join(models.Group, models.Quote.group_id == models.Group.id)
+            .options(selectinload(models.Quote.author), selectinload(models.Quote.group))
+            .where(
+                models.Group.chat_id == chat_id,
+                models.Quote.id == quote_id,
+                models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
+            )
             .limit(1)
         )
         return result.scalars().first()

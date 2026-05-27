@@ -13,6 +13,7 @@ from app.quote_status import (
     MANUAL_PUBLISHABLE_STATUSES,
     STATUS_BORING_NOTICE_UNKNOWN,
     STATUS_PUBLISH_UNKNOWN,
+    STATUS_SKIPPED_BORING,
 )
 
 
@@ -484,6 +485,45 @@ class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, "published")
         self.assertTrue(publish_quote.await_args.kwargs["forced_by_admin"])
         self.assertTrue(publish_quote.await_args.kwargs["clear_window_after"])
+
+    async def test_manual_publish_latest_can_publish_confirmed_quote_id(self) -> None:
+        quote = self._make_quote()
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(
+                scheduler.core,
+                "get_manual_publish_candidate",
+                new=AsyncMock(return_value=quote),
+            ) as get_candidate,
+            patch.object(
+                scheduler.core,
+                "claim_manual_publish_candidate",
+                new=AsyncMock(return_value=(quote, STATUS_SKIPPED_BORING)),
+            ) as claim_candidate,
+            patch.object(
+                scheduler.core,
+                "get_latest_manual_publish_candidate",
+                new=AsyncMock(),
+            ) as get_latest,
+            patch.object(
+                scheduler.core,
+                "claim_latest_manual_publish_candidate",
+                new=AsyncMock(),
+            ) as claim_latest,
+            patch.object(
+                scheduler,
+                "_publish_quote_message",
+                new=AsyncMock(return_value=True),
+            ),
+        ):
+            result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id, quote_id=61)
+
+        self.assertEqual(result, "published")
+        get_candidate.assert_awaited_once_with(quote.group.chat_id, 61)
+        claim_candidate.assert_awaited_once_with(quote.group.chat_id, 61)
+        get_latest.assert_not_awaited()
+        claim_latest.assert_not_awaited()
 
     async def test_manual_publish_latest_skips_already_sent_publish_unknown(self) -> None:
         quote = self._make_quote()

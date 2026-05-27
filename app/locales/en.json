@@ -15,6 +15,7 @@
       "group_language": "🌐 Group language",
       "preview": "🔎 Preview",
       "publish": "🚀 Publish latest",
+      "confirm_publish": "✅ Confirm publish",
       "back": "‹ Back",
       "close": "Close"
     },
@@ -92,7 +93,18 @@
     "nothing": "📭 There is no boring-day or failed day available for manual publishing.",
     "already_sent": "⚠️ The latest day was already sent to Telegram, but the DB did not confirm the final status. I did not publish a duplicate.",
     "failed": "❌ Manual publishing failed. Check the bot logs.",
-    "done": "✅ Published manually."
+    "done": "✅ Published manually.",
+    "confirm_title": "⚠️ <b>Confirm manual publish</b>",
+    "confirm_scope": "This will publish the latest saved day that was skipped as boring or failed to publish automatically.",
+    "confirm_day": "Day: <b>{date}</b>",
+    "confirm_status": "Status: <b>{status}</b>",
+    "confirm_score": "Score: <b>{score:.1f}/10</b>",
+    "confirm_parts": "Metadata: reactions {reactions:.1f}/10, AI {ai:.1f}/10, length {length:.1f}/10",
+    "confirm_quote": "💬 Quote: <i>«{quote}»</i>",
+    "confirm_author": "— <b>{author}</b>",
+    "confirm_reason": "💭 Reason: {reason}",
+    "confirm_error": "⚠️ Error: {error}",
+    "confirm_warning": "Check the text above. The next button immediately sends this post to the group."
   },
   "stats": {
     "missing": "📊 Stats are not available yet — the bot has not registered this group.",

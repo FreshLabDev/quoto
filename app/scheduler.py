@@ -207,10 +207,14 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
 
 
-async def manual_publish_latest(bot: Bot, chat_id: int) -> str:
+async def manual_publish_latest(bot: Bot, chat_id: int, quote_id: int | None = None) -> str:
     await _recover_stale_quotes_for_chat(chat_id)
 
-    latest = await core.get_latest_manual_publish_candidate(chat_id)
+    latest = (
+        await core.get_manual_publish_candidate(chat_id, quote_id)
+        if quote_id is not None
+        else await core.get_latest_manual_publish_candidate(chat_id)
+    )
     if not latest or not latest.group:
         return _MANUAL_PUBLISH_NOTHING
 
@@ -220,7 +224,11 @@ async def manual_publish_latest(bot: Bot, chat_id: int) -> str:
     ):
         return _MANUAL_PUBLISH_ALREADY_SENT
 
-    quote, previous_status = await core.claim_latest_manual_publish_candidate(chat_id)
+    quote, previous_status = (
+        await core.claim_manual_publish_candidate(chat_id, quote_id)
+        if quote_id is not None
+        else await core.claim_latest_manual_publish_candidate(chat_id)
+    )
     if not quote or not quote.group:
         return _MANUAL_PUBLISH_NOTHING
 

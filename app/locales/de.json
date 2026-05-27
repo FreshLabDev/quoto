@@ -15,6 +15,7 @@
       "group_language": "🌐 Gruppensprache",
       "preview": "🔎 Vorschau",
       "publish": "🚀 Veröffentlichen",
+      "confirm_publish": "✅ Veröffentlichung bestätigen",
       "back": "‹ Zurück",
       "close": "Schließen"
     },
@@ -92,7 +93,18 @@
     "nothing": "📭 Es gibt keinen langweiligen oder fehlgeschlagenen Tag für manuelle Veröffentlichung.",
     "already_sent": "⚠️ Der letzte Tag wurde bereits an Telegram gesendet, aber die DB hat den finalen Status nicht bestätigt. Ich veröffentliche kein Duplikat.",
     "failed": "❌ Manuelle Veröffentlichung fehlgeschlagen. Prüfe die Bot-Logs.",
-    "done": "✅ Manuell veröffentlicht."
+    "done": "✅ Manuell veröffentlicht.",
+    "confirm_title": "⚠️ <b>Manuelle Veröffentlichung bestätigen</b>",
+    "confirm_scope": "Veröffentlicht wird der letzte gespeicherte Tag, der als langweilig übersprungen wurde oder automatisch nicht veröffentlicht werden konnte.",
+    "confirm_day": "Tag: <b>{date}</b>",
+    "confirm_status": "Status: <b>{status}</b>",
+    "confirm_score": "Bewertung: <b>{score:.1f}/10</b>",
+    "confirm_parts": "Metadaten: Reaktionen {reactions:.1f}/10, KI {ai:.1f}/10, Länge {length:.1f}/10",
+    "confirm_quote": "💬 Zitat: <i>«{quote}»</i>",
+    "confirm_author": "— <b>{author}</b>",
+    "confirm_reason": "💭 Grund: {reason}",
+    "confirm_error": "⚠️ Fehler: {error}",
+    "confirm_warning": "Prüfe den Text oben. Die nächste Taste sendet diesen Post sofort in die Gruppe."
   },
   "stats": {
     "missing": "📊 Statistik ist noch nicht verfügbar — der Bot hat diese Gruppe noch nicht registriert.",
