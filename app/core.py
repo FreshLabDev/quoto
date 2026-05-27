@@ -23,6 +23,16 @@ from .windows import QuoteWindow, utc_now
 
 log = setup_logging(logging.getLogger(__name__))
 _UNSET = object()
+_INTERNAL_MANUAL_PUBLISH_PREFIXES = (
+    "📊 подробности дня",
+    "📊 деталі дня",
+    "📊 day details",
+    "📊 tagesdetails",
+    "💭 причина решения:",
+    "💭 причина рішення:",
+    "💭 reason:",
+    "💭 grund:",
+)
 
 
 async def user_getOrCreate(telegram_user: types.User) -> models.User:
@@ -755,10 +765,10 @@ async def claim_latest_manual_publish_candidate(
                     models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
                 )
                 .order_by(models.Quote.window_end_at.desc())
-                .limit(1)
+                .limit(25)
                 .with_for_update(skip_locked=True)
             )
-            quote = result.scalars().first()
+            quote = _first_visible_manual_publish_candidate(result.scalars().all())
             if not quote:
                 return None, None
 
@@ -791,6 +801,8 @@ async def claim_manual_publish_candidate(
             quote = result.scalars().first()
             if not quote:
                 return None, None
+            if not _is_visible_manual_publish_candidate(quote):
+                return None, None
 
             previous_status = quote.decision_status
             quote.decision_status = STATUS_PUBLISHING
@@ -811,9 +823,9 @@ async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | No
                 models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
             )
             .order_by(models.Quote.window_end_at.desc())
-            .limit(1)
+            .limit(25)
         )
-        return result.scalars().first()
+        return _first_visible_manual_publish_candidate(result.scalars().all())
 
 
 async def get_manual_publish_candidate(chat_id: int, quote_id: int) -> models.Quote | None:
@@ -829,7 +841,24 @@ async def get_manual_publish_candidate(chat_id: int, quote_id: int) -> models.Qu
             )
             .limit(1)
         )
-        return result.scalars().first()
+        quote = result.scalars().first()
+        if not quote or not _is_visible_manual_publish_candidate(quote):
+            return None
+        return quote
+
+
+def _first_visible_manual_publish_candidate(quotes: list[models.Quote]) -> models.Quote | None:
+    for quote in quotes:
+        if _is_visible_manual_publish_candidate(quote):
+            return quote
+    return None
+
+
+def _is_visible_manual_publish_candidate(quote: models.Quote) -> bool:
+    text = " ".join(str(getattr(quote, "text", "") or "").split()).lower()
+    return bool(text) and not any(
+        text.startswith(prefix) for prefix in _INTERNAL_MANUAL_PUBLISH_PREFIXES
+    )
 
 
 async def get_stale_in_progress_quotes(chat_id: int, older_than: datetime) -> list[models.Quote]:
