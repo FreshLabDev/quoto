@@ -25,8 +25,8 @@
     },
     "group": {
       "title": "🏆 <b>Quoto-Steuerung</b>",
-      "admin_body": "Mit den Buttons unten verwaltest du Zitate, Statistik und Gruppeneinstellungen.",
-      "user_body": "Mit den Buttons unten öffnest du die Zitat-Statistik.",
+      "admin_body": "Zitat des Tages und Statistik für diese Gruppe.",
+      "user_body": "Zitat-Statistik für diesen Chat.",
       "language_line": "Sprache: <b>{language_name}</b>",
       "schedule_line": "Tägliche Auswahl: <b>{time}</b>; Überspringen bei weniger als <b>{min_messages}</b> Nachrichten."
     },
@@ -36,6 +36,9 @@
       "source_auto": "Quelle: automatisch erkannt",
       "source_manual": "Quelle: manuell gesetzt",
       "source_default": "Quelle: englischer Fallback",
+      "source_auto_short": "auto",
+      "source_manual_short": "manuell",
+      "source_default_short": "Fallback",
       "updated": "Sprache auf {language_name} gesetzt.",
       "invalid": "Nicht unterstützte Sprache."
     },
@@ -65,7 +68,9 @@
             "language_hint": "<i>Nutze deine Telegram-Sprache oder wähle manuell.</i>",
             "telegram_language": "Telegram-Sprache nutzen",
             "language_source_manual": "Quelle: manuell gesetzt",
-            "language_source_telegram": "Quelle: Telegram-Sprache"
+            "language_source_telegram": "Quelle: Telegram-Sprache",
+            "language_source_manual_short": "manuell",
+            "language_source_telegram_short": "Telegram"
         },
         "group": {
             "title": "⚙️ <b>Gruppeneinstellungen</b>",
@@ -73,17 +78,18 @@
             "language_auto": "Am nächsten Tag automatisch erkennen",
             "language_auto_updated": "Die Sprache wird bei der nächsten Auswertung automatisch erkannt.",
             "context": {
-                "short": "Zitat-Kontext",
+                "short": "Kontext",
                 "label": "Zitat-Kontext",
                 "title": "Was Kontext bedeutet",
-                "explain": "Zitat-Kontext sind einige benachbarte oder per Antwort verknüpfte Nachrichten rund um den Gewinner-Satz. So bleibt das Zitat ohne Scrollen verständlich."
+                "explain": "Zitat-Kontext sind einige benachbarte oder per Antwort verknüpfte Nachrichten rund um den Gewinner-Satz. So bleibt das Zitat ohne Scrollen verständlich.",
+                "explain_short": "benachbarte oder Antwort-Nachrichten rund um das Zitat"
             },
             "boring_notice": {
-                "short": "Hinweis zum langweiligen Tag",
+                "short": "Langweiliger Tag",
                 "label": "Hinweis zum langweiligen Tag senden"
             },
             "pin": {
-                "short": "Zitat anheften",
+                "short": "Anheften",
                 "label": "Veröffentlichtes Zitat anheften"
             },
             "time": {

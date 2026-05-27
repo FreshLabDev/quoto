@@ -248,7 +248,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             for row in panel.edit_markups[0].inline_keyboard
             for button in row
         ]
-        self.assertIn("◉ Контекст", labels)
+        self.assertIn("✅ Контекст", labels)
 
     async def test_private_language_callback_sets_manual_user_language(self) -> None:
         panel = DummyResponse(

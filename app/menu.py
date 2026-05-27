@@ -31,7 +31,8 @@ ACTION_USER_STATS = "userstats"
 LANGUAGE_BUTTON_ORDER = ("uk", "ru", "en", "de")
 TOGGLE_ON = "◉"
 TOGGLE_OFF = "◎"
-CHEVRON = "›"
+STATE_ON = "✅"
+STATE_OFF = "▫️"
 
 
 @dataclass(frozen=True)
@@ -74,22 +75,19 @@ def build_private_home(
     language_source: str | None,
     bot_username: str,
 ) -> tuple[str, types.InlineKeyboardMarkup]:
-    source_key = _private_language_source_key(language_source)
     text = "\n".join(
         [
             i18n.t(language, "menu.private.title"),
             "",
             i18n.t(language, "menu.private.body"),
             "",
-            "<blockquote>"
+            "🌐 "
             + i18n.t(
                 language,
                 "menu.private.language",
                 language_name=i18n.language_name(language),
             )
-            + "\n"
-            + i18n.t(language, source_key)
-            + "</blockquote>",
+            + f" · {i18n.t(language, _private_language_source_short_key(language_source))}",
         ]
     )
     keyboard = types.InlineKeyboardMarkup(
@@ -125,29 +123,24 @@ def build_group_home(
     pin_enabled: bool,
     quote_context_enabled: bool,
 ) -> tuple[str, types.InlineKeyboardMarkup]:
-    source_key = (
-        "menu.language.source_manual"
-        if group_language_source == i18n.LANGUAGE_SOURCE_MANUAL
-        else "menu.language.source_auto"
-        if group_language_source == i18n.LANGUAGE_SOURCE_AUTO
-        else "menu.language.source_default"
-    )
-    rows = [
-        _chevron_line(i18n.t(language, "menu.group.language_line", language_name=i18n.language_name(group_language))),
-        _chevron_line(i18n.t(language, "menu.group.schedule_line", time=quote_time, min_messages=min_messages)),
-        _toggle_line(i18n.t(language, "settings.group.context.short"), quote_context_enabled),
-        _toggle_line(i18n.t(language, "settings.group.boring_notice.short"), boring_notice_enabled),
-        _toggle_line(i18n.t(language, "settings.group.pin.short"), pin_enabled),
-    ]
     text = "\n".join(
         [
             i18n.t(language, "menu.group.title"),
             "",
             i18n.t(language, "menu.group.admin_body" if is_admin else "menu.group.user_body"),
             "",
-            "<blockquote>" + "\n".join(rows) + "</blockquote>",
-            "",
-            i18n.t(language, source_key),
+            f"⏰ <b>{quote_time}</b> · 💬 <b>{min_messages}+</b>",
+            "🌐 "
+            + i18n.t(language, "menu.group.language_line", language_name=i18n.language_name(group_language))
+            + f" · {i18n.t(language, _group_language_source_short_key(group_language_source))}",
+            _compact_toggle_line(
+                language,
+                [
+                    ("settings.group.context.short", quote_context_enabled),
+                    ("settings.group.boring_notice.short", boring_notice_enabled),
+                    ("settings.group.pin.short", pin_enabled),
+                ],
+            ),
         ]
     )
 
@@ -187,21 +180,15 @@ def build_private_settings(
 ) -> tuple[str, types.InlineKeyboardMarkup]:
     lines = [
         i18n.t(language, "settings.private.title"),
-        i18n.t(language, "settings.private.hint"),
         "",
-        *_section(
-            i18n.t(language, "settings.block.interface"),
-            [
-                _chevron_line(
-                    i18n.t(
-                        language,
-                        "menu.private.language",
-                        language_name=i18n.language_name(language),
-                    )
-                ),
-                i18n.t(language, _private_language_source_key(language_source)),
-            ],
+        f"<b>{i18n.t(language, 'settings.block.interface')}</b>",
+        "🌐 "
+        + i18n.t(
+            language,
+            "menu.private.language",
+            language_name=i18n.language_name(language),
         ),
+        f"↳ {i18n.t(language, _private_language_source_key(language_source))}",
     ]
     if lines and lines[-1] == "":
         lines.pop()
@@ -238,18 +225,9 @@ def build_private_language(
     text = "\n".join(
         [
             i18n.t(language, "settings.private.language_title"),
-            i18n.t(language, "settings.private.language_hint"),
             "",
-            "<blockquote>"
-            + "\n".join(
-                [
-                    f"{_toggle_icon(code == current_language)} {i18n.language_name(code)}"
-                    for code in LANGUAGE_BUTTON_ORDER
-                ]
-            )
-            + "\n"
-            + i18n.t(language, _private_language_source_key(language_source))
-            + "</blockquote>",
+            i18n.t(language, "settings.private.language_hint"),
+            f"↳ {i18n.t(language, _private_language_source_key(language_source))}",
         ]
     )
     rows: list[list[types.InlineKeyboardButton]] = []
@@ -291,43 +269,23 @@ def build_group_settings(
     pin_enabled: bool,
     quote_context_enabled: bool,
 ) -> tuple[str, types.InlineKeyboardMarkup]:
-    source_key = (
-        "menu.language.source_manual"
-        if group_language_source == i18n.LANGUAGE_SOURCE_MANUAL
-        else "menu.language.source_auto"
-        if group_language_source == i18n.LANGUAGE_SOURCE_AUTO
-        else "menu.language.source_default"
-    )
     lines = [
         i18n.t(language, "settings.group.title"),
-        i18n.t(language, "settings.group.hint"),
         "",
-        *_section(
-            i18n.t(language, "settings.block.interface"),
-            [
-                _chevron_line(i18n.t(language, "menu.group.language_line", language_name=i18n.language_name(group_language))),
-                i18n.t(language, source_key),
-            ],
-        ),
-        *_section(
-            i18n.t(language, "settings.block.quote_day"),
-            [
-                _chevron_line(i18n.t(language, "settings.group.time.line", time=quote_time)),
-                _chevron_line(i18n.t(language, "settings.group.min_messages.line", count=min_messages)),
-            ],
-        ),
-        *_section(
-            i18n.t(language, "settings.block.behavior"),
-            [
-                _toggle_line(i18n.t(language, "settings.group.context.label"), quote_context_enabled),
-                _toggle_line(i18n.t(language, "settings.group.boring_notice.label"), boring_notice_enabled),
-                _toggle_line(i18n.t(language, "settings.group.pin.label"), pin_enabled),
-            ],
-        ),
-        *_section(
-            i18n.t(language, "settings.group.context.title"),
-            [i18n.t(language, "settings.group.context.explain")],
-        ),
+        f"<b>{i18n.t(language, 'settings.block.quote_day')}</b>",
+        f"⏰ {i18n.t(language, 'settings.group.time.line', time=quote_time)}",
+        f"💬 {i18n.t(language, 'settings.group.min_messages.line', count=min_messages)}",
+        "",
+        f"<b>{i18n.t(language, 'settings.block.interface')}</b>",
+        "🌐 "
+        + i18n.t(language, "menu.group.language_line", language_name=i18n.language_name(group_language)),
+        f"↳ {i18n.t(language, _group_language_source_short_key(group_language_source))}",
+        "",
+        f"<b>{i18n.t(language, 'settings.block.behavior')}</b>",
+        _state_line(language, "settings.group.context.label", quote_context_enabled),
+        f"↳ {i18n.t(language, 'settings.group.context.explain_short')}",
+        _state_line(language, "settings.group.boring_notice.label", boring_notice_enabled),
+        _state_line(language, "settings.group.pin.label", pin_enabled),
     ]
     if lines and lines[-1] == "":
         lines.pop()
@@ -348,19 +306,21 @@ def build_group_settings(
                 types.InlineKeyboardButton(
                     text=i18n.t(language, "settings.button.min_messages"),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_MIN_MESSAGES),
-                ),
+                )
+            ],
+            [
                 types.InlineKeyboardButton(
-                    text=_toggle_line(i18n.t(language, "settings.button.context"), quote_context_enabled),
+                    text=_state_button_text(language, "settings.button.context", quote_context_enabled),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "context"),
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=_toggle_line(i18n.t(language, "settings.button.boring_notice"), boring_notice_enabled),
+                    text=_state_button_text(language, "settings.button.boring_notice", boring_notice_enabled),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "boring"),
                 ),
                 types.InlineKeyboardButton(
-                    text=_toggle_line(i18n.t(language, "settings.button.pin"), pin_enabled),
+                    text=_state_button_text(language, "settings.button.pin", pin_enabled),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "pin"),
                 ),
             ],
@@ -383,13 +343,11 @@ def build_group_time(
     text = "\n".join(
         [
             i18n.t(language, "settings.group.time.title"),
+            "",
             i18n.t(language, "settings.group.time.hint"),
             "",
-            "<blockquote>"
-            + i18n.t(language, "settings.group.time.line", time=quote_time)
-            + "\n"
-            + i18n.t(language, "settings.group.time.timezone", timezone=timezone_name)
-            + "</blockquote>",
+            f"⏰ {i18n.t(language, 'settings.group.time.line', time=quote_time)}",
+            f"🌍 {i18n.t(language, 'settings.group.time.timezone', timezone=timezone_name)}",
         ]
     )
     return text, types.InlineKeyboardMarkup(
@@ -431,11 +389,10 @@ def build_group_min_messages(
     text = "\n".join(
         [
             i18n.t(language, "settings.group.min_messages.title"),
+            "",
             i18n.t(language, "settings.group.min_messages.hint"),
             "",
-            "<blockquote>"
-            + i18n.t(language, "settings.group.min_messages.line", count=min_messages)
-            + "</blockquote>",
+            f"💬 {i18n.t(language, 'settings.group.min_messages.line', count=min_messages)}",
         ]
     )
     return text, types.InlineKeyboardMarkup(
@@ -486,12 +443,9 @@ def build_group_language(
         [
             i18n.t(language, "menu.language.title"),
             "",
-            "<blockquote>"
-            + i18n.t(language, "menu.group.language_line", language_name=i18n.language_name(current_language))
-            + "\n"
-            + i18n.t(language, source_key)
-            + "</blockquote>",
-            "",
+            "🌐 "
+            + i18n.t(language, "menu.group.language_line", language_name=i18n.language_name(current_language)),
+            f"↳ {i18n.t(language, source_key)}",
             i18n.t(language, "menu.language.hint"),
         ]
     )
@@ -562,19 +516,37 @@ def _toggle_icon(enabled: bool) -> str:
     return TOGGLE_ON if enabled else TOGGLE_OFF
 
 
-def _toggle_line(label: str, enabled: bool) -> str:
-    return f"{_toggle_icon(enabled)} {label}"
+def _state_icon(enabled: bool) -> str:
+    return STATE_ON if enabled else STATE_OFF
 
 
-def _chevron_line(label: str) -> str:
-    return f"{CHEVRON} {label}"
+def _state_line(language: str, label_key: str, enabled: bool) -> str:
+    return f"{_state_icon(enabled)} {i18n.t(language, label_key)}"
 
 
-def _section(title: str, rows: list[str]) -> list[str]:
-    return [f"<b>{title}</b>", "<blockquote>" + "\n".join(rows) + "</blockquote>", ""]
+def _state_button_text(language: str, label_key: str, enabled: bool) -> str:
+    return f"{_state_icon(enabled)} {i18n.t(language, label_key)}"
+
+
+def _compact_toggle_line(language: str, items: list[tuple[str, bool]]) -> str:
+    return " · ".join(f"{_state_icon(enabled)} {i18n.t(language, key)}" for key, enabled in items)
 
 
 def _private_language_source_key(language_source: str | None) -> str:
     if language_source == i18n.LANGUAGE_SOURCE_MANUAL:
         return "settings.private.language_source_manual"
     return "settings.private.language_source_telegram"
+
+
+def _private_language_source_short_key(language_source: str | None) -> str:
+    if language_source == i18n.LANGUAGE_SOURCE_MANUAL:
+        return "settings.private.language_source_manual_short"
+    return "settings.private.language_source_telegram_short"
+
+
+def _group_language_source_short_key(language_source: str | None) -> str:
+    if language_source == i18n.LANGUAGE_SOURCE_MANUAL:
+        return "menu.language.source_manual_short"
+    if language_source == i18n.LANGUAGE_SOURCE_AUTO:
+        return "menu.language.source_auto_short"
+    return "menu.language.source_default_short"
