@@ -12,6 +12,7 @@
         "button": {
             "user_stats": "👤 Meine Statistik",
             "chat_stats": "📊 Chat-Statistik",
+            "stats": "📊 Statistik",
             "group_language": "🌐 Gruppensprache",
             "settings": "⚙️ Einstellungen",
             "back": "‹ Zurück",
@@ -52,6 +53,9 @@
         },
         "button": {
             "language": "🌐 Sprache",
+            "interface": "🌐 Oberfläche",
+            "quote_day": "🏆 Zitat-Tag",
+            "publication": "🧵 Veröffentlichung",
             "time": "⏰ Zeit",
             "min_messages": "💬 Minimum",
             "context": "Kontext",
@@ -76,7 +80,7 @@
                 "short": "Zitat-Kontext",
                 "label": "Zitat-Kontext",
                 "title": "Was Kontext bedeutet",
-                "explain": "Zitat-Kontext sind einige benachbarte oder per Antwort verknüpfte Nachrichten rund um den Gewinner-Satz. So bleibt das Zitat ohne Scrollen verständlich."
+                "explain": "<i>Kontext sind die Nachrichten, die die KI rund um den Gewinner-Satz ausgewählt hat. Bei mehr als fünf kürzt Quoto den Block um das Zitat selbst.</i>"
             },
             "boring_notice": {
                 "short": "Hinweis zum langweiligen Tag",
@@ -85,6 +89,14 @@
             "pin": {
                 "short": "Zitat anheften",
                 "label": "Veröffentlichtes Zitat anheften"
+            },
+            "quote_day": {
+                "title": "🏆 <b>Zitat des Tages</b>",
+                "hint": "<i>Wann der Tag geschlossen wird und wie viele Nachrichten für die Auswertung nötig sind.</i>"
+            },
+            "publication": {
+                "title": "🧵 <b>Veröffentlichung</b>",
+                "hint": "<i>Wie Quoto das Ergebnis in der Gruppe formatiert.</i>"
             },
             "time": {
                 "title": "⏰ <b>Zeit für das Zitat</b>",

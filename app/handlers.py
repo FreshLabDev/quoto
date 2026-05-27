@@ -602,6 +602,8 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         menu.ACTION_GROUP_TIME_ADJUST,
         menu.ACTION_GROUP_MIN_MESSAGES,
         menu.ACTION_GROUP_MIN_ADJUST,
+        menu.ACTION_GROUP_QUOTE_DAY,
+        menu.ACTION_GROUP_PUBLICATION,
         menu.ACTION_TOGGLE_GROUP_SETTING,
     } and not is_admin:
         await callback.answer(i18n.t(language, "admin.admin_only"), show_alert=True)
@@ -615,6 +617,29 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
             group_language_source=group.language_source,
             quote_time=_time_label(group),
             min_messages=core.effective_group_min_messages(group),
+            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
+            pin_enabled=core.effective_group_pin_enabled(group),
+            quote_context_enabled=core.effective_group_quote_context_enabled(group),
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer()
+        return
+
+    if parsed.action == menu.ACTION_GROUP_QUOTE_DAY:
+        text, reply_markup = menu.build_group_quote_day(
+            owner_id=parsed.owner_id,
+            language=language,
+            quote_time=_time_label(group),
+            min_messages=core.effective_group_min_messages(group),
+        )
+        await _edit_panel(callback, text, reply_markup)
+        await callback.answer()
+        return
+
+    if parsed.action == menu.ACTION_GROUP_PUBLICATION:
+        text, reply_markup = menu.build_group_publication(
+            owner_id=parsed.owner_id,
+            language=language,
             boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
             pin_enabled=core.effective_group_pin_enabled(group),
             quote_context_enabled=core.effective_group_quote_context_enabled(group),
@@ -727,13 +752,9 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
     if parsed.action == menu.ACTION_TOGGLE_GROUP_SETTING:
         group = await core.toggle_group_setting(group.id, parsed.payload or "") or group
         language = i18n.group_language(group)
-        text, reply_markup = menu.build_group_settings(
+        text, reply_markup = menu.build_group_publication(
             owner_id=parsed.owner_id,
             language=language,
-            group_language=language,
-            group_language_source=group.language_source,
-            quote_time=_time_label(group),
-            min_messages=core.effective_group_min_messages(group),
             boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
             pin_enabled=core.effective_group_pin_enabled(group),
             quote_context_enabled=core.effective_group_quote_context_enabled(group),
@@ -748,7 +769,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         await _edit_panel(
             callback,
             text,
-            menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
+            menu.build_stats_keyboard(parsed.owner_id, language, active_view="chat"),
         )
         await callback.answer()
         return
@@ -759,7 +780,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         await _edit_panel(
             callback,
             text,
-            menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
+            menu.build_stats_keyboard(parsed.owner_id, language, active_view="user"),
         )
         await callback.answer()
         return

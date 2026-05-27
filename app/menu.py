@@ -24,6 +24,8 @@ ACTION_GROUP_TIME = "time"
 ACTION_GROUP_TIME_ADJUST = "timeadj"
 ACTION_GROUP_MIN_MESSAGES = "minmsg"
 ACTION_GROUP_MIN_ADJUST = "minadj"
+ACTION_GROUP_QUOTE_DAY = "quoteday"
+ACTION_GROUP_PUBLICATION = "publish"
 ACTION_TOGGLE_GROUP_SETTING = "toggle"
 ACTION_CHAT_STATS = "chatstats"
 ACTION_USER_STATS = "userstats"
@@ -154,12 +156,8 @@ def build_group_home(
     keyboard_rows: list[list[types.InlineKeyboardButton]] = [
         [
             types.InlineKeyboardButton(
-                text=i18n.t(language, "menu.button.user_stats"),
+                text=i18n.t(language, "menu.button.stats"),
                 callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_USER_STATS),
-            ),
-            types.InlineKeyboardButton(
-                text=i18n.t(language, "menu.button.chat_stats"),
-                callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_CHAT_STATS),
             ),
         ]
     ]
@@ -317,16 +315,12 @@ def build_group_settings(
             ],
         ),
         *_section(
-            i18n.t(language, "settings.block.behavior"),
+            i18n.t(language, "settings.button.publication"),
             [
                 _toggle_line(i18n.t(language, "settings.group.context.label"), quote_context_enabled),
                 _toggle_line(i18n.t(language, "settings.group.boring_notice.label"), boring_notice_enabled),
                 _toggle_line(i18n.t(language, "settings.group.pin.label"), pin_enabled),
             ],
-        ),
-        *_section(
-            i18n.t(language, "settings.group.context.title"),
-            [i18n.t(language, "settings.group.context.explain")],
         ),
     ]
     if lines and lines[-1] == "":
@@ -336,19 +330,100 @@ def build_group_settings(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=i18n.t(language, "settings.button.language"),
+                    text=i18n.t(language, "settings.button.interface"),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_LANGUAGE),
                 ),
                 types.InlineKeyboardButton(
-                    text=i18n.t(language, "settings.button.time"),
-                    callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_TIME),
+                    text=i18n.t(language, "settings.button.quote_day"),
+                    callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_QUOTE_DAY),
                 ),
             ],
             [
                 types.InlineKeyboardButton(
+                    text=i18n.t(language, "settings.button.publication"),
+                    callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_PUBLICATION),
+                ),
+            ],
+            [
+                _back_button(owner_id, SCOPE_GROUP, language, ACTION_HOME),
+                _close_button(owner_id, SCOPE_GROUP, language),
+            ],
+        ]
+    )
+    return "\n".join(lines), keyboard
+
+
+def build_group_quote_day(
+    *,
+    owner_id: int,
+    language: str,
+    quote_time: str,
+    min_messages: int,
+) -> tuple[str, types.InlineKeyboardMarkup]:
+    text = "\n".join(
+        [
+            i18n.t(language, "settings.group.quote_day.title"),
+            i18n.t(language, "settings.group.quote_day.hint"),
+            "",
+            "<blockquote>"
+            + "\n".join(
+                [
+                    i18n.t(language, "settings.group.time.line", time=quote_time),
+                    i18n.t(language, "settings.group.min_messages.line", count=min_messages),
+                ]
+            )
+            + "</blockquote>",
+        ]
+    )
+    return text, types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=i18n.t(language, "settings.button.time"),
+                    callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_TIME),
+                ),
+                types.InlineKeyboardButton(
                     text=i18n.t(language, "settings.button.min_messages"),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_MIN_MESSAGES),
                 ),
+            ],
+            [
+                _back_button(owner_id, SCOPE_GROUP, language, ACTION_SETTINGS),
+                _close_button(owner_id, SCOPE_GROUP, language),
+            ],
+        ]
+    )
+
+
+def build_group_publication(
+    *,
+    owner_id: int,
+    language: str,
+    boring_notice_enabled: bool,
+    pin_enabled: bool,
+    quote_context_enabled: bool,
+) -> tuple[str, types.InlineKeyboardMarkup]:
+    text = "\n".join(
+        [
+            i18n.t(language, "settings.group.publication.title"),
+            i18n.t(language, "settings.group.publication.hint"),
+            "",
+            "<blockquote>"
+            + "\n".join(
+                [
+                    _toggle_line(i18n.t(language, "settings.group.context.label"), quote_context_enabled),
+                    _toggle_line(i18n.t(language, "settings.group.boring_notice.label"), boring_notice_enabled),
+                    _toggle_line(i18n.t(language, "settings.group.pin.label"), pin_enabled),
+                ]
+            )
+            + "</blockquote>",
+            "",
+            i18n.t(language, "settings.group.context.explain"),
+        ]
+    )
+    return text, types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
                 types.InlineKeyboardButton(
                     text=_toggle_line(i18n.t(language, "settings.button.context"), quote_context_enabled),
                     callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "context"),
@@ -365,12 +440,11 @@ def build_group_settings(
                 ),
             ],
             [
-                _back_button(owner_id, SCOPE_GROUP, language, ACTION_HOME),
+                _back_button(owner_id, SCOPE_GROUP, language, ACTION_SETTINGS),
                 _close_button(owner_id, SCOPE_GROUP, language),
             ],
         ]
     )
-    return "\n".join(lines), keyboard
 
 
 def build_group_time(
@@ -415,7 +489,7 @@ def build_group_time(
                 ),
             ],
             [
-                _back_button(owner_id, SCOPE_GROUP, language, ACTION_SETTINGS),
+                _back_button(owner_id, SCOPE_GROUP, language, ACTION_GROUP_QUOTE_DAY),
                 _close_button(owner_id, SCOPE_GROUP, language),
             ],
         ]
@@ -461,7 +535,7 @@ def build_group_min_messages(
                 ),
             ],
             [
-                _back_button(owner_id, SCOPE_GROUP, language, ACTION_SETTINGS),
+                _back_button(owner_id, SCOPE_GROUP, language, ACTION_GROUP_QUOTE_DAY),
                 _close_button(owner_id, SCOPE_GROUP, language),
             ],
         ]
@@ -521,6 +595,33 @@ def build_group_language(
         ]
     )
     return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_stats_keyboard(
+    owner_id: int,
+    language: str,
+    active_view: str,
+) -> types.InlineKeyboardMarkup:
+    user_active = active_view == "user"
+    chat_active = active_view == "chat"
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=_toggle_line(i18n.t(language, "menu.button.user_stats"), user_active),
+                    callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_USER_STATS),
+                ),
+                types.InlineKeyboardButton(
+                    text=_toggle_line(i18n.t(language, "menu.button.chat_stats"), chat_active),
+                    callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_CHAT_STATS),
+                ),
+            ],
+            [
+                _back_button(owner_id, SCOPE_GROUP, language, ACTION_HOME),
+                _close_button(owner_id, SCOPE_GROUP, language),
+            ],
+        ]
+    )
 
 
 def build_back_close_keyboard(

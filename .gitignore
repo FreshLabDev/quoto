@@ -6,3 +6,5 @@ __pycache__/
 /.venv
 .env
 *.code-workspace
+.DS_Store
+**/.DS_Store

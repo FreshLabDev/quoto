@@ -154,7 +154,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(
             labels,
-            ["👤 Моя статистика", "📊 Статистика чата", "⚙️ Настройки", "Закрыть"],
+            ["📊 Статистика", "⚙️ Настройки", "Закрыть"],
         )
 
     async def test_close_panel_deletes_panel_and_command_message(self) -> None:
@@ -212,7 +212,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Мова групи", panel.edits[0])
         callback.answer.assert_awaited()
 
-    async def test_group_settings_explains_quote_context(self) -> None:
+    async def test_group_settings_shows_minimal_sections(self) -> None:
         panel = DummyResponse(
             chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
             message_id=902,
@@ -242,13 +242,92 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             await handlers.start_menu_callback(callback, SimpleNamespace())
 
         self.assertIn("Настройки группы", panel.edits[0])
-        self.assertIn("несколько соседних или reply-связанных сообщений", panel.edits[0])
+        labels = [
+            button.text
+            for row in panel.edit_markups[0].inline_keyboard
+            for button in row
+        ]
+        self.assertEqual(
+            labels,
+            ["🌐 Интерфейс", "🏆 Цитата дня", "🧵 Публикация", "‹ Назад", "Закрыть"],
+        )
+
+    async def test_group_publication_settings_explains_quote_context(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:publish",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(
+                    return_value=SimpleNamespace(
+                        id=1,
+                        language_code="ru",
+                        language_source=None,
+                        quote_context_enabled=True,
+                    )
+                ),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+        ):
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+
+        self.assertIn("Публикация", panel.edits[0])
+        self.assertIn("сообщения, которые ИИ выбрал", panel.edits[0])
         labels = [
             button.text
             for row in panel.edit_markups[0].inline_keyboard
             for button in row
         ]
         self.assertIn("◉ Контекст", labels)
+
+    async def test_group_stats_panel_switches_between_user_and_chat_stats(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:userstats",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+        user_stats = {
+            "user_name": "Alice",
+            "wins": 2,
+            "avg_score": 0.8,
+            "rank": 1,
+            "total_participants": 5,
+            "best_quote": None,
+        }
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(id=1, language_code="ru", language_source=None)),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=False)),
+            patch.object(handlers.core, "get_user_stats", new=AsyncMock(return_value=user_stats)),
+        ):
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+
+        self.assertIn("Твоя статистика", panel.edits[0])
+        labels = [
+            button.text
+            for row in panel.edit_markups[0].inline_keyboard
+            for button in row
+        ]
+        self.assertEqual(labels, ["◉ 👤 Моя статистика", "◎ 📊 Статистика чата", "‹ Назад", "Закрыть"])
 
     async def test_private_language_callback_sets_manual_user_language(self) -> None:
         panel = DummyResponse(

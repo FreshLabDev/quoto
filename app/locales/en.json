@@ -12,6 +12,7 @@
         "button": {
             "user_stats": "👤 My stats",
             "chat_stats": "📊 Chat stats",
+            "stats": "📊 Stats",
             "group_language": "🌐 Group language",
             "settings": "⚙️ Settings",
             "back": "‹ Back",
@@ -52,6 +53,9 @@
         },
         "button": {
             "language": "🌐 Language",
+            "interface": "🌐 Interface",
+            "quote_day": "🏆 Quote day",
+            "publication": "🧵 Publishing",
             "time": "⏰ Time",
             "min_messages": "💬 Minimum",
             "context": "Context",
@@ -76,7 +80,7 @@
                 "short": "Quote context",
                 "label": "Quote context",
                 "title": "What context means",
-                "explain": "Quote context is a few neighboring or reply-linked messages around the winning phrase. It makes the quote understandable without scrolling the chat."
+                "explain": "<i>Context is the set of messages AI chose around the winning phrase. If there are more than five, Quoto trims the block around the quote itself.</i>"
             },
             "boring_notice": {
                 "short": "Boring-day notice",
@@ -85,6 +89,14 @@
             "pin": {
                 "short": "Pin quote",
                 "label": "Pin the published quote"
+            },
+            "quote_day": {
+                "title": "🏆 <b>Quote day</b>",
+                "hint": "<i>When to close the day and how many messages are needed for review.</i>"
+            },
+            "publication": {
+                "title": "🧵 <b>Publishing</b>",
+                "hint": "<i>How Quoto formats the result in the group.</i>"
             },
             "time": {
                 "title": "⏰ <b>Quote time</b>",
