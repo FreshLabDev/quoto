@@ -68,6 +68,8 @@ class QuoteEvaluation:
     day_reason_code: str | None = None
     day_reason_text: str = ""
     day_verdict_error: str = ""
+    detected_language_code: str | None = None
+    detected_chat_language: str = ""
 
 
 def calculate_length_score(text: str) -> float:
@@ -96,6 +98,7 @@ async def pick_best_quote(
     include_day_verdict: bool = False,
     day_verdict_min_messages: int | None = None,
     group_id: int | None = None,
+    detect_interface_language: bool = False,
 ) -> QuoteEvaluation:
     async with SessionLocal() as session:
         stmt = (
@@ -167,6 +170,7 @@ async def pick_best_quote(
     evaluation = await ai.evaluate_messages(
         ai_payload,
         include_day_verdict=should_request_day_verdict,
+        detect_interface_language=detect_interface_language and should_request_day_verdict,
     )
 
     fallback_best_id = _fallback_primary_id(evaluation.scores, messages)
@@ -225,6 +229,12 @@ async def pick_best_quote(
         day_reason_code=day_verdict.reason_code if day_verdict else None,
         day_reason_text=day_verdict.reason_text if day_verdict else "",
         day_verdict_error=evaluation.day_verdict_error or "",
+        detected_language_code=(
+            evaluation.language_choice.interface_language if evaluation.language_choice else None
+        ),
+        detected_chat_language=(
+            evaluation.language_choice.chat_language if evaluation.language_choice else ""
+        ),
     )
 
 

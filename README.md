@@ -19,8 +19,10 @@ A Telegram bot that tracks quote days, previews quote candidates, and only publi
 - 😴 **Boring-Day Detection** — if the day feels flat, the bot says so instead of forcing a weak quote
 - ❤️ **Reaction Context** — sends emoji reactions to AI as context for each message
 - 🧾 **AI Audit Log** — writes the exact OpenRouter request body and raw response to `logs/ai_audit.jsonl` for 7 days
+- 🌐 **Localized Interface** — supports Russian, Ukrainian, English, and German UI text
+- 🧭 **One-Time Language Detection** — if a group has no saved language, the next daily AI run chooses the best interface language and stores it
 - 📏 **Text Context** — stores message length signals for transparent details
-- 🔎 **Admin AI Preview** — `/quote` shows the current leader for chat admins without publishing or clearing data
+- 🧭 **Single `/start` Control Panel** — stats, group language, preview, manual publishing, and close cleanup live behind inline buttons
 - 📌 **Auto-Pin** — pins the winning quote in the chat
 - 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
 - ⏰ **Scheduler** — configurable daily time for quote selection
@@ -43,17 +45,14 @@ A Telegram bot that tracks quote days, previews quote candidates, and only publi
 | **Length**    | Context | Stored for transparent quote details          |
 
 8. If the quote needs setup, AI may attach a validated consecutive/reply-linked context block of up to `5` messages
-9. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
+9. If the group has no saved interface language yet, the same AI run selects one of `ru`, `uk`, `en`, or `de` and the bot stores it for future UI messages
+10. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
 
-## 📌 Commands
+## 📌 Command
 
 | Command    | Description                      |
 | :--------- | :------------------------------- |
-| `/start`   | Bot info and help                |
-| `/quote`   | AI preview of the current day for chat admins |
-| `/publish_quote` | Admin-only override for boring-day / failed runs |
-| `/stats`   | Chat statistics and top authors  |
-| `/mystats` | Your personal statistics         |
+| `/start`   | Opens the context-aware control panel |
 
 ## 🚀 Quick Start
 
@@ -125,7 +124,7 @@ WEIGHT_LENGTH=0.0
 
 ### Running
 
-`/quote` is an admin-only AI preview. `/publish_quote` is reserved for admins when the automatic run marked the day as boring or failed.
+Use `/start` in a private chat or group. In groups, regular users see stats buttons, while admins also get group language, preview, and manual publish controls.
 
 ```bash
 python main.py
@@ -160,6 +159,7 @@ quoto/
 │   ├── core.py         # Core business logic (users, groups, messages)
 │   ├── db.py           # Database session & initialization
 │   ├── handlers.py     # Telegram bot handlers & commands
+│   ├── menu.py         # /start control panel rendering
 │   ├── models.py       # SQLAlchemy models (User, Group, Message, Quote)
 │   ├── scheduler.py    # APScheduler jobs & quote of the day pipeline
 │   ├── scoring.py      # Scoring engine & best quote selection

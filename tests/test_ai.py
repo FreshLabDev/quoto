@@ -33,7 +33,7 @@ class PromptTests(unittest.TestCase):
 
 class DayVerdictParsingTests(unittest.TestCase):
     def test_string_false_is_parsed_strictly(self) -> None:
-        entries, verdict, quote_choice = _parse_day_payload(
+        entries, verdict, quote_choice, language_choice = _parse_day_payload(
             '{"day":{"should_publish":"false","reason_text":"boring"},"messages":[{"id":1,"score":4}]}'
         )
 
@@ -42,6 +42,7 @@ class DayVerdictParsingTests(unittest.TestCase):
         self.assertEqual(verdict.reason_code, REASON_BORING_DAY)
         self.assertEqual(verdict.reason_text, "boring")
         self.assertIsNone(quote_choice)
+        self.assertIsNone(language_choice)
 
     def test_missing_day_block_is_rejected(self) -> None:
         with self.assertRaises(DayVerdictParseError):
@@ -52,7 +53,7 @@ class DayVerdictParsingTests(unittest.TestCase):
             _parse_day_payload('[{"id":1,"score":5}]')
 
     def test_parse_day_payload_ignores_surrounding_prose_and_braces(self) -> None:
-        entries, verdict, quote_choice = _parse_day_payload(
+        entries, verdict, quote_choice, language_choice = _parse_day_payload(
             'note {"draft": true}\n'
             '```json\n'
             '{"day":{"should_publish":"false","reason_text":"boring"},'
@@ -68,6 +69,21 @@ class DayVerdictParsingTests(unittest.TestCase):
         self.assertEqual(quote_choice.primary_id, 1)
         self.assertEqual(quote_choice.context_ids, [1, 2])
         self.assertTrue(quote_choice.context_needed)
+        self.assertIsNone(language_choice)
+
+    def test_parse_day_payload_reads_interface_language(self) -> None:
+        entries, verdict, quote_choice, language_choice = _parse_day_payload(
+            '{"day":{"should_publish":true,"reason_code":"worthy","reason_text":"ok"},'
+            '"language":{"chat_language":"Ukrainian","interface_language":"uk"},'
+            '"quote":{"primary_id":1,"context_ids":[1],"context_needed":false},'
+            '"messages":[{"id":1,"score":8}]}'
+        )
+
+        self.assertEqual(entries, [{"id": 1, "score": 8}])
+        self.assertTrue(verdict.should_publish)
+        self.assertEqual(quote_choice.primary_id, 1)
+        self.assertEqual(language_choice.chat_language, "Ukrainian")
+        self.assertEqual(language_choice.interface_language, "uk")
 
 
 class AIRetryTests(unittest.IsolatedAsyncioTestCase):
@@ -141,6 +157,15 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(captured_body["response_format"]["type"], "json_schema")
         day_schema = ai._response_format(include_day_verdict=True)["json_schema"]["schema"]
         self.assertEqual(day_schema["properties"]["day"]["properties"]["reason_text"]["maxLength"], 200)
+        language_schema = ai._response_format(
+            include_day_verdict=True,
+            detect_interface_language=True,
+        )["json_schema"]["schema"]
+        self.assertIn("language", language_schema["required"])
+        self.assertEqual(
+            language_schema["properties"]["language"]["properties"]["interface_language"]["enum"],
+            ["ru", "uk", "en", "de"],
+        )
 
     async def test_eval_max_tokens_is_high_guardrail(self) -> None:
         with patch.object(ai.settings, "OPENROUTER_EVAL_MAX_TOKENS", 32000):

@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from . import media, models
+from . import i18n, media, models
 from .config import setup_logging
 from .db import SessionLocal
 from .quote_status import (
@@ -87,6 +87,52 @@ async def group_getOrCreate(chat: types.Chat) -> models.Group:
                 select(models.Group).where(models.Group.chat_id == chat.id)
             )
             return result.scalars().first()
+
+
+async def get_group_by_chat_id(chat_id: int) -> models.Group | None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.chat_id == chat_id)
+        )
+        return result.scalars().first()
+
+
+async def set_group_language_auto(group_id: int, language_code: str | None) -> bool:
+    normalized = i18n.normalize_language_code(language_code)
+    if not normalized:
+        return False
+
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group or i18n.normalize_language_code(group.language_code):
+            return False
+
+        group.language_code = normalized
+        group.language_source = i18n.LANGUAGE_SOURCE_AUTO
+        await session.commit()
+        return True
+
+
+async def set_group_language_manual(group_id: int, language_code: str | None) -> bool:
+    normalized = i18n.normalize_language_code(language_code)
+    if not normalized:
+        return False
+
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return False
+
+        group.language_code = normalized
+        group.language_source = i18n.LANGUAGE_SOURCE_MANUAL
+        await session.commit()
+        return True
 
 
 async def save_message(message: types.Message, user: models.User) -> models.Message | None:
@@ -277,6 +323,8 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "reaction_count": quote.reaction_count or 0,
             "author_name": quote.author.name if quote.author else "Аноним",
             "group_name": quote.group.name if quote.group else "—",
+            "language_code": quote.group.language_code if quote.group else None,
+            "language_source": quote.group.language_source if quote.group else None,
             "created_at": quote.created_at,
             "ai_model": quote.ai_model,
             "ai_best_text": quote.ai_best_text,

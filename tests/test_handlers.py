@@ -13,27 +13,40 @@ from app.quote_status import STATUS_PUBLISH_FAILED
 
 
 class DummyResponse:
-    def __init__(self) -> None:
+    def __init__(self, chat=None, message_id: int = 900) -> None:
+        self.chat = chat
+        self.message_id = message_id
         self.edits: list[str] = []
+        self.edit_markups = []
         self.deleted = False
 
-    async def edit_text(self, text: str) -> None:
+    async def edit_text(self, text: str, reply_markup=None) -> None:
         self.edits.append(text)
+        self.edit_markups.append(reply_markup)
 
     async def delete(self) -> None:
         self.deleted = True
 
 
 class DummyMessage:
-    def __init__(self, chat_type: str = "supergroup") -> None:
+    def __init__(
+        self,
+        chat_type: str = "supergroup",
+        language_code: str | None = None,
+        text: str | None = None,
+    ) -> None:
         self.chat = SimpleNamespace(id=-100123456, type=chat_type, title="Quoto Test Chat")
-        self.from_user = SimpleNamespace(id=777, is_bot=False)
+        self.from_user = SimpleNamespace(id=777, is_bot=False, language_code=language_code)
+        self.message_id = 100
+        self.text = text
         self.answers: list[str] = []
+        self.answer_markups = []
         self.responses: list[DummyResponse] = []
 
     async def answer(self, text: str, reply_markup=None):
         self.answers.append(text)
-        response = DummyResponse()
+        self.answer_markups.append(reply_markup)
+        response = DummyResponse(chat=self.chat, message_id=900 + len(self.responses))
         self.responses.append(response)
         return response
 
@@ -43,7 +56,11 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         message = DummyMessage()
 
         with (
-            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock()),
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(language_code="ru")),
+            ),
             patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=False)),
         ):
             await handlers.manual_quote_handler(message, SimpleNamespace())
@@ -66,7 +83,11 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with (
-            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock()),
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(language_code="ru")),
+            ),
             patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
             patch.object(handlers.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
         ):
@@ -77,7 +98,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Alice", message.answers[0])
 
     async def test_private_quote_details_escape_reason_and_operation_error(self) -> None:
-        message = DummyMessage(chat_type="private")
+        message = DummyMessage(chat_type="private", language_code="ru")
         detail = {
             "id": 7,
             "text": "Цитата <script>",
@@ -98,6 +119,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "operation_error": "Telegram timeout & retry",
             "forced_by_admin": False,
             "quote_day": None,
+            "language_code": "uk",
         }
 
         with (
@@ -114,8 +136,131 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Quoto &lt;Test&gt; Chat", message.answers[0])
         self.assertIn("Цитата &lt;script&gt;", message.answers[0])
 
+    async def test_private_uses_telegram_user_language_not_group_language(self) -> None:
+        message = DummyMessage(chat_type="private", language_code="en-US")
+        detail = {
+            "id": 7,
+            "text": "Цитата <script>",
+            "score": 0.8,
+            "reaction_score": 0.2,
+            "ai_score": 0.5,
+            "length_score": 0.1,
+            "reaction_count": 0,
+            "author_name": "Alice",
+            "group_name": "Quoto Test Chat",
+            "created_at": datetime(2026, 3, 27, 21, 0, tzinfo=timezone.utc),
+            "ai_model": "openrouter/test",
+            "ai_best_text": None,
+            "message_id": 10,
+            "chat_id": -100123456,
+            "decision_status": STATUS_PUBLISH_FAILED,
+            "decision_reason": "LLM rejected",
+            "operation_error": None,
+            "forced_by_admin": False,
+            "quote_day": None,
+            "language_code": "uk",
+        }
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
+            patch.object(handlers.core, "get_quote_detail", new=AsyncMock(return_value=detail)),
+        ):
+            await handlers.private_handler(message, SimpleNamespace(args="quote_7"))
+
+        self.assertIn("Decision reason", message.answers[0])
+        self.assertNotIn("Причина решения", message.answers[0])
+        self.assertNotIn("Причина рішення", message.answers[0])
+
+    async def test_private_falls_back_to_english_for_unknown_telegram_language(self) -> None:
+        message = DummyMessage(chat_type="private", language_code="es")
+
+        with patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()):
+            await handlers.private_handler(message, SimpleNamespace(args=None))
+
+        self.assertIn("<b>Quoto</b>", message.answers[0])
+        self.assertIn("use /start there for controls", message.answers[0])
+
+    async def test_group_start_menu_shows_admin_controls(self) -> None:
+        message = DummyMessage(text="/start")
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(language_code="ru", language_source=None)),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+        ):
+            await handlers.group_start_handler(message, SimpleNamespace())
+
+        self.assertIn("Панель Quoto", message.answers[0])
+        labels = [
+            button.text
+            for row in message.answer_markups[0].inline_keyboard
+            for button in row
+        ]
+        self.assertIn("🌐 Язык группы", labels)
+        self.assertIn("🔎 Предпросмотр", labels)
+        self.assertIn("🚀 Опубликовать", labels)
+        self.assertIn("Закрыть", labels)
+
+    async def test_close_panel_deletes_panel_and_command_message(self) -> None:
+        panel = DummyResponse(chat=SimpleNamespace(id=-100123456), message_id=901)
+        callback = SimpleNamespace(message=panel, answered=[])
+
+        async def answer(text=None, show_alert=None):
+            callback.answered.append((text, show_alert))
+
+        callback.answer = answer
+        bot = SimpleNamespace(delete_message=AsyncMock())
+        handlers._PANEL_COMMAND_MESSAGES[(panel.chat.id, panel.message_id)] = (panel.chat.id, 100)
+
+        await handlers._close_panel(callback, bot)
+
+        bot.delete_message.assert_any_await(panel.chat.id, panel.message_id)
+        bot.delete_message.assert_any_await(panel.chat.id, 100)
+        self.assertNotIn((panel.chat.id, panel.message_id), handlers._PANEL_COMMAND_MESSAGES)
+
+    async def test_group_language_callback_sets_manual_language(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:setlang:uk",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(id=1, language_code="ru", language_source=None)),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+            patch.object(handlers.core, "set_group_language_manual", new=AsyncMock()) as set_language,
+            patch.object(
+                handlers.core,
+                "get_group_by_chat_id",
+                new=AsyncMock(
+                    return_value=SimpleNamespace(
+                        id=1,
+                        language_code="uk",
+                        language_source=handlers.i18n.LANGUAGE_SOURCE_MANUAL,
+                    )
+                ),
+            ),
+        ):
+            await handlers.start_menu_callback(callback, SimpleNamespace())
+
+        set_language.assert_awaited_once_with(1, "uk")
+        self.assertIn("Мова групи", panel.edits[0])
+        callback.answer.assert_awaited()
+
     async def test_private_quote_details_renders_context_messages(self) -> None:
-        message = DummyMessage(chat_type="private")
+        message = DummyMessage(chat_type="private", language_code="ru")
         detail = {
             "id": 8,
             "text": "primary",

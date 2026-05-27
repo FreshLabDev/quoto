@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import httpx
 
+from . import i18n
 from .config import settings, setup_logging
 from .quote_status import REASON_BORING_DAY, REASON_WORTHY
 
@@ -69,6 +70,15 @@ _DAY_PROMPT = (
     "\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
     "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
     "Keep reason_text under 160 characters. Write reason_text in the main language used in the chat that day."
+)
+
+_LANGUAGE_DETECTION_PROMPT = (
+    " The chat does not have a stored interface language yet. Also infer the main language used in this chat "
+    "from the same message sample and choose exactly one suitable interface_language from these options: "
+    f"{i18n.language_options_prompt()}. "
+    "Prefer the dominant chat language when it is supported; otherwise choose the closest comfortable interface language. "
+    "Add a `language` object to the JSON response: "
+    "{\"chat_language\": \"short language name\", \"interface_language\": \"ru|uk|en|de\"}."
 )
 
 _IMAGE_DESCRIPTION_PROMPT = (
@@ -140,6 +150,26 @@ _DAY_RESPONSE_SCHEMA = {
     "required": ["day", "quote", "messages"],
 }
 
+_LANGUAGE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "chat_language": {"type": "string", "maxLength": 80},
+        "interface_language": {"type": "string", "enum": list(i18n.SUPPORTED_LANGUAGES)},
+    },
+    "required": ["chat_language", "interface_language"],
+}
+
+_DAY_RESPONSE_SCHEMA_WITH_LANGUAGE = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        **_DAY_RESPONSE_SCHEMA["properties"],
+        "language": _LANGUAGE_RESPONSE_SCHEMA,
+    },
+    "required": [*_DAY_RESPONSE_SCHEMA["required"], "language"],
+}
+
 
 @dataclass
 class DayVerdict:
@@ -156,6 +186,12 @@ class QuoteContextChoice:
 
 
 @dataclass
+class InterfaceLanguageChoice:
+    chat_language: str = ""
+    interface_language: str = i18n.DEFAULT_LANGUAGE
+
+
+@dataclass
 class EvaluationResult:
     scores: dict[int, float]
     actual_model: str
@@ -165,6 +201,7 @@ class EvaluationResult:
     day_verdict: DayVerdict | None = None
     day_verdict_error: str | None = None
     quote_choice: QuoteContextChoice | None = None
+    language_choice: InterfaceLanguageChoice | None = None
 
 
 class DayVerdictParseError(ValueError):
@@ -187,6 +224,7 @@ def _is_retryable_http_status(status_code: int) -> bool:
 async def evaluate_messages(
     messages: list[dict[str, Any]],
     include_day_verdict: bool = False,
+    detect_interface_language: bool = False,
 ) -> EvaluationResult:
     if not messages:
         return EvaluationResult(
@@ -215,16 +253,23 @@ async def evaluate_messages(
             ),
         )
 
+    detect_interface_language = bool(include_day_verdict and detect_interface_language)
     request_id = uuid4().hex
     user_payload = json.dumps([_message_payload(m) for m in messages], ensure_ascii=False)
+    system_prompt = _DAY_PROMPT if include_day_verdict else _SCORE_PROMPT
+    if detect_interface_language:
+        system_prompt = system_prompt + _LANGUAGE_DETECTION_PROMPT
 
     body = {
         "model": settings.OPENROUTER_EVAL_MODEL,
         "messages": [
-            {"role": "system", "content": _DAY_PROMPT if include_day_verdict else _SCORE_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_payload},
         ],
-        "response_format": _response_format(include_day_verdict),
+        "response_format": _response_format(
+            include_day_verdict,
+            detect_interface_language=detect_interface_language,
+        ),
     }
     max_tokens = _eval_max_tokens(len(messages), include_day_verdict=include_day_verdict)
     if max_tokens > 0:
@@ -246,6 +291,7 @@ async def evaluate_messages(
             "request_id": request_id,
             "attempt": attempt + 1,
             "include_day_verdict": include_day_verdict,
+            "detect_interface_language": detect_interface_language,
             "message_count": len(messages),
             "request": {
                 "url": settings.OPENROUTER_BASE_URL,
@@ -301,10 +347,14 @@ async def evaluate_messages(
                 )
 
             if include_day_verdict:
-                entries, verdict, quote_choice, verdict_error = _parse_day_payload_safely(content)
+                entries, verdict, quote_choice, language_choice, verdict_error = _parse_day_payload_safely(
+                    content,
+                    require_language=False,
+                )
             else:
                 entries, quote_choice = _parse_score_payload(content)
                 verdict = None
+                language_choice = None
                 verdict_error = None
 
             scores = _normalize_scores(messages, entries)
@@ -314,6 +364,7 @@ async def evaluate_messages(
                 "score_count": len(scores),
                 "quote_choice": _quote_choice_audit_payload(quote_choice),
                 "day_verdict": _day_verdict_audit_payload(verdict),
+                "language_choice": _language_choice_audit_payload(language_choice),
                 "day_verdict_error": verdict_error,
             }
             _write_ai_audit_record(audit_record)
@@ -327,6 +378,7 @@ async def evaluate_messages(
                 day_verdict=verdict,
                 day_verdict_error=verdict_error,
                 quote_choice=quote_choice,
+                language_choice=language_choice,
             )
 
         except httpx.HTTPStatusError as e:
@@ -487,13 +539,32 @@ def _day_verdict_audit_payload(verdict: DayVerdict | None) -> dict[str, Any] | N
     }
 
 
-def _response_format(include_day_verdict: bool) -> dict[str, Any]:
+def _language_choice_audit_payload(choice: InterfaceLanguageChoice | None) -> dict[str, Any] | None:
+    if not choice:
+        return None
+    return {
+        "chat_language": choice.chat_language,
+        "interface_language": choice.interface_language,
+    }
+
+
+def _response_format(
+    include_day_verdict: bool,
+    detect_interface_language: bool = False,
+) -> dict[str, Any]:
+    schema = _SCORE_RESPONSE_SCHEMA
+    if include_day_verdict:
+        schema = _DAY_RESPONSE_SCHEMA_WITH_LANGUAGE if detect_interface_language else _DAY_RESPONSE_SCHEMA
     return {
         "type": "json_schema",
         "json_schema": {
-            "name": "quoto_day_verdict" if include_day_verdict else "quoto_scores",
+            "name": (
+                "quoto_day_verdict_language"
+                if include_day_verdict and detect_interface_language
+                else ("quoto_day_verdict" if include_day_verdict else "quoto_scores")
+            ),
             "strict": True,
-            "schema": _DAY_RESPONSE_SCHEMA if include_day_verdict else _SCORE_RESPONSE_SCHEMA,
+            "schema": schema,
         },
     }
 
@@ -663,10 +734,17 @@ def _message_payload(message: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _parse_day_payload_safely(content: str) -> tuple[list[dict], DayVerdict | None, QuoteContextChoice | None, str | None]:
+def _parse_day_payload_safely(
+    content: str,
+    *,
+    require_language: bool = False,
+) -> tuple[list[dict], DayVerdict | None, QuoteContextChoice | None, InterfaceLanguageChoice | None, str | None]:
     try:
-        entries, verdict, quote_choice = _parse_day_payload(content)
-        return entries, verdict, quote_choice, None
+        entries, verdict, quote_choice, language_choice = _parse_day_payload(
+            content,
+            require_language=require_language,
+        )
+        return entries, verdict, quote_choice, language_choice, None
     except (json.JSONDecodeError, DayVerdictParseError, ValueError) as exc:
         log.error(f"Ошибка day verdict ответа AI: {exc}")
         try:
@@ -674,10 +752,14 @@ def _parse_day_payload_safely(content: str) -> tuple[list[dict], DayVerdict | No
         except (json.JSONDecodeError, ValueError):
             entries = []
             quote_choice = None
-        return entries, None, quote_choice, str(exc)
+        return entries, None, quote_choice, None, str(exc)
 
 
-def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict, QuoteContextChoice | None]:
+def _parse_day_payload(
+    content: str,
+    *,
+    require_language: bool = False,
+) -> tuple[list[dict], DayVerdict, QuoteContextChoice | None, InterfaceLanguageChoice | None]:
     cleaned = _extract_json_payload(content)
     parsed = json.loads(cleaned)
 
@@ -703,6 +785,10 @@ def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict, QuoteConte
     )
     reason_text = str(day.get("reason_text") or "").strip()
 
+    language_choice = _parse_language_choice(parsed)
+    if require_language and language_choice is None:
+        raise DayVerdictParseError("AI response is missing a valid `language.interface_language` value.")
+
     return (
         entries,
         DayVerdict(
@@ -711,6 +797,7 @@ def _parse_day_payload(content: str) -> tuple[list[dict], DayVerdict, QuoteConte
             reason_text=reason_text,
         ),
         _parse_quote_choice(parsed),
+        language_choice,
     )
 
 
@@ -769,6 +856,21 @@ def _parse_quote_choice(payload: dict[str, Any]) -> QuoteContextChoice | None:
         primary_id=primary_id,
         context_ids=context_ids,
         context_needed=context_needed,
+    )
+
+
+def _parse_language_choice(payload: dict[str, Any]) -> InterfaceLanguageChoice | None:
+    language = payload.get("language")
+    if not isinstance(language, dict):
+        return None
+
+    interface_language = i18n.normalize_language_code(language.get("interface_language"))
+    if interface_language is None:
+        return None
+
+    return InterfaceLanguageChoice(
+        chat_language=str(language.get("chat_language") or "").strip(),
+        interface_language=interface_language,
     )
 
 

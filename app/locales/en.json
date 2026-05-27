@@ -1,0 +1,132 @@
+{
+  "language_name": "English",
+  "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  "common": {
+    "anonymous": "Anonymous",
+    "original": "Original",
+    "details": "Details",
+    "context": "context",
+    "ai": "AI"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "👤 My stats",
+      "chat_stats": "📊 Chat stats",
+      "group_language": "🌐 Group language",
+      "preview": "🔎 Preview",
+      "publish": "🚀 Publish latest",
+      "back": "‹ Back",
+      "close": "Close"
+    },
+    "private": {
+      "title": "🏆 <b>Quoto</b>",
+      "body": "I run quote-of-the-day windows in group chats. Add me to a group, then use /start there for controls.",
+      "language": "UI language: <b>{language_name}</b>",
+      "language_note": "Private chat follows your Telegram app language."
+    },
+    "group": {
+      "title": "🏆 <b>Quoto control panel</b>",
+      "admin_body": "Use the buttons below to manage quotes, stats, and group language.",
+      "user_body": "Use the buttons below to view quote stats.",
+      "language_line": "Language: <b>{language_name}</b>",
+      "schedule_line": "Daily pick: <b>{time}</b>; skip if fewer than <b>{min_messages}</b> messages."
+    },
+    "language": {
+      "title": "🌐 <b>Group language</b>",
+      "hint": "Choose the interface language for this group.",
+      "source_auto": "Source: detected automatically",
+      "source_manual": "Source: set manually",
+      "source_default": "Source: English fallback",
+      "updated": "Language set to {language_name}.",
+      "invalid": "Unsupported language."
+    },
+    "other_user": "Open your own menu with /start.",
+    "group_context_required": "Open this from a group chat."
+  },
+  "status": {
+    "published": "✅ Published",
+    "skipped_boring": "😴 Boring day",
+    "publish_failed": "⚠️ Publishing failed",
+    "boring_notice_failed": "⚠️ Boring-day notice failed",
+    "publish_unknown": "⚠️ Publishing state is unknown",
+    "boring_notice_unknown": "⚠️ Boring-day state is unknown"
+  },
+  "admin": {
+    "quote_only": "🔒 /quote with AI preview is available only to chat admins.",
+    "admin_only": "🔒 This command is available only to chat admins."
+  },
+  "chat_member": {
+    "added": "👋 Hi, <b>{chat_title}</b>!\n\nI'm <b>Quoto</b>. At <b>{time}</b>, I pick and publish the quote of the day.\n\nUse /start to open stats, language, preview, and manual publishing controls.",
+    "need_admin": "⚠️ Please <b>make me an administrator</b> with permission to <i>pin</i> messages so I can publish the result.",
+    "admin_granted": "✅ <b>Thanks</b> for making me an administrator!"
+  },
+  "private": {
+    "invalid_quote_link": "❌ Invalid quote link.",
+    "quote_not_found": "❌ Quote not found.",
+    "add_to_group": "➕ Add to group",
+    "hello": "🏆 <b>Hi! I'm Quoto</b>\n\nI run quote-of-the-day windows and publish the result in your group.\n\nUse /start to open the control panel."
+  },
+  "details": {
+    "title": "📊 <b>Day details #{id}</b>",
+    "total": "Total",
+    "reactions": "Reactions",
+    "length": "Length",
+    "decision_reason": "Decision reason",
+    "operation_error": "Technical error",
+    "ai_choice": "AI choice",
+    "forced": "⚙️ <i>Published manually by an admin.</i>"
+  },
+  "start": {
+    "group": "🏆 <b>Quoto — Quote of the Day</b>\n\nI collect messages between two cutoff points and choose the winner at the end of the day.\n\nUse /start to open the control panel."
+  },
+  "quote_preview": {
+    "empty": "📭 There are no messages to preview for the current day yet.",
+    "title": "🔎 <b>Current day preview</b>",
+    "messages": "📨 Messages today: <b>{count}</b>",
+    "score": "⭐ Current score: <b>{score:.1f}/10</b>",
+    "subthreshold": "🤫 If there are fewer than {min_messages} messages by {time}, the day will be skipped without publishing.",
+    "ai_verdict": "🤖 At {time}, AI will also decide whether the whole day is worth publishing."
+  },
+  "manual_publish": {
+    "checking": "⏳ Checking whether there is a day to publish manually...",
+    "nothing": "📭 There is no boring-day or failed day available for manual publishing.",
+    "already_sent": "⚠️ The latest day was already sent to Telegram, but the DB did not confirm the final status. I did not publish a duplicate.",
+    "failed": "❌ Manual publishing failed. Check the bot logs.",
+    "done": "✅ Published manually."
+  },
+  "stats": {
+    "missing": "📊 Stats are not available yet — the bot has not registered this group.",
+    "empty": "📊 This chat has no published quotes yet.",
+    "title": "📊 <b>Chat stats</b>",
+    "total_quotes": "🏆 Total quotes: <b>{count}</b>",
+    "unique_authors": "👥 Unique authors: <b>{count}</b>",
+    "avg_score": "📈 Average rating: <b>{score:.1f}/10</b>",
+    "top_authors": "👑 <b>Top authors:</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} 🏆 (avg {score:.1f}/10)",
+    "best_quote": "⭐ <b>Best quote:</b>"
+  },
+  "user_stats": {
+    "missing": "📊 Stats are not available yet.",
+    "empty": "📊 <b>{user}</b>, you do not have published quotes in this chat yet.\nKeep writing — your time will come! 💪",
+    "title": "📊 <b>Your stats</b>",
+    "user": "👤 <b>{user}</b>",
+    "wins": "🏆 Wins: <b>{count}</b>",
+    "avg_score": "📈 Average rating: <b>{score:.1f}/10</b>",
+    "rank": "🏅 Rank: <b>{rank}</b> of {total}",
+    "best_quote": "⭐ <b>Best quote:</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Quote of the Day</b>",
+      "photo": "📷 <b>Photo of the Day</b>",
+      "video": "🎬 <b>Video of the Day</b>",
+      "voice": "🎙 <b>Voice Message of the Day</b>",
+      "audio": "🎧 <b>Audio of the Day</b>"
+    },
+    "forced": "⚙️ <i>Published manually by an admin.</i>"
+  },
+  "boring": {
+    "title": "😴 <b>Today was a boring day</b>",
+    "body": "The bot did not find a strong enough quote to publish."
+  }
+}

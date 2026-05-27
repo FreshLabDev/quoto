@@ -9,7 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
 from sqlalchemy import select
 
-from . import core, media, scoring
+from . import core, i18n, media, scoring
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .models import Group, Quote
@@ -111,7 +111,17 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         include_day_verdict=True,
         day_verdict_min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
         group_id=group.id,
+        detect_interface_language=not i18n.group_language_is_set(group),
     )
+
+    if not i18n.group_language_is_set(group) and evaluation.detected_language_code:
+        if await core.set_group_language_auto(group.id, evaluation.detected_language_code):
+            group.language_code = evaluation.detected_language_code
+            group.language_source = i18n.LANGUAGE_SOURCE_AUTO
+            log.info(
+                f"{group.chat_id} | 🌐 Язык интерфейса выбран автоматически: "
+                f"{evaluation.detected_language_code} ({evaluation.detected_chat_language or 'unknown'})"
+            )
 
     if evaluation.message_count == 0:
         if evaluation.source_message_count:
@@ -269,16 +279,18 @@ async def _publish_quote_message(
     forced_by_admin: bool,
     clear_window_after: bool,
 ) -> bool:
+    language = i18n.group_language(group)
     info_parts = [breakdown.stars]
     if breakdown.reaction_count:
         info_parts.append(f"{breakdown.reaction_count}❤️")
-    info_parts.append(_format_quote_day(quote.quote_day))
+    info_parts.append(_format_quote_day(quote.quote_day, language))
     info_line = " · ".join(info_parts)
 
     msg_link = _message_link(group.chat_id, quote.message_id)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
-    forced_line = "\n⚙️ <i>Опубликовано администратором вручную.</i>" if forced_by_admin else ""
+    forced_line = f"\n{i18n.t(language, 'quote_post.forced')}" if forced_by_admin else ""
     text = _build_quote_post_text(
+        language=language,
         quote=quote,
         author_name=author_name,
         info_line=info_line,
@@ -296,6 +308,7 @@ async def _publish_quote_message(
                     from_chat_id=group.chat_id,
                     message_id=quote.message_id,
                     caption=_build_quote_post_text(
+                        language=language,
                         quote=quote,
                         author_name=author_name,
                         info_line=info_line,
@@ -370,13 +383,14 @@ async def _send_boring_notice(
     quote: Quote,
     clear_window_after: bool,
 ) -> None:
+    language = i18n.group_language(group)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
     reason_line = f"\n💭 {escape(quote.decision_reason)}" if quote.decision_reason else ""
     text = (
-        "😴 <b>Сегодня день вышел скучным</b>\n\n"
-        "Бот не нашёл достаточно сильную цитату для публикации."
+        f"{i18n.t(language, 'boring.title')}\n\n"
+        f"{i18n.t(language, 'boring.body')}"
         f"{reason_line}\n\n"
-        f"<a href='{details_link}'>Подробнее</a> · #quoto"
+        f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
     )
 
     try:
@@ -482,6 +496,7 @@ def _load_quote_context_lines(quote: Quote) -> list[dict[str, object]]:
 
 def _build_quote_post_text(
     *,
+    language: str,
     quote: Quote,
     author_name: str,
     info_line: str,
@@ -505,10 +520,11 @@ def _build_quote_post_text(
         )
 
     text = (
-        f"{_quote_day_title(quote)}\n\n"
+        f"{_quote_day_title(quote, language)}\n\n"
         f"{quote_body}\n\n"
         f"{info_line}\n\n"
-        f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
+        f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
+        f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
         f"{forced_line}"
     )
     if not media_caption or len(text) <= _MEDIA_CAPTION_LIMIT:
@@ -520,35 +536,37 @@ def _build_quote_post_text(
             f"— <b>{safe_author_name}</b>"
         )
         text = (
-            f"{_quote_day_title(quote)}\n\n"
+            f"{_quote_day_title(quote, language)}\n\n"
             f"{shortened}\n\n"
             f"{info_line}\n\n"
-            f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
+            f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
+            f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
             f"{forced_line}"
         )
         if len(text) <= _MEDIA_CAPTION_LIMIT:
             return text
 
     return (
-        f"{_quote_day_title(quote)}\n\n"
+        f"{_quote_day_title(quote, language)}\n\n"
         f"— <b>{safe_author_name}</b>\n\n"
         f"{info_line}\n\n"
-        f"<a href='{msg_link}'>Оригинал</a> · <a href='{details_link}'>Подробнее</a> · #quoto"
+        f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
+        f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
         f"{forced_line}"
     )
 
 
-def _quote_day_title(quote: Quote) -> str:
+def _quote_day_title(quote: Quote, language: str) -> str:
     content_type = str(getattr(quote, "content_type", "") or "text")
     if content_type in {"photo", "image"}:
-        return "📷 <b>Фото дня</b>"
+        return i18n.t(language, "quote_post.titles.photo")
     if content_type in {"video", "animation", "video_note"}:
-        return "🎬 <b>Видео дня</b>"
+        return i18n.t(language, "quote_post.titles.video")
     if content_type == "voice":
-        return "🎙 <b>Голосовое дня</b>"
+        return i18n.t(language, "quote_post.titles.voice")
     if content_type == "audio":
-        return "🎧 <b>Аудио дня</b>"
-    return "🏆 <b>Цитата дня</b>"
+        return i18n.t(language, "quote_post.titles.audio")
+    return i18n.t(language, "quote_post.titles.text")
 
 
 def _can_copy_media_quote(quote: Quote) -> bool:
@@ -585,23 +603,8 @@ def _format_context_quote_body(context_lines: list[dict[str, object]], text_limi
     return "\n".join(rendered)
 
 
-def _format_quote_day(quote_day) -> str:
-    months = [
-        "",
-        "Января",
-        "Февраля",
-        "Марта",
-        "Апреля",
-        "Мая",
-        "Июня",
-        "Июля",
-        "Августа",
-        "Сентября",
-        "Октября",
-        "Ноября",
-        "Декабря",
-    ]
-    return f"{quote_day.day} {months[quote_day.month]}"
+def _format_quote_day(quote_day, language: str) -> str:
+    return f"{quote_day.day} {i18n.month_name(language, quote_day.month)}"
 
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:

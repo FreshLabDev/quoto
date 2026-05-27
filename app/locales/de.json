@@ -1,0 +1,132 @@
+{
+  "language_name": "Deutsch",
+  "months": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+  "common": {
+    "anonymous": "Anonym",
+    "original": "Original",
+    "details": "Details",
+    "context": "Kontext",
+    "ai": "KI"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "👤 Meine Statistik",
+      "chat_stats": "📊 Chat-Statistik",
+      "group_language": "🌐 Gruppensprache",
+      "preview": "🔎 Vorschau",
+      "publish": "🚀 Veröffentlichen",
+      "back": "‹ Zurück",
+      "close": "Schließen"
+    },
+    "private": {
+      "title": "🏆 <b>Quoto</b>",
+      "body": "Ich verwalte Zitat-des-Tages-Fenster in Gruppenchats. Füge mich zu einer Gruppe hinzu und nutze dort /start für die Steuerung.",
+      "language": "UI-Sprache: <b>{language_name}</b>",
+      "language_note": "Im privaten Chat folgt die Sprache deiner Telegram-App."
+    },
+    "group": {
+      "title": "🏆 <b>Quoto-Steuerung</b>",
+      "admin_body": "Mit den Buttons unten verwaltest du Zitate, Statistik und Gruppensprache.",
+      "user_body": "Mit den Buttons unten öffnest du die Zitat-Statistik.",
+      "language_line": "Sprache: <b>{language_name}</b>",
+      "schedule_line": "Tägliche Auswahl: <b>{time}</b>; Überspringen bei weniger als <b>{min_messages}</b> Nachrichten."
+    },
+    "language": {
+      "title": "🌐 <b>Gruppensprache</b>",
+      "hint": "Wähle die UI-Sprache für diese Gruppe.",
+      "source_auto": "Quelle: automatisch erkannt",
+      "source_manual": "Quelle: manuell gesetzt",
+      "source_default": "Quelle: englischer Fallback",
+      "updated": "Sprache auf {language_name} gesetzt.",
+      "invalid": "Nicht unterstützte Sprache."
+    },
+    "other_user": "Öffne dein eigenes Menü mit /start.",
+    "group_context_required": "Öffne dies aus einem Gruppenchat."
+  },
+  "status": {
+    "published": "✅ Veröffentlicht",
+    "skipped_boring": "😴 Langweiliger Tag",
+    "publish_failed": "⚠️ Veröffentlichung fehlgeschlagen",
+    "boring_notice_failed": "⚠️ Hinweis zum langweiligen Tag fehlgeschlagen",
+    "publish_unknown": "⚠️ Veröffentlichungsstatus ist unklar",
+    "boring_notice_unknown": "⚠️ Status des langweiligen Tages ist unklar"
+  },
+  "admin": {
+    "quote_only": "🔒 /quote mit AI-Preview ist nur für Chat-Admins verfügbar.",
+    "admin_only": "🔒 Dieser Befehl ist nur für Chat-Admins verfügbar."
+  },
+  "chat_member": {
+    "added": "👋 Hallo, <b>{chat_title}</b>!\n\nIch bin <b>Quoto</b>. Um <b>{time}</b> wähle und veröffentliche ich das Zitat des Tages.\n\nNutze /start, um Statistik, Sprache, Vorschau und manuelle Veröffentlichung zu öffnen.",
+    "need_admin": "⚠️ Bitte <b>mache mich zum Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i>, damit ich das Ergebnis veröffentlichen kann.",
+    "admin_granted": "✅ <b>Danke</b>, dass du mich zum Administrator gemacht hast!"
+  },
+  "private": {
+    "invalid_quote_link": "❌ Ungültiger Zitat-Link.",
+    "quote_not_found": "❌ Zitat nicht gefunden.",
+    "add_to_group": "➕ Zur Gruppe hinzufügen",
+    "hello": "🏆 <b>Hallo! Ich bin Quoto</b>\n\nIch führe Zitat-des-Tages-Fenster und veröffentliche das Ergebnis in deiner Gruppe.\n\nNutze /start, um die Steuerung zu öffnen."
+  },
+  "details": {
+    "title": "📊 <b>Tagesdetails #{id}</b>",
+    "total": "Gesamt",
+    "reactions": "Reaktionen",
+    "length": "Länge",
+    "decision_reason": "Entscheidungsgrund",
+    "operation_error": "Technischer Fehler",
+    "ai_choice": "KI-Auswahl",
+    "forced": "⚙️ <i>Manuell von einem Admin veröffentlicht.</i>"
+  },
+  "start": {
+    "group": "🏆 <b>Quoto — Zitat des Tages</b>\n\nIch sammle Nachrichten zwischen zwei Cutoff-Zeitpunkten und wähle am Tagesende den Gewinner.\n\nNutze /start, um die Steuerung zu öffnen."
+  },
+  "quote_preview": {
+    "empty": "📭 Für den aktuellen Tag gibt es noch keine Nachrichten für ein Preview.",
+    "title": "🔎 <b>Preview des aktuellen Tages</b>",
+    "messages": "📨 Nachrichten heute: <b>{count}</b>",
+    "score": "⭐ Aktueller Score: <b>{score:.1f}/10</b>",
+    "subthreshold": "🤫 Wenn es bis {time} weniger als {min_messages} Nachrichten gibt, wird der Tag ohne Veröffentlichung übersprungen.",
+    "ai_verdict": "🤖 Um {time} entscheidet die KI zusätzlich, ob der ganze Tag eine Veröffentlichung wert ist."
+  },
+  "manual_publish": {
+    "checking": "⏳ Prüfe, ob es einen Tag für manuelle Veröffentlichung gibt...",
+    "nothing": "📭 Es gibt keinen langweiligen oder fehlgeschlagenen Tag für manuelle Veröffentlichung.",
+    "already_sent": "⚠️ Der letzte Tag wurde bereits an Telegram gesendet, aber die DB hat den finalen Status nicht bestätigt. Ich veröffentliche kein Duplikat.",
+    "failed": "❌ Manuelle Veröffentlichung fehlgeschlagen. Prüfe die Bot-Logs.",
+    "done": "✅ Manuell veröffentlicht."
+  },
+  "stats": {
+    "missing": "📊 Statistik ist noch nicht verfügbar — der Bot hat diese Gruppe noch nicht registriert.",
+    "empty": "📊 Dieser Chat hat noch keine veröffentlichten Zitate.",
+    "title": "📊 <b>Chat-Statistik</b>",
+    "total_quotes": "🏆 Zitate gesamt: <b>{count}</b>",
+    "unique_authors": "👥 Eindeutige Autoren: <b>{count}</b>",
+    "avg_score": "📈 Durchschnittsbewertung: <b>{score:.1f}/10</b>",
+    "top_authors": "👑 <b>Top-Autoren:</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} 🏆 (Ø {score:.1f}/10)",
+    "best_quote": "⭐ <b>Bestes Zitat:</b>"
+  },
+  "user_stats": {
+    "missing": "📊 Statistik ist noch nicht verfügbar.",
+    "empty": "📊 <b>{user}</b>, du hast in diesem Chat noch keine veröffentlichten Zitate.\nSchreib weiter — deine Zeit kommt! 💪",
+    "title": "📊 <b>Deine Statistik</b>",
+    "user": "👤 <b>{user}</b>",
+    "wins": "🏆 Siege: <b>{count}</b>",
+    "avg_score": "📈 Durchschnittsbewertung: <b>{score:.1f}/10</b>",
+    "rank": "🏅 Platz: <b>{rank}</b> von {total}",
+    "best_quote": "⭐ <b>Bestes Zitat:</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Zitat des Tages</b>",
+      "photo": "📷 <b>Foto des Tages</b>",
+      "video": "🎬 <b>Video des Tages</b>",
+      "voice": "🎙 <b>Sprachnachricht des Tages</b>",
+      "audio": "🎧 <b>Audio des Tages</b>"
+    },
+    "forced": "⚙️ <i>Manuell von einem Admin veröffentlicht.</i>"
+  },
+  "boring": {
+    "title": "😴 <b>Heute war ein langweiliger Tag</b>",
+    "body": "Der Bot hat kein ausreichend starkes Zitat für eine Veröffentlichung gefunden."
+  }
+}

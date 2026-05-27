@@ -35,6 +35,8 @@ class Group(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     chat_id = Column(BigInteger, unique=True, index=True, nullable=False)
     name = Column(String)
+    language_code = Column(String, nullable=True)
+    language_source = Column(String, nullable=True)
 
     quotes = relationship("Quote", back_populates="group")
 

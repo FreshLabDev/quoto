@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
@@ -18,6 +18,9 @@ async def main():
     dp.include_router(handlers.router)
 
     await db.init_db()
+    await bot.set_my_commands(
+        [types.BotCommand(command="start", description="Open Quoto menu")]
+    )
 
     # Инициализация планировщика
     sched = scheduler.setup_scheduler(bot)

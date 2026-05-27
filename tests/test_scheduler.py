@@ -124,7 +124,54 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             include_day_verdict=True,
             day_verdict_min_messages=scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
             group_id=self.group.id,
+            detect_interface_language=True,
         )
+
+    async def test_process_group_does_not_detect_language_when_already_set(self) -> None:
+        self.group.language_code = "en"
+        message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+        evaluation = scoring.QuoteEvaluation(message_count=message_count, best_message=None)
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
+            patch.object(
+                scheduler.scoring,
+                "pick_best_quote",
+                new=AsyncMock(return_value=evaluation),
+            ) as pick_best_quote,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        self.assertFalse(pick_best_quote.await_args.kwargs["detect_interface_language"])
+
+    async def test_process_group_persists_detected_language_before_publish(self) -> None:
+        message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
+        best_message = SimpleNamespace(author=SimpleNamespace(name="Alice"))
+        evaluation = scoring.QuoteEvaluation(
+            message_count=message_count,
+            best_message=best_message,
+            should_publish=True,
+            detected_language_code="uk",
+            detected_chat_language="Ukrainian",
+        )
+        quote = SimpleNamespace(id=5)
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
+            patch.object(scheduler.core, "set_group_language_auto", new=AsyncMock(return_value=True)) as set_language,
+            patch.object(scheduler.core, "create_quote_record", new=AsyncMock(return_value=(quote, True))),
+            patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)) as publish,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        set_language.assert_awaited_once_with(self.group.id, "uk")
+        self.assertEqual(self.group.language_code, "uk")
+        publish.assert_awaited_once()
 
     async def test_process_group_clears_window_when_all_messages_filtered_before_ai(self) -> None:
         source_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
@@ -247,7 +294,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         copy_kwargs = bot.copy_message.await_args.kwargs
         self.assertEqual(copy_kwargs["from_chat_id"], self.group.chat_id)
         self.assertEqual(copy_kwargs["message_id"], 57)
-        self.assertIn("📷 <b>Фото дня</b>", copy_kwargs["caption"])
+        self.assertIn("📷 <b>Photo of the Day</b>", copy_kwargs["caption"])
         update_publication.assert_awaited_once_with(
             quote_id=quote.id,
             bot_message_id=204,
@@ -292,7 +339,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         bot.copy_message.assert_awaited_once()
         bot.send_message.assert_awaited_once()
         sent_text = bot.send_message.await_args.kwargs["text"]
-        self.assertIn("🎙 <b>Голосовое дня</b>", sent_text)
+        self.assertIn("🎙 <b>Voice Message of the Day</b>", sent_text)
         update_publication.assert_awaited_once_with(
             quote_id=quote.id,
             bot_message_id=205,
