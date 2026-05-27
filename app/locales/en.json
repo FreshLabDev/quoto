@@ -25,8 +25,8 @@
     },
     "group": {
       "title": "🏆 <b>Quoto control panel</b>",
-      "admin_body": "Quote of the day and stats for this group.",
-      "user_body": "Quote stats for this chat.",
+      "admin_body": "Use the buttons below to manage quotes, stats, and group settings.",
+      "user_body": "Use the buttons below to view quote stats.",
       "language_line": "Language: <b>{language_name}</b>",
       "schedule_line": "Daily pick: <b>{time}</b>; skip if fewer than <b>{min_messages}</b> messages."
     },
@@ -36,9 +36,6 @@
       "source_auto": "Source: detected automatically",
       "source_manual": "Source: set manually",
       "source_default": "Source: English fallback",
-      "source_auto_short": "auto",
-      "source_manual_short": "manual",
-      "source_default_short": "fallback",
       "updated": "Language set to {language_name}.",
       "invalid": "Unsupported language."
     },
@@ -68,9 +65,7 @@
             "language_hint": "<i>Keep your Telegram language or choose one manually.</i>",
             "telegram_language": "Use Telegram language",
             "language_source_manual": "Source: set manually",
-            "language_source_telegram": "Source: Telegram language",
-            "language_source_manual_short": "manual",
-            "language_source_telegram_short": "Telegram"
+            "language_source_telegram": "Source: Telegram language"
         },
         "group": {
             "title": "⚙️ <b>Group settings</b>",
@@ -78,18 +73,17 @@
             "language_auto": "Detect automatically next day",
             "language_auto_updated": "Language will be detected automatically during the next review.",
             "context": {
-                "short": "Context",
+                "short": "Quote context",
                 "label": "Quote context",
                 "title": "What context means",
-                "explain": "Quote context is a few neighboring or reply-linked messages around the winning phrase. It makes the quote understandable without scrolling the chat.",
-                "explain_short": "neighboring or reply-linked messages around the quote"
+                "explain": "Quote context is a few neighboring or reply-linked messages around the winning phrase. It makes the quote understandable without scrolling the chat."
             },
             "boring_notice": {
-                "short": "Boring day",
+                "short": "Boring-day notice",
                 "label": "Send boring-day notice"
             },
             "pin": {
-                "short": "Pinning",
+                "short": "Pin quote",
                 "label": "Pin the published quote"
             },
             "time": {
