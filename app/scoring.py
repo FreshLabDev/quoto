@@ -14,6 +14,7 @@ from .windows import QuoteWindow
 log = setup_logging(logging.getLogger(__name__))
 _QUOTO_HASHTAG_RE = re.compile(r"(?<![\w])#quoto(?![\w])", re.IGNORECASE)
 _PRIMARY_EXCLUDED_CONTENT_TYPES = {"sticker"}
+_MAX_CONTEXT_MESSAGES = 5
 
 
 def create_bar(current: int, total: int = 100, width: int = 6, style: str = "circles") -> str:
@@ -306,19 +307,46 @@ def _valid_context_messages(
         return []
 
     selected_ids = _dedupe_preserve_order(quote_choice.context_ids)
-    if len(selected_ids) <= 1 or len(selected_ids) > 5:
-        return []
-    if primary_message.id not in selected_ids:
+    if not selected_ids:
         return []
 
     by_id = {message.id: message for message in messages}
-    if any(message_id not in by_id for message_id in selected_ids):
+    selected = [by_id[message_id] for message_id in selected_ids if message_id in by_id]
+
+    if primary_message.id not in {message.id for message in selected}:
+        selected.append(primary_message)
+
+    selected = sorted(selected, key=lambda message: _message_position(message, messages))
+    if len(selected) <= 1:
         return []
 
-    selected = [by_id[message_id] for message_id in selected_ids]
-    if _is_contiguous_context(selected, messages) or _is_reply_connected_context(selected):
-        return sorted(selected, key=lambda message: _message_position(message, messages))
-    return []
+    if len(selected) > _MAX_CONTEXT_MESSAGES:
+        selected = _trim_context_around_primary(selected, primary_message, _MAX_CONTEXT_MESSAGES)
+
+    return selected
+
+
+def _trim_context_around_primary(
+    selected: list[Message],
+    primary_message: Message,
+    limit: int,
+) -> list[Message]:
+    primary_index = next(
+        (index for index, message in enumerate(selected) if message.id == primary_message.id),
+        None,
+    )
+    if primary_index is None:
+        return selected[:limit]
+
+    start = primary_index - (limit // 2)
+    end = start + limit
+    if start < 0:
+        start = 0
+        end = limit
+    if end > len(selected):
+        end = len(selected)
+        start = max(0, end - limit)
+    return selected[start:end]
 
 
 def _dedupe_preserve_order(values: list[int]) -> list[int]:
@@ -330,36 +358,6 @@ def _dedupe_preserve_order(values: list[int]) -> list[int]:
         seen.add(value)
         result.append(value)
     return result
-
-
-def _is_contiguous_context(selected: list[Message], messages: list[Message]) -> bool:
-    positions = sorted(_message_position(message, messages) for message in selected)
-    return positions[-1] - positions[0] + 1 == len(positions)
-
-
-def _is_reply_connected_context(selected: list[Message]) -> bool:
-    by_message_id = {message.message_id: message.id for message in selected}
-    graph: dict[int, set[int]] = {message.id: set() for message in selected}
-
-    for message in selected:
-        reply_to_id = getattr(message, "reply_to_message_id", None)
-        if reply_to_id not in by_message_id:
-            continue
-        parent_id = by_message_id[reply_to_id]
-        graph[message.id].add(parent_id)
-        graph[parent_id].add(message.id)
-
-    start = selected[0].id
-    visited: set[int] = set()
-    stack = [start]
-    while stack:
-        current = stack.pop()
-        if current in visited:
-            continue
-        visited.add(current)
-        stack.extend(graph[current] - visited)
-
-    return len(visited) == len(selected)
 
 
 def _message_position(message: Message, messages: list[Message]) -> int:

@@ -287,7 +287,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([message.id for message in result], [1, 3, 5])
 
-    def test_context_validator_rejects_unrelated_noncontiguous_messages(self) -> None:
+    def test_context_validator_trusts_model_selected_noncontiguous_messages(self) -> None:
         messages = [
             _message(1, 11, "root", "Alice"),
             _message(2, 12, "unrelated", "Bob"),
@@ -301,9 +301,26 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
 
         result = scoring._valid_context_messages(choice, messages, messages[2])
 
-        self.assertEqual(result, [])
+        self.assertEqual([message.id for message in result], [1, 3])
 
-    def test_context_validator_rejects_invalid_context_contracts(self) -> None:
+    def test_context_validator_trims_long_context_around_primary(self) -> None:
+        messages = [
+            _message(1, 11, "one", "Alice"),
+            _message(2, 12, "two", "Bob"),
+            _message(3, 13, "three", "Cara"),
+            _message(4, 14, "four", "Dan"),
+            _message(5, 15, "five", "Eve"),
+            _message(6, 16, "six", "Fred"),
+            _message(7, 17, "seven", "Gina"),
+        ]
+
+        too_many = ai.QuoteContextChoice(primary_id=4, context_ids=[1, 2, 3, 4, 5, 6, 7], context_needed=True)
+
+        result = scoring._valid_context_messages(too_many, messages, messages[3])
+
+        self.assertEqual([message.id for message in result], [2, 3, 4, 5, 6])
+
+    def test_context_validator_keeps_usable_model_context_instead_of_killing_it(self) -> None:
         messages = [
             _message(1, 11, "one", "Alice"),
             _message(2, 12, "two", "Bob"),
@@ -313,10 +330,23 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
             _message(6, 16, "six", "Fred"),
         ]
 
-        too_many = ai.QuoteContextChoice(primary_id=6, context_ids=[1, 2, 3, 4, 5, 6], context_needed=True)
+        too_many_at_edge = ai.QuoteContextChoice(
+            primary_id=6,
+            context_ids=[1, 2, 3, 4, 5, 6],
+            context_needed=True,
+        )
         missing_primary = ai.QuoteContextChoice(primary_id=6, context_ids=[1, 2, 3], context_needed=True)
         outside_day = ai.QuoteContextChoice(primary_id=6, context_ids=[4, 5, 999, 6], context_needed=True)
 
-        self.assertEqual(scoring._valid_context_messages(too_many, messages, messages[5]), [])
-        self.assertEqual(scoring._valid_context_messages(missing_primary, messages, messages[5]), [])
-        self.assertEqual(scoring._valid_context_messages(outside_day, messages, messages[5]), [])
+        self.assertEqual(
+            [message.id for message in scoring._valid_context_messages(too_many_at_edge, messages, messages[5])],
+            [2, 3, 4, 5, 6],
+        )
+        self.assertEqual(
+            [message.id for message in scoring._valid_context_messages(missing_primary, messages, messages[5])],
+            [1, 2, 3, 6],
+        )
+        self.assertEqual(
+            [message.id for message in scoring._valid_context_messages(outside_day, messages, messages[5])],
+            [4, 5, 6],
+        )
