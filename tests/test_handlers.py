@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 import os
 from types import SimpleNamespace
 import unittest
@@ -8,8 +8,8 @@ os.environ.setdefault("BOT_TOKEN", "123456:TESTTOKEN1234567890")
 os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
 
-from app import handlers, menu, scoring
-from app.quote_status import STATUS_PUBLISH_FAILED, STATUS_SKIPPED_BORING
+from app import handlers
+from app.quote_status import STATUS_PUBLISH_FAILED
 
 
 class DummyResponse:
@@ -52,51 +52,6 @@ class DummyMessage:
 
 
 class HandlerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_quote_preview_requires_admin(self) -> None:
-        message = DummyMessage()
-
-        with (
-            patch.object(
-                handlers.core,
-                "group_getOrCreate",
-                new=AsyncMock(return_value=SimpleNamespace(language_code="ru")),
-            ),
-            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=False)),
-        ):
-            await handlers.manual_quote_handler(message, SimpleNamespace())
-
-        self.assertEqual(
-            message.answers,
-            ["🔒 Команда /quote с AI-preview доступна только администраторам чата."],
-        )
-
-    async def test_quote_preview_works_for_admin(self) -> None:
-        message = DummyMessage()
-        best_message = SimpleNamespace(
-            text="Лучший тестовый панчлайн",
-            author=SimpleNamespace(name="Alice"),
-        )
-        evaluation = scoring.QuoteEvaluation(
-            best_message=best_message,
-            breakdown=scoring.ScoreBreakdown(reaction=0.2, ai=0.7, length=0.1),
-            message_count=12,
-        )
-
-        with (
-            patch.object(
-                handlers.core,
-                "group_getOrCreate",
-                new=AsyncMock(return_value=SimpleNamespace(language_code="ru")),
-            ),
-            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
-            patch.object(handlers.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
-        ):
-            await handlers.manual_quote_handler(message, SimpleNamespace())
-
-        self.assertIn("Preview текущего дня", message.answers[0])
-        self.assertIn("Лучший тестовый панчлайн", message.answers[0])
-        self.assertIn("Alice", message.answers[0])
-
     async def test_private_quote_details_escape_reason_and_operation_error(self) -> None:
         message = DummyMessage(chat_type="private", language_code="ru")
         detail = {
@@ -117,7 +72,6 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "decision_status": STATUS_PUBLISH_FAILED,
             "decision_reason": "LLM rejected <auto> publication",
             "operation_error": "Telegram timeout & retry",
-            "forced_by_admin": False,
             "quote_day": None,
             "language_code": "uk",
         }
@@ -156,7 +110,6 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "decision_status": STATUS_PUBLISH_FAILED,
             "decision_reason": "LLM rejected",
             "operation_error": None,
-            "forced_by_admin": False,
             "quote_day": None,
             "language_code": "uk",
         }
@@ -199,10 +152,10 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             for row in message.answer_markups[0].inline_keyboard
             for button in row
         ]
-        self.assertIn("🌐 Язык группы", labels)
-        self.assertIn("🔎 Предпросмотр", labels)
-        self.assertIn("🚀 Опубликовать", labels)
-        self.assertIn("Закрыть", labels)
+        self.assertEqual(
+            labels,
+            ["👤 Моя статистика", "📊 Статистика чата", "🌐 Язык группы", "Закрыть"],
+        )
 
     async def test_close_panel_deletes_panel_and_command_message(self) -> None:
         panel = DummyResponse(chat=SimpleNamespace(id=-100123456), message_id=901)
@@ -259,84 +212,6 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Мова групи", panel.edits[0])
         callback.answer.assert_awaited()
 
-    async def test_manual_publish_button_only_shows_confirmation(self) -> None:
-        panel = DummyResponse(
-            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
-            message_id=903,
-        )
-        callback = SimpleNamespace(
-            data=menu.callback_data(777, menu.SCOPE_GROUP, menu.ACTION_MANUAL_PUBLISH),
-            from_user=SimpleNamespace(id=777, language_code="ru"),
-            message=panel,
-            answer=AsyncMock(),
-        )
-        quote = SimpleNamespace(
-            id=61,
-            quote_day=date(2026, 5, 19),
-            decision_status=STATUS_SKIPPED_BORING,
-            score=0.6,
-            reaction_score=0.67,
-            ai_score=0.6,
-            length_score=0.75,
-            text="Просто отказано",
-            author=SimpleNamespace(name="_amti"),
-            decision_reason="Разговор будничный",
-            operation_error=None,
-            group=SimpleNamespace(chat_id=-100123456),
-        )
-
-        with (
-            patch.object(
-                handlers.core,
-                "group_getOrCreate",
-                new=AsyncMock(return_value=SimpleNamespace(id=1, language_code="ru", language_source=None)),
-            ),
-            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
-            patch.object(handlers.core, "get_latest_manual_publish_candidate", new=AsyncMock(return_value=quote)),
-            patch.object(handlers.scheduler, "manual_publish_latest", new=AsyncMock()) as publish_latest,
-        ):
-            await handlers.start_menu_callback(callback, SimpleNamespace())
-
-        publish_latest.assert_not_awaited()
-        self.assertIn("Подтверждение ручной публикации", panel.edits[0])
-        self.assertIn("19 Мая 2026", panel.edits[0])
-        self.assertIn("6.0/10", panel.edits[0])
-        self.assertIn("Просто отказано", panel.edits[0])
-        labels = [
-            button.text
-            for row in panel.edit_markups[0].inline_keyboard
-            for button in row
-        ]
-        self.assertIn("✅ Подтвердить публикацию", labels)
-
-    async def test_manual_publish_confirmation_publishes_exact_quote_id(self) -> None:
-        panel = DummyResponse(
-            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
-            message_id=904,
-        )
-        callback = SimpleNamespace(
-            data=menu.callback_data(777, menu.SCOPE_GROUP, menu.ACTION_MANUAL_PUBLISH_CONFIRM, "61"),
-            from_user=SimpleNamespace(id=777, language_code="ru"),
-            message=panel,
-            answer=AsyncMock(),
-        )
-        bot = SimpleNamespace()
-
-        with (
-            patch.object(
-                handlers.core,
-                "group_getOrCreate",
-                new=AsyncMock(return_value=SimpleNamespace(id=1, language_code="ru", language_source=None)),
-            ),
-            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
-            patch.object(handlers.scheduler, "manual_publish_latest", new=AsyncMock(return_value="published")) as publish_latest,
-        ):
-            await handlers.start_menu_callback(callback, bot)
-
-        publish_latest.assert_awaited_once_with(bot, -100123456, quote_id=61)
-        self.assertIn("Проверяю", panel.edits[0])
-        self.assertIn("Опубликовано вручную", panel.edits[1])
-
     async def test_private_quote_details_renders_context_messages(self) -> None:
         message = DummyMessage(chat_type="private", language_code="ru")
         detail = {
@@ -357,7 +232,6 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "decision_status": STATUS_PUBLISH_FAILED,
             "decision_reason": None,
             "operation_error": None,
-            "forced_by_admin": False,
             "quote_day": None,
             "context_messages": [
                 {"message_id": 9, "author": "Alice <A>", "text": "setup & context", "is_primary": False},

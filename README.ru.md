@@ -3,7 +3,7 @@
 
 [English](./README.md) | Русский
 
-Телеграм-бот, который собирает сообщения за день, показывает безопасный preview кандидата и публикует **Цитату дня** только если день действительно был достойным цитаты.
+Телеграм-бот, который собирает сообщения за день и публикует **Цитату дня** только если день действительно был достойным цитаты.
 
 [![GitHub Stars](https://img.shields.io/github/stars/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=f59e0b&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZjU5ZTBiIiBzdHJva2U9Im5vbmUiPjxwb2x5Z29uIHBvaW50cz0iMTIgMiAxNS4wOSA4LjI2IDIyIDkuMjcgMTcgMTQuMTQgMTguMTggMjEuMDIgMTIgMTcuNzcgNS44MiAyMS4wMiA3IDE0LjE0IDIgOS4yNyA4LjkxIDguMjYgMTIgMiIvPjwvc3ZnPg==)](https://github.com/FreshLabDev/quoto/stargazers)
 ![GitHub Repo Size](https://img.shields.io/github/repo-size/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=a6da95&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM3ODcxNmMiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTIyIDE5YTIgMiAwIDAgMS0yIDJINGEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg1bDIgM2g5YTIgMiAwIDAgMSAyIDJ6Ii8+PC9zdmc+)
@@ -22,7 +22,7 @@
 - 🌐 **Локализованный интерфейс** — поддерживает русский, украинский, английский и немецкий UI
 - 🧭 **Одноразовое определение языка** — если в группе ещё нет сохранённого языка, следующий daily AI-run выберет подходящий язык интерфейса и сохранит его
 - 📏 **Контекст текста** — сохраняет длину сообщения для прозрачных деталей
-- 🧭 **Единая панель `/start`** — статистика, язык группы, предпросмотр, ручная публикация и закрытие живут в inline-кнопках
+- 🧭 **Единая панель `/start`** — статистика, язык группы и закрытие живут в inline-кнопках
 - 📌 **Автозакрепление** — закрепляет цитату-победителя в чате
 - 📊 **Статистика** — статистика чата, личная статистика, топ авторов и разбор рейтинга
 - ⏰ **Планировщик** — настраиваемое время ежедневного выбора цитаты
@@ -124,7 +124,7 @@ WEIGHT_LENGTH=0.0
 
 ### Запуск
 
-Используйте `/start` в ЛС или группе. В группе обычные пользователи видят статистику, а администраторы дополнительно получают язык группы, предпросмотр и ручную публикацию.
+Используйте `/start` в ЛС или группе. В группе обычные пользователи видят статистику, а администраторы дополнительно получают управление языком группы.
 
 ```bash
 python main.py

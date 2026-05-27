@@ -7,7 +7,7 @@ from aiogram import Bot, F, Router, types
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 
-from . import core, i18n, media, menu, scheduler, scoring
+from . import core, i18n, media, menu, scoring
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
@@ -17,7 +17,6 @@ from .quote_status import (
     STATUS_PUBLISH_UNKNOWN,
     STATUS_SKIPPED_BORING,
 )
-from .windows import get_open_window
 
 router = Router()
 log = setup_logging(logging.getLogger(__name__))
@@ -212,104 +211,6 @@ def _decision_status_label(language: str, status: str) -> str:
     return status_map.get(status, status)
 
 
-def _score10(value: object) -> float:
-    return float(value or 0.0) * 10
-
-
-def _format_local_date(language: str, value: object) -> str:
-    if not value:
-        return "-"
-    return f"{value.day} {i18n.month_name(language, value.month)} {value.year}"
-
-
-def _short_preview(value: object, limit: int = 220) -> str:
-    text = " ".join(str(value or "").split())
-    if len(text) <= limit:
-        return text
-    return text[: limit - 3].rstrip() + "..."
-
-
-def _format_manual_publish_confirm_text(language: str, quote) -> str:
-    author_name = quote.author.name if getattr(quote, "author", None) else i18n.t(language, "common.anonymous")
-    quote_text = _short_preview(getattr(quote, "text", ""))
-    parts = [
-        i18n.t(language, "manual_publish.confirm_title"),
-        "",
-        i18n.t(language, "manual_publish.confirm_scope"),
-        "",
-        "<blockquote>"
-        + "\n".join(
-            [
-                i18n.t(language, "manual_publish.confirm_day", date=_format_local_date(language, quote.quote_day)),
-                i18n.t(
-                    language,
-                    "manual_publish.confirm_status",
-                    status=_decision_status_label(language, quote.decision_status),
-                ),
-                i18n.t(language, "manual_publish.confirm_score", score=_score10(quote.score)),
-                i18n.t(
-                    language,
-                    "manual_publish.confirm_parts",
-                    reactions=_score10(quote.reaction_score),
-                    ai=_score10(quote.ai_score),
-                    length=_score10(quote.length_score),
-                ),
-            ]
-        )
-        + "</blockquote>",
-        "",
-        i18n.t(language, "manual_publish.confirm_quote", quote=_html(quote_text)),
-        i18n.t(language, "manual_publish.confirm_author", author=_html(author_name)),
-    ]
-
-    if getattr(quote, "decision_reason", None):
-        parts.append(i18n.t(language, "manual_publish.confirm_reason", reason=_html(quote.decision_reason)))
-
-    if getattr(quote, "operation_error", None):
-        parts.append(i18n.t(language, "manual_publish.confirm_error", error=_html(quote.operation_error)))
-
-    parts.extend(["", i18n.t(language, "manual_publish.confirm_warning")])
-    return "\n".join(parts)
-
-
-async def _build_quote_preview_text(chat_id: int, language: str) -> str:
-    window = get_open_window()
-    evaluation = await scoring.pick_best_quote(chat_id, window)
-
-    if evaluation.message_count == 0 or not evaluation.best_message:
-        return i18n.t(language, "quote_preview.empty")
-
-    author_name = (
-        evaluation.best_message.author.name
-        if evaluation.best_message.author
-        else i18n.t(language, "common.anonymous")
-    )
-    parts = [
-        i18n.t(language, "quote_preview.title"),
-        "",
-        f"💬 <i>«{_html(evaluation.best_message.text)}»</i>",
-        f"— <b>{_html(author_name)}</b>",
-        "",
-        i18n.t(language, "quote_preview.messages", count=evaluation.message_count),
-        i18n.t(language, "quote_preview.score", score=evaluation.breakdown.total * 10),
-    ]
-
-    if evaluation.message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
-        parts.append(
-            "\n"
-            + i18n.t(
-                language,
-                "quote_preview.subthreshold",
-                time=_time_label(),
-                min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
-            )
-        )
-    else:
-        parts.append("\n" + i18n.t(language, "quote_preview.ai_verdict", time=_time_label()))
-
-    return "\n".join(parts)
-
-
 async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> None:
     if not message.from_user:
         return
@@ -464,9 +365,6 @@ async def private_handler(message: types.Message, command: CommandObject = None)
                 ai_text = detail["ai_best_text"][:100] + ("..." if len(detail["ai_best_text"]) > 100 else "")
                 text += f"💡 <b>{i18n.t(language, 'details.ai_choice')}:</b> <i>«{_html(ai_text)}»</i>\n"
 
-            if detail.get("forced_by_admin"):
-                text += f"{i18n.t(language, 'details.forced')}\n"
-
             await message.answer(text)
             return
 
@@ -476,79 +374,6 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 @router.message(Command("start"), F.chat.type.in_({"group", "supergroup"}))
 async def group_start_handler(message: types.Message, bot: Bot):
     await _send_start_menu(message, bot)
-
-
-async def manual_quote_handler(message: types.Message, bot: Bot):
-    if not message.from_user:
-        return
-
-    group = await core.group_getOrCreate(message.chat)
-    language = i18n.group_language(group)
-    if not await _is_chat_admin(bot, message.chat.id, message.from_user.id):
-        await message.answer(i18n.t(language, "admin.quote_only"))
-        return
-
-    window = get_open_window()
-    evaluation = await scoring.pick_best_quote(message.chat.id, window)
-
-    if evaluation.message_count == 0 or not evaluation.best_message:
-        await message.answer(i18n.t(language, "quote_preview.empty"))
-        return
-
-    author_name = evaluation.best_message.author.name if evaluation.best_message.author else i18n.t(language, "common.anonymous")
-    parts = [
-        i18n.t(language, "quote_preview.title"),
-        "",
-        f"💬 <i>«{_html(evaluation.best_message.text)}»</i>",
-        f"— <b>{_html(author_name)}</b>",
-        "",
-        i18n.t(language, "quote_preview.messages", count=evaluation.message_count),
-        i18n.t(language, "quote_preview.score", score=evaluation.breakdown.total * 10),
-    ]
-
-    if evaluation.message_count < settings.MIN_MESSAGES_FOR_AUTO_REVIEW:
-        parts.append(
-            "\n" + i18n.t(
-                language,
-                "quote_preview.subthreshold",
-                time=_time_label(),
-                min_messages=settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
-            )
-        )
-    else:
-        parts.append(
-            "\n" + i18n.t(language, "quote_preview.ai_verdict", time=_time_label())
-        )
-
-    await message.answer("\n".join(parts))
-
-
-async def manual_publish_handler(message: types.Message, bot: Bot):
-    if not message.from_user:
-        return
-
-    group = await core.group_getOrCreate(message.chat)
-    language = i18n.group_language(group)
-    if not await _is_chat_admin(bot, message.chat.id, message.from_user.id):
-        await message.answer(i18n.t(language, "admin.admin_only"))
-        return
-
-    processing = await message.answer(i18n.t(language, "manual_publish.checking"))
-    result = await scheduler.manual_publish_latest(bot, message.chat.id)
-
-    if result == "nothing":
-        await processing.edit_text(i18n.t(language, "manual_publish.nothing"))
-        return
-
-    if result == "already_sent":
-        await processing.edit_text(i18n.t(language, "manual_publish.already_sent"))
-        return
-
-    if result == "failed":
-        await processing.edit_text(i18n.t(language, "manual_publish.failed"))
-        return
-
-    await processing.delete()
 
 
 async def chat_stats_handler(message: types.Message):
@@ -699,9 +524,6 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
     if parsed.action in {
         menu.ACTION_GROUP_LANGUAGE,
         menu.ACTION_SET_GROUP_LANGUAGE,
-        menu.ACTION_QUOTE_PREVIEW,
-        menu.ACTION_MANUAL_PUBLISH,
-        menu.ACTION_MANUAL_PUBLISH_CONFIRM,
     } and not is_admin:
         await callback.answer(i18n.t(language, "admin.admin_only"), show_alert=True)
         return
@@ -757,76 +579,6 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
             menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
         )
         await callback.answer()
-        return
-
-    if parsed.action == menu.ACTION_QUOTE_PREVIEW:
-        text = await _build_quote_preview_text(panel.chat.id, language)
-        await _edit_panel(
-            callback,
-            text,
-            menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
-        )
-        await callback.answer()
-        return
-
-    if parsed.action == menu.ACTION_MANUAL_PUBLISH:
-        await callback.answer()
-        quote = await core.get_latest_manual_publish_candidate(panel.chat.id)
-        if not quote or not getattr(quote, "group", None):
-            await _edit_panel(
-                callback,
-                i18n.t(language, "manual_publish.nothing"),
-                menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
-            )
-            return
-
-        if (
-            quote.decision_status == STATUS_PUBLISH_UNKNOWN
-            and scheduler._publish_unknown_already_sent(quote.operation_error)
-        ):
-            await _edit_panel(
-                callback,
-                i18n.t(language, "manual_publish.already_sent"),
-                menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
-            )
-            return
-
-        await _edit_panel(
-            callback,
-            _format_manual_publish_confirm_text(language, quote),
-            menu.build_manual_publish_confirm_keyboard(
-                owner_id=parsed.owner_id,
-                language=language,
-                quote_id=quote.id,
-            ),
-        )
-        return
-
-    if parsed.action == menu.ACTION_MANUAL_PUBLISH_CONFIRM:
-        await callback.answer()
-        try:
-            quote_id = int(parsed.payload or "")
-        except ValueError:
-            await _edit_panel(
-                callback,
-                i18n.t(language, "manual_publish.nothing"),
-                menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
-            )
-            return
-
-        await _edit_panel(callback, i18n.t(language, "manual_publish.checking"), None)
-        result = await scheduler.manual_publish_latest(bot, panel.chat.id, quote_id=quote_id)
-        result_key = {
-            "nothing": "manual_publish.nothing",
-            "already_sent": "manual_publish.already_sent",
-            "failed": "manual_publish.failed",
-            "published": "manual_publish.done",
-        }.get(result, "manual_publish.failed")
-        await _edit_panel(
-            callback,
-            i18n.t(language, result_key),
-            menu.build_back_close_keyboard(parsed.owner_id, menu.SCOPE_GROUP, language),
-        )
         return
 
     await callback.answer()

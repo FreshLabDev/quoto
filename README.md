@@ -3,7 +3,7 @@
 
 English | [Русский](./README.ru.md)
 
-A Telegram bot that tracks quote days, previews quote candidates, and only publishes a **quote of the day** when the conversation was actually worth quoting.
+A Telegram bot that tracks quote days and only publishes a **quote of the day** when the conversation was actually worth quoting.
 
 [![GitHub Stars](https://img.shields.io/github/stars/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=f59e0b&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZjU5ZTBiIiBzdHJva2U9Im5vbmUiPjxwb2x5Z29uIHBvaW50cz0iMTIgMiAxNS4wOSA4LjI2IDIyIDkuMjcgMTcgMTQuMTQgMTguMTggMjEuMDIgMTIgMTcuNzcgNS44MiAyMS4wMiA3IDE0LjE0IDIgOS4yNyA4LjkxIDguMjYgMTIgMiIvPjwvc3ZnPg==)](https://github.com/FreshLabDev/quoto/stargazers)
 ![GitHub Repo Size](https://img.shields.io/github/repo-size/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=a6da95&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM3ODcxNmMiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTIyIDE5YTIgMiAwIDAgMS0yIDJINGEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg1bDIgM2g5YTIgMiAwIDAgMSAyIDJ6Ii8+PC9zdmc+)
@@ -22,7 +22,7 @@ A Telegram bot that tracks quote days, previews quote candidates, and only publi
 - 🌐 **Localized Interface** — supports Russian, Ukrainian, English, and German UI text
 - 🧭 **One-Time Language Detection** — if a group has no saved language, the next daily AI run chooses the best interface language and stores it
 - 📏 **Text Context** — stores message length signals for transparent details
-- 🧭 **Single `/start` Control Panel** — stats, group language, preview, manual publishing, and close cleanup live behind inline buttons
+- 🧭 **Single `/start` Control Panel** — stats, group language, and close cleanup live behind inline buttons
 - 📌 **Auto-Pin** — pins the winning quote in the chat
 - 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
 - ⏰ **Scheduler** — configurable daily time for quote selection
@@ -124,7 +124,7 @@ WEIGHT_LENGTH=0.0
 
 ### Running
 
-Use `/start` in a private chat or group. In groups, regular users see stats buttons, while admins also get group language, preview, and manual publish controls.
+Use `/start` in a private chat or group. In groups, regular users see stats buttons, while admins also get group language controls.
 
 ```bash
 python main.py

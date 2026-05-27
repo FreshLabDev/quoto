@@ -50,14 +50,6 @@ class _UpdateSession(_DummySession):
 
 
 class CoreTests(unittest.IsolatedAsyncioTestCase):
-    async def test_manual_publish_candidate_filter_rejects_internal_reports(self) -> None:
-        internal = SimpleNamespace(text="📊 Подробности дня #60\n💬 «Просто отказано»")
-        reason_line = SimpleNamespace(text="💭 Причина решения: обычный день")
-        normal = SimpleNamespace(text="Просто отказано")
-
-        self.assertIsNone(core._first_visible_manual_publish_candidate([internal, reason_line]))
-        self.assertIs(core._first_visible_manual_publish_candidate([internal, normal]), normal)
-
     async def test_save_message_uses_telegram_message_timestamp(self) -> None:
         session = _DummySession()
         message_date = datetime(2026, 3, 27, 20, 30, tzinfo=timezone.utc)

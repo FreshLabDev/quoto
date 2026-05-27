@@ -17,9 +17,6 @@ ACTION_GROUP_LANGUAGE = "lang"
 ACTION_SET_GROUP_LANGUAGE = "setlang"
 ACTION_CHAT_STATS = "chatstats"
 ACTION_USER_STATS = "userstats"
-ACTION_QUOTE_PREVIEW = "preview"
-ACTION_MANUAL_PUBLISH = "publish"
-ACTION_MANUAL_PUBLISH_CONFIRM = "publish_ok"
 
 LANGUAGE_BUTTON_ORDER = ("uk", "ru", "en", "de")
 
@@ -147,16 +144,6 @@ def build_group_home(
                         callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_LANGUAGE),
                     )
                 ],
-                [
-                    types.InlineKeyboardButton(
-                        text=i18n.t(language, "menu.button.preview"),
-                        callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_QUOTE_PREVIEW),
-                    ),
-                    types.InlineKeyboardButton(
-                        text=i18n.t(language, "menu.button.publish"),
-                        callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_MANUAL_PUBLISH),
-                    ),
-                ],
             ]
         )
     keyboard_rows.append([_close_button(owner_id, SCOPE_GROUP, language)])
@@ -217,33 +204,6 @@ def build_back_close_keyboard(owner_id: int, scope: str, language: str) -> types
                 _back_button(owner_id, scope, language),
                 _close_button(owner_id, scope, language),
             ]
-        ]
-    )
-
-
-def build_manual_publish_confirm_keyboard(
-    *,
-    owner_id: int,
-    language: str,
-    quote_id: int,
-) -> types.InlineKeyboardMarkup:
-    return types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=i18n.t(language, "menu.button.confirm_publish"),
-                    callback_data=callback_data(
-                        owner_id,
-                        SCOPE_GROUP,
-                        ACTION_MANUAL_PUBLISH_CONFIRM,
-                        str(quote_id),
-                    ),
-                )
-            ],
-            [
-                _back_button(owner_id, SCOPE_GROUP, language),
-                _close_button(owner_id, SCOPE_GROUP, language),
-            ],
         ]
     )
 

@@ -14,7 +14,6 @@ from .config import settings, setup_logging
 from .db import SessionLocal
 from .models import Group, Quote
 from .quote_status import (
-    MANUAL_PUBLISHABLE_STATUSES,
     STATUS_BORING_NOTICE_FAILED,
     STATUS_BORING_NOTICE_UNKNOWN,
     STATUS_NOTIFYING_BORING,
@@ -22,7 +21,6 @@ from .quote_status import (
     STATUS_PUBLISH_FAILED,
     STATUS_PUBLISH_UNKNOWN,
     STATUS_PUBLISHING,
-    STATUS_SKIPPED_BORING,
 )
 from .windows import QuoteWindow, get_closed_window, utc_now
 from .windows import quote_timezone
@@ -30,11 +28,6 @@ from .windows import quote_timezone
 log = setup_logging(logging.getLogger(__name__))
 
 _STALE_QUOTE_AFTER = timedelta(minutes=15)
-_MANUAL_PUBLISH_NOTHING = "nothing"
-_MANUAL_PUBLISH_PUBLISHED = "published"
-_MANUAL_PUBLISH_FAILED = "failed"
-_MANUAL_PUBLISH_ALREADY_SENT = "already_sent"
-_PUBLISH_UNKNOWN_SENT_PREFIX = "Telegram message was sent, but DB finalization failed:"
 _MEDIA_COPY_CONTENT_TYPES = {"photo", "image", "video", "animation", "video_note", "voice", "audio"}
 _MEDIA_CAPTION_LIMIT = 1024
 
@@ -83,12 +76,8 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
 
     existing = await core.get_quote_for_day(group.id, window.quote_day)
     if existing:
-        if existing and existing.decision_status in MANUAL_PUBLISHABLE_STATUSES:
-            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} ждёт ручного решения ({existing.decision_status})")
-            return
-        if existing:
-            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже обработан ({existing.decision_status})")
-            return
+        log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже обработан ({existing.decision_status})")
+        return
 
     message_count = await core.count_window_messages(group.chat_id, window)
 
@@ -187,7 +176,6 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             quote=quote,
             author_name=author_name,
             breakdown=evaluation.breakdown,
-            forced_by_admin=False,
             clear_window_after=True,
         )
         return
@@ -205,63 +193,6 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
         return
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
-
-
-async def manual_publish_latest(bot: Bot, chat_id: int, quote_id: int | None = None) -> str:
-    await _recover_stale_quotes_for_chat(chat_id)
-
-    latest = (
-        await core.get_manual_publish_candidate(chat_id, quote_id)
-        if quote_id is not None
-        else await core.get_latest_manual_publish_candidate(chat_id)
-    )
-    if not latest or not latest.group:
-        return _MANUAL_PUBLISH_NOTHING
-
-    if (
-        latest.decision_status == STATUS_PUBLISH_UNKNOWN
-        and _publish_unknown_already_sent(latest.operation_error)
-    ):
-        return _MANUAL_PUBLISH_ALREADY_SENT
-
-    quote, previous_status = (
-        await core.claim_manual_publish_candidate(chat_id, quote_id)
-        if quote_id is not None
-        else await core.claim_latest_manual_publish_candidate(chat_id)
-    )
-    if not quote or not quote.group:
-        return _MANUAL_PUBLISH_NOTHING
-
-    author_name = quote.author.name if quote.author else "Аноним"
-    breakdown = scoring.ScoreBreakdown(
-        reaction=quote.reaction_score or 0.0,
-        ai=quote.ai_score or 0.0,
-        length=quote.length_score or 0.0,
-        reaction_count=quote.reaction_count or 0,
-        ai_model=quote.ai_model or "",
-        ai_best_text=quote.ai_best_text,
-    )
-
-    clear_window_after = _manual_publish_clears_window(previous_status)
-
-    published = await _publish_quote_message(
-        bot=bot,
-        group=quote.group,
-        quote=quote,
-        author_name=author_name,
-        breakdown=breakdown,
-        forced_by_admin=True,
-        clear_window_after=clear_window_after,
-    )
-    return _MANUAL_PUBLISH_PUBLISHED if published else _MANUAL_PUBLISH_FAILED
-
-
-def _manual_publish_clears_window(previous_status: str | None) -> bool:
-    return previous_status != STATUS_SKIPPED_BORING
-
-
-def _publish_unknown_already_sent(operation_error: str | None) -> bool:
-    return bool(operation_error and operation_error.startswith(_PUBLISH_UNKNOWN_SENT_PREFIX))
 
 
 async def _recover_stale_quotes_for_chat(chat_id: int) -> int:
@@ -284,7 +215,6 @@ async def _publish_quote_message(
     quote: Quote,
     author_name: str,
     breakdown: scoring.ScoreBreakdown,
-    forced_by_admin: bool,
     clear_window_after: bool,
 ) -> bool:
     language = i18n.group_language(group)
@@ -296,7 +226,6 @@ async def _publish_quote_message(
 
     msg_link = _message_link(group.chat_id, quote.message_id)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
-    forced_line = f"\n{i18n.t(language, 'quote_post.forced')}" if forced_by_admin else ""
     text = _build_quote_post_text(
         language=language,
         quote=quote,
@@ -304,7 +233,6 @@ async def _publish_quote_message(
         info_line=info_line,
         msg_link=msg_link,
         details_link=details_link,
-        forced_line=forced_line,
     )
 
     media_copy_error: str | None = None
@@ -322,7 +250,6 @@ async def _publish_quote_message(
                         info_line=info_line,
                         msg_link=msg_link,
                         details_link=details_link,
-                        forced_line=forced_line,
                         media_caption=True,
                     ),
                 )
@@ -345,7 +272,6 @@ async def _publish_quote_message(
         await core.update_quote_publication(
             quote_id=quote.id,
             bot_message_id=sent.message_id,
-            forced_by_admin=forced_by_admin,
             decision_reason=quote.decision_reason,
         )
     except Exception as e:
@@ -510,7 +436,6 @@ def _build_quote_post_text(
     info_line: str,
     msg_link: str,
     details_link: str,
-    forced_line: str,
     media_caption: bool = False,
 ) -> str:
     quote_text = _display_quote_text(quote.text, media_caption=media_caption)
@@ -533,7 +458,6 @@ def _build_quote_post_text(
         f"{info_line}\n\n"
         f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
         f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
-        f"{forced_line}"
     )
     if not media_caption or len(text) <= _MEDIA_CAPTION_LIMIT:
         return text
@@ -549,7 +473,6 @@ def _build_quote_post_text(
             f"{info_line}\n\n"
             f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
             f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
-            f"{forced_line}"
         )
         if len(text) <= _MEDIA_CAPTION_LIMIT:
             return text
@@ -560,7 +483,6 @@ def _build_quote_post_text(
         f"{info_line}\n\n"
         f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
         f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
-        f"{forced_line}"
     )
 
 

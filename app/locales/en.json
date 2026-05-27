@@ -13,9 +13,6 @@
       "user_stats": "👤 My stats",
       "chat_stats": "📊 Chat stats",
       "group_language": "🌐 Group language",
-      "preview": "🔎 Preview",
-      "publish": "🚀 Publish latest",
-      "confirm_publish": "✅ Confirm publish",
       "back": "‹ Back",
       "close": "Close"
     },
@@ -53,11 +50,10 @@
     "boring_notice_unknown": "⚠️ Boring-day state is unknown"
   },
   "admin": {
-    "quote_only": "🔒 /quote with AI preview is available only to chat admins.",
     "admin_only": "🔒 This command is available only to chat admins."
   },
   "chat_member": {
-    "added": "👋 Hi, <b>{chat_title}</b>!\n\nI'm <b>Quoto</b>. At <b>{time}</b>, I pick and publish the quote of the day.\n\nUse /start to open stats, language, preview, and manual publishing controls.",
+    "added": "👋 Hi, <b>{chat_title}</b>!\n\nI'm <b>Quoto</b>. At <b>{time}</b>, I pick and publish the quote of the day.\n\nUse /start to open stats and group language.",
     "need_admin": "⚠️ Please <b>make me an administrator</b> with permission to <i>pin</i> messages so I can publish the result.",
     "admin_granted": "✅ <b>Thanks</b> for making me an administrator!"
   },
@@ -74,37 +70,10 @@
     "length": "Length",
     "decision_reason": "Decision reason",
     "operation_error": "Technical error",
-    "ai_choice": "AI choice",
-    "forced": "⚙️ <i>Published manually by an admin.</i>"
+    "ai_choice": "AI choice"
   },
   "start": {
     "group": "🏆 <b>Quoto — Quote of the Day</b>\n\nI collect messages between two cutoff points and choose the winner at the end of the day.\n\nUse /start to open the control panel."
-  },
-  "quote_preview": {
-    "empty": "📭 There are no messages to preview for the current day yet.",
-    "title": "🔎 <b>Current day preview</b>",
-    "messages": "📨 Messages today: <b>{count}</b>",
-    "score": "⭐ Current score: <b>{score:.1f}/10</b>",
-    "subthreshold": "🤫 If there are fewer than {min_messages} messages by {time}, the day will be skipped without publishing.",
-    "ai_verdict": "🤖 At {time}, AI will also decide whether the whole day is worth publishing."
-  },
-  "manual_publish": {
-    "checking": "⏳ Checking whether there is a day to publish manually...",
-    "nothing": "📭 There is no boring-day or failed day available for manual publishing.",
-    "already_sent": "⚠️ The latest day was already sent to Telegram, but the DB did not confirm the final status. I did not publish a duplicate.",
-    "failed": "❌ Manual publishing failed. Check the bot logs.",
-    "done": "✅ Published manually.",
-    "confirm_title": "⚠️ <b>Confirm manual publish</b>",
-    "confirm_scope": "This will publish the latest saved day that was skipped as boring or failed to publish automatically.",
-    "confirm_day": "Day: <b>{date}</b>",
-    "confirm_status": "Status: <b>{status}</b>",
-    "confirm_score": "Score: <b>{score:.1f}/10</b>",
-    "confirm_parts": "Metadata: reactions {reactions:.1f}/10, AI {ai:.1f}/10, length {length:.1f}/10",
-    "confirm_quote": "💬 Quote: <i>«{quote}»</i>",
-    "confirm_author": "— <b>{author}</b>",
-    "confirm_reason": "💭 Reason: {reason}",
-    "confirm_error": "⚠️ Error: {error}",
-    "confirm_warning": "Check the text above. The next button immediately sends this post to the group."
   },
   "stats": {
     "missing": "📊 Stats are not available yet — the bot has not registered this group.",
@@ -134,8 +103,7 @@
       "video": "🎬 <b>Video of the Day</b>",
       "voice": "🎙 <b>Voice Message of the Day</b>",
       "audio": "🎧 <b>Audio of the Day</b>"
-    },
-    "forced": "⚙️ <i>Published manually by an admin.</i>"
+    }
   },
   "boring": {
     "title": "😴 <b>Today was a boring day</b>",

@@ -13,9 +13,6 @@
       "user_stats": "👤 Meine Statistik",
       "chat_stats": "📊 Chat-Statistik",
       "group_language": "🌐 Gruppensprache",
-      "preview": "🔎 Vorschau",
-      "publish": "🚀 Veröffentlichen",
-      "confirm_publish": "✅ Veröffentlichung bestätigen",
       "back": "‹ Zurück",
       "close": "Schließen"
     },
@@ -53,11 +50,10 @@
     "boring_notice_unknown": "⚠️ Status des langweiligen Tages ist unklar"
   },
   "admin": {
-    "quote_only": "🔒 /quote mit AI-Preview ist nur für Chat-Admins verfügbar.",
     "admin_only": "🔒 Dieser Befehl ist nur für Chat-Admins verfügbar."
   },
   "chat_member": {
-    "added": "👋 Hallo, <b>{chat_title}</b>!\n\nIch bin <b>Quoto</b>. Um <b>{time}</b> wähle und veröffentliche ich das Zitat des Tages.\n\nNutze /start, um Statistik, Sprache, Vorschau und manuelle Veröffentlichung zu öffnen.",
+    "added": "👋 Hallo, <b>{chat_title}</b>!\n\nIch bin <b>Quoto</b>. Um <b>{time}</b> wähle und veröffentliche ich das Zitat des Tages.\n\nNutze /start, um Statistik und Gruppensprache zu öffnen.",
     "need_admin": "⚠️ Bitte <b>mache mich zum Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i>, damit ich das Ergebnis veröffentlichen kann.",
     "admin_granted": "✅ <b>Danke</b>, dass du mich zum Administrator gemacht hast!"
   },
@@ -74,37 +70,10 @@
     "length": "Länge",
     "decision_reason": "Entscheidungsgrund",
     "operation_error": "Technischer Fehler",
-    "ai_choice": "KI-Auswahl",
-    "forced": "⚙️ <i>Manuell von einem Admin veröffentlicht.</i>"
+    "ai_choice": "KI-Auswahl"
   },
   "start": {
     "group": "🏆 <b>Quoto — Zitat des Tages</b>\n\nIch sammle Nachrichten zwischen zwei Cutoff-Zeitpunkten und wähle am Tagesende den Gewinner.\n\nNutze /start, um die Steuerung zu öffnen."
-  },
-  "quote_preview": {
-    "empty": "📭 Für den aktuellen Tag gibt es noch keine Nachrichten für ein Preview.",
-    "title": "🔎 <b>Preview des aktuellen Tages</b>",
-    "messages": "📨 Nachrichten heute: <b>{count}</b>",
-    "score": "⭐ Aktueller Score: <b>{score:.1f}/10</b>",
-    "subthreshold": "🤫 Wenn es bis {time} weniger als {min_messages} Nachrichten gibt, wird der Tag ohne Veröffentlichung übersprungen.",
-    "ai_verdict": "🤖 Um {time} entscheidet die KI zusätzlich, ob der ganze Tag eine Veröffentlichung wert ist."
-  },
-  "manual_publish": {
-    "checking": "⏳ Prüfe, ob es einen Tag für manuelle Veröffentlichung gibt...",
-    "nothing": "📭 Es gibt keinen langweiligen oder fehlgeschlagenen Tag für manuelle Veröffentlichung.",
-    "already_sent": "⚠️ Der letzte Tag wurde bereits an Telegram gesendet, aber die DB hat den finalen Status nicht bestätigt. Ich veröffentliche kein Duplikat.",
-    "failed": "❌ Manuelle Veröffentlichung fehlgeschlagen. Prüfe die Bot-Logs.",
-    "done": "✅ Manuell veröffentlicht.",
-    "confirm_title": "⚠️ <b>Manuelle Veröffentlichung bestätigen</b>",
-    "confirm_scope": "Veröffentlicht wird der letzte gespeicherte Tag, der als langweilig übersprungen wurde oder automatisch nicht veröffentlicht werden konnte.",
-    "confirm_day": "Tag: <b>{date}</b>",
-    "confirm_status": "Status: <b>{status}</b>",
-    "confirm_score": "Bewertung: <b>{score:.1f}/10</b>",
-    "confirm_parts": "Metadaten: Reaktionen {reactions:.1f}/10, KI {ai:.1f}/10, Länge {length:.1f}/10",
-    "confirm_quote": "💬 Zitat: <i>«{quote}»</i>",
-    "confirm_author": "— <b>{author}</b>",
-    "confirm_reason": "💭 Grund: {reason}",
-    "confirm_error": "⚠️ Fehler: {error}",
-    "confirm_warning": "Prüfe den Text oben. Die nächste Taste sendet diesen Post sofort in die Gruppe."
   },
   "stats": {
     "missing": "📊 Statistik ist noch nicht verfügbar — der Bot hat diese Gruppe noch nicht registriert.",
@@ -134,8 +103,7 @@
       "video": "🎬 <b>Video des Tages</b>",
       "voice": "🎙 <b>Sprachnachricht des Tages</b>",
       "audio": "🎧 <b>Audio des Tages</b>"
-    },
-    "forced": "⚙️ <i>Manuell von einem Admin veröffentlicht.</i>"
+    }
   },
   "boring": {
     "title": "😴 <b>Heute war ein langweiliger Tag</b>",
