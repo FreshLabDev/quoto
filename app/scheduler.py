@@ -247,9 +247,9 @@ async def _publish_quote_message(
     pin_enabled: bool = True,
 ) -> bool:
     language = i18n.group_language(group)
-    info_parts = [breakdown.stars]
+    info_parts = [f"<i>{breakdown.stars}</i>"]
     if breakdown.reaction_count:
-        info_parts.append(f"{breakdown.reaction_count}❤️")
+        info_parts.append(f"{breakdown.reaction_count} ❤️")
     info_parts.append(_format_quote_day(quote.quote_day, language))
     info_line = " · ".join(info_parts)
 
@@ -349,11 +349,15 @@ async def _send_boring_notice(
 ) -> None:
     language = i18n.group_language(group)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
-    reason_line = f"\n💭 {escape(quote.decision_reason)}" if quote.decision_reason else ""
+    reason_block = (
+        f"\n\n<blockquote><i>{escape(quote.decision_reason)}</i></blockquote>"
+        if quote.decision_reason
+        else ""
+    )
     text = (
         f"{i18n.t(language, 'boring.title')}\n\n"
-        f"{i18n.t(language, 'boring.body')}"
-        f"{reason_line}\n\n"
+        f"<i>{i18n.t(language, 'boring.body')}</i>"
+        f"{reason_block}\n\n"
         f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
     )
 
@@ -471,49 +475,40 @@ def _build_quote_post_text(
     quote_text = _display_quote_text(quote.text, media_caption=media_caption)
     safe_author_name = escape(author_name)
     context_lines = _load_quote_context_lines(quote)
-
-    if context_lines and not media_caption:
-        quote_body = _format_context_quote_body(context_lines)
-    elif context_lines:
-        quote_body = _format_context_quote_body(context_lines, text_limit=140)
-    else:
-        quote_body = (
-            f"💬 <i>«{escape(quote_text)}»</i>\n"
-            f"— <b>{safe_author_name}</b>"
-        )
-
-    text = (
-        f"{_quote_day_title(quote, language)}\n\n"
-        f"{quote_body}\n\n"
-        f"{info_line}\n\n"
+    footer = (
         f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
         f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
     )
+
+    def _compose(body: str) -> str:
+        return (
+            f"{_quote_day_title(quote, language)}\n\n"
+            f"<blockquote>{body}</blockquote>\n\n"
+            f"{info_line}\n\n"
+            f"{footer}"
+        )
+
+    if context_lines and not media_caption:
+        body = _format_context_quote_body(context_lines)
+    elif context_lines:
+        body = _format_context_quote_body(context_lines, text_limit=140)
+    else:
+        body = f"<i>«{escape(quote_text)}»</i>\n— <b>{safe_author_name}</b>"
+
+    text = _compose(body)
     if not media_caption or len(text) <= _MEDIA_CAPTION_LIMIT:
         return text
 
     for limit in (320, 220, 140, 80):
         shortened = (
-            f"💬 <i>«{escape(_truncate_text(str(quote.text or ''), limit))}»</i>\n"
+            f"<i>«{escape(_truncate_text(str(quote.text or ''), limit))}»</i>\n"
             f"— <b>{safe_author_name}</b>"
         )
-        text = (
-            f"{_quote_day_title(quote, language)}\n\n"
-            f"{shortened}\n\n"
-            f"{info_line}\n\n"
-            f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
-            f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
-        )
+        text = _compose(shortened)
         if len(text) <= _MEDIA_CAPTION_LIMIT:
             return text
 
-    return (
-        f"{_quote_day_title(quote, language)}\n\n"
-        f"— <b>{safe_author_name}</b>\n\n"
-        f"{info_line}\n\n"
-        f"<a href='{msg_link}'>{i18n.t(language, 'common.original')}</a> · "
-        f"<a href='{details_link}'>{i18n.t(language, 'common.details')}</a> · #quoto"
-    )
+    return _compose(f"— <b>{safe_author_name}</b>")
 
 
 def _quote_day_title(quote: Quote, language: str) -> str:
@@ -557,7 +552,7 @@ def _format_context_quote_body(context_lines: list[dict[str, object]], text_limi
             line_text = _truncate_text(line_text, text_limit)
         text = escape(line_text)
         if line.get("is_primary"):
-            rendered.append(f"💬 <b>{author}:</b> <i>«{text}»</i>")
+            rendered.append(f"<b>{author}:</b> <i>«{text}»</i>")
         else:
             rendered.append(f"<b>{author}:</b> {text}")
     return "\n".join(rendered)

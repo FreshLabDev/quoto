@@ -362,7 +362,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         copy_kwargs = bot.copy_message.await_args.kwargs
         self.assertEqual(copy_kwargs["from_chat_id"], self.group.chat_id)
         self.assertEqual(copy_kwargs["message_id"], 57)
-        self.assertIn("📷 <b>Photo of the Day</b>", copy_kwargs["caption"])
+        self.assertIn("🏆 <b>Photo of the Day</b>", copy_kwargs["caption"])
         update_publication.assert_awaited_once_with(
             quote_id=quote.id,
             bot_message_id=204,
@@ -405,7 +405,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         bot.copy_message.assert_awaited_once()
         bot.send_message.assert_awaited_once()
         sent_text = bot.send_message.await_args.kwargs["text"]
-        self.assertIn("🎙 <b>Voice Message of the Day</b>", sent_text)
+        self.assertIn("🏆 <b>Voice of the Day</b>", sent_text)
         update_publication.assert_awaited_once_with(
             quote_id=quote.id,
             bot_message_id=205,
@@ -449,7 +449,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         sent_text = bot.send_message.await_args.kwargs["text"]
         self.assertIn("<b>Alice &lt;A&gt;:</b> setup &amp; context", sent_text)
-        self.assertIn("💬 <b>Bob:</b> <i>«punch &lt;line&gt;»</i>", sent_text)
+        self.assertIn("<b>Bob:</b> <i>«punch &lt;line&gt;»</i>", sent_text)
         update_publication.assert_awaited_once()
         mark_status.assert_not_awaited()
         append_error.assert_not_awaited()

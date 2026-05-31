@@ -173,7 +173,7 @@ def _format_context_lines(context_messages: list[dict[str, object]], language: s
         author = _html(item.get("author") or i18n.t(language, "common.anonymous"))
         text = _html(item.get("text") or "")
         if item.get("is_primary"):
-            lines.append(f"💬 <b>{author}:</b> <i>«{text}»</i>")
+            lines.append(f"<b>{author}:</b> <i>«{text}»</i>")
         else:
             lines.append(f"<b>{author}:</b> {text}")
     return "\n".join(lines)
@@ -212,11 +212,11 @@ def _format_chat_stats_text(language: str, stats: dict[str, object] | None) -> s
 
     if stats.get("best_quote"):
         bq = stats["best_quote"]
-        quote_text = bq["text"][:80] + ("..." if len(bq["text"]) > 80 else "")
+        quote_text = bq["text"][:80] + ("…" if len(bq["text"]) > 80 else "")
         text += (
             f"\n\n{i18n.t(language, 'stats.best_quote')}\n"
-            f"💬 <i>«{_html(quote_text)}»</i>\n"
-            f"— {_html(bq['author'])} ({bq['score'] * 10:.1f}/10)"
+            f"<blockquote><i>«{_html(quote_text)}»</i>\n"
+            f"— {_html(bq['author'])} · {bq['score'] * 10:.1f}/10</blockquote>"
         )
 
     return text
@@ -239,10 +239,10 @@ def _format_user_stats_text(language: str, stats: dict[str, object] | None) -> s
 
     if stats.get("best_quote"):
         bq = stats["best_quote"]
-        quote_text = bq["text"][:80] + ("..." if len(bq["text"]) > 80 else "")
+        quote_text = bq["text"][:80] + ("…" if len(bq["text"]) > 80 else "")
         text += (
             f"\n\n{i18n.t(language, 'user_stats.best_quote')}\n"
-            f"💬 <i>«{_html(quote_text)}»</i> ({bq['score'] * 10:.1f}/10)"
+            f"<blockquote><i>«{_html(quote_text)}»</i> · {bq['score'] * 10:.1f}/10</blockquote>"
         )
 
     return text
@@ -260,6 +260,22 @@ def _decision_status_label(language: str, status: str) -> str:
     return status_map.get(status, status)
 
 
+def _group_panel_kwargs(owner_id: int, group, language: str, is_admin: bool) -> dict:
+    return dict(
+        owner_id=owner_id,
+        language=language,
+        group_language=language,
+        group_language_source=group.language_source,
+        is_admin=is_admin,
+        quote_time=_time_label(group),
+        min_messages=core.effective_group_min_messages(group),
+        timezone_name=settings.TIMEZONE,
+        boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
+        pin_enabled=core.effective_group_pin_enabled(group),
+        quote_context_enabled=core.effective_group_quote_context_enabled(group),
+    )
+
+
 async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> None:
     if not message.from_user:
         return
@@ -267,7 +283,7 @@ async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> No
     if message.chat.type == "private":
         db_user = await core.user_getOrCreate(message.from_user)
         language = _private_message_language(message, db_user)
-        text, reply_markup = menu.build_private_home(
+        text, reply_markup = menu.build_private_panel(
             owner_id=message.from_user.id,
             language=language,
             language_source=_private_language_source(db_user),
@@ -279,17 +295,8 @@ async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> No
         group = await core.group_getOrCreate(message.chat)
         language = i18n.group_language(group)
         is_admin = await _is_chat_admin(bot, message.chat.id, message.from_user.id)
-        text, reply_markup = menu.build_group_home(
-            owner_id=message.from_user.id,
-            language=language,
-            group_language=language,
-            group_language_source=group.language_source,
-            is_admin=is_admin,
-            quote_time=_time_label(group),
-            min_messages=core.effective_group_min_messages(group),
-            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
-            pin_enabled=core.effective_group_pin_enabled(group),
-            quote_context_enabled=core.effective_group_quote_context_enabled(group),
+        text, reply_markup = menu.build_group_panel(
+            **_group_panel_kwargs(message.from_user.id, group, language, is_admin)
         )
 
     panel = await message.answer(text, reply_markup=reply_markup)
@@ -379,44 +386,46 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 
             context_text = _format_context_lines(detail.get("context_messages") or [], language)
             if context_text:
-                text = (
-                    f"{i18n.t(language, 'details.title', id=detail['id'])}\n\n"
-                    f"🏷️ {status_label}\n"
-                    f"{context_text}\n\n"
-                )
+                quote_block = f"<blockquote>{context_text}</blockquote>"
             else:
-                text = (
-                    f"{i18n.t(language, 'details.title', id=detail['id'])}\n\n"
-                    f"🏷️ {status_label}\n"
-                    f"💬 <i>«{_html(detail['text'])}»</i>\n"
-                    f"— <b>{_html(detail['author_name'])}</b>\n\n"
+                quote_block = (
+                    f"<blockquote><i>«{_html(detail['text'])}»</i>\n"
+                    f"— <b>{_html(detail['author_name'])}</b></blockquote>"
                 )
 
+            text = (
+                f"{i18n.t(language, 'details.title', id=detail['id'])}\n"
+                f"{status_label}\n\n"
+                f"{quote_block}\n\n"
+            )
+
             if link_chat_id:
+                reactions_suffix = (
+                    f" · {detail['reaction_count']} ❤️" if detail["reaction_count"] > 0 else ""
+                )
                 text += (
                     f"<a href='https://t.me/c/{link_chat_id}/{detail['message_id']}'>{_html(detail['group_name'])}</a>"
-                    f"{' · ' + str(detail['reaction_count']) + '❤️' if detail['reaction_count'] > 0 else ''}"
-                    f" · {date_str}\n\n"
+                    f"{reactions_suffix} · {date_str}\n\n"
                 )
             else:
                 text += f"{_html(detail['group_name'])} · {date_str}\n\n"
 
             text += (
                 f"<b>{i18n.t(language, 'details.total')}: {detail['score'] * 10:.1f}/10</b>\n"
-                f"<code>{safe_model_short:<10} {scoring.create_bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10 (100%)\n"
-                f"<code>{i18n.t(language, 'details.reactions'):<10} {scoring.create_bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10 ({i18n.t(language, 'common.context')})\n"
-                f"<code>{i18n.t(language, 'details.length'):<10} {scoring.create_bar(int(detail['length_score'] * 100), 100)}</code> {detail['length_score'] * 10:.1f}/10 ({i18n.t(language, 'common.context')})\n"
+                f"<code>{safe_model_short:<10} {scoring.create_bar(int(detail['ai_score'] * 100), 100)}</code> {detail['ai_score'] * 10:.1f}/10\n"
+                f"<code>{i18n.t(language, 'details.reactions'):<10} {scoring.create_bar(int(detail['reaction_score'] * 100), 100)}</code> {detail['reaction_score'] * 10:.1f}/10\n"
+                f"<code>{i18n.t(language, 'details.length'):<10} {scoring.create_bar(int(detail['length_score'] * 100), 100)}</code> {detail['length_score'] * 10:.1f}/10\n"
             )
 
             if detail.get("decision_reason"):
-                text += f"\n💭 <b>{i18n.t(language, 'details.decision_reason')}:</b> {_html(detail['decision_reason'])}\n"
+                text += f"\n<b>{i18n.t(language, 'details.decision_reason')}:</b> <i>{_html(detail['decision_reason'])}</i>\n"
 
             if detail.get("operation_error"):
                 text += f"⚠️ <b>{i18n.t(language, 'details.operation_error')}:</b> {_html(detail['operation_error'])}\n"
 
             if detail.get("ai_best_text"):
-                ai_text = detail["ai_best_text"][:100] + ("..." if len(detail["ai_best_text"]) > 100 else "")
-                text += f"💡 <b>{i18n.t(language, 'details.ai_choice')}:</b> <i>«{_html(ai_text)}»</i>\n"
+                ai_text = detail["ai_best_text"][:100] + ("…" if len(detail["ai_best_text"]) > 100 else "")
+                text += f"<b>{i18n.t(language, 'details.ai_choice')}:</b> <i>«{_html(ai_text)}»</i>\n"
 
             await message.answer(text)
             return
@@ -427,91 +436,6 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 @router.message(Command("start"), F.chat.type.in_({"group", "supergroup"}))
 async def group_start_handler(message: types.Message, bot: Bot):
     await _send_start_menu(message, bot)
-
-
-async def chat_stats_handler(message: types.Message):
-    group = await core.group_getOrCreate(message.chat)
-    language = i18n.group_language(group)
-    stats = await core.get_chat_stats(message.chat.id)
-
-    if not stats:
-        await message.answer(i18n.t(language, "stats.missing"))
-        return
-
-    if stats["total_quotes"] == 0:
-        await message.answer(i18n.t(language, "stats.empty"))
-        return
-
-    medals = ["🥇", "🥈", "🥉"]
-    top_lines = []
-    for i, author in enumerate(stats["top_authors"]):
-        medal = medals[i] if i < len(medals) else f"{i + 1}."
-        top_lines.append(i18n.t(
-            language,
-            "stats.author_row",
-            medal=medal,
-            name=_html(author["name"]),
-            wins=author["wins"],
-            score=author["avg_score"] * 10,
-        )
-        )
-    top_text = "\n".join(top_lines)
-
-    text = (
-        f"{i18n.t(language, 'stats.title')}\n\n"
-        f"{i18n.t(language, 'stats.total_quotes', count=stats['total_quotes'])}\n"
-        f"{i18n.t(language, 'stats.unique_authors', count=stats['unique_authors'])}\n"
-        f"{i18n.t(language, 'stats.avg_score', score=stats['avg_score'] * 10)}\n\n"
-        f"{i18n.t(language, 'stats.top_authors')}\n{top_text}"
-    )
-
-    if stats.get("best_quote"):
-        bq = stats["best_quote"]
-        quote_text = bq["text"][:80] + ("..." if len(bq["text"]) > 80 else "")
-        text += (
-            f"\n\n{i18n.t(language, 'stats.best_quote')}\n"
-            f"💬 <i>«{_html(quote_text)}»</i>\n"
-            f"— {_html(bq['author'])} ({bq['score'] * 10:.1f}/10)"
-        )
-
-    await message.answer(text)
-
-
-async def user_stats_handler(message: types.Message):
-    if not message.from_user:
-        return
-
-    group = await core.group_getOrCreate(message.chat)
-    language = i18n.group_language(group)
-    stats = await core.get_user_stats(message.chat.id, message.from_user.id)
-
-    if not stats:
-        await message.answer(i18n.t(language, "user_stats.missing"))
-        return
-
-    if stats["wins"] == 0:
-        await message.answer(
-            i18n.t(language, "user_stats.empty", user=_html(stats["user_name"]))
-        )
-        return
-
-    text = (
-        f"{i18n.t(language, 'user_stats.title')}\n\n"
-        f"{i18n.t(language, 'user_stats.user', user=_html(stats['user_name']))}\n"
-        f"{i18n.t(language, 'user_stats.wins', count=stats['wins'])}\n"
-        f"{i18n.t(language, 'user_stats.avg_score', score=stats['avg_score'] * 10)}\n"
-        f"{i18n.t(language, 'user_stats.rank', rank=stats['rank'], total=stats['total_participants'])}"
-    )
-
-    if stats.get("best_quote"):
-        bq = stats["best_quote"]
-        quote_text = bq["text"][:80] + ("..." if len(bq["text"]) > 80 else "")
-        text += (
-            f"\n\n{i18n.t(language, 'user_stats.best_quote')}\n"
-            f"💬 <i>«{_html(quote_text)}»</i> ({bq['score'] * 10:.1f}/10)"
-        )
-
-    await message.answer(text)
 
 
 async def _group_menu_context(callback: types.CallbackQuery, bot: Bot):
@@ -550,37 +474,23 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         language = core.effective_user_language(db_user, getattr(user, "language_code", None))
         language_source = _private_language_source(db_user)
 
-        if parsed.action == menu.ACTION_HOME:
-            text, reply_markup = menu.build_private_home(
+        async def _show_private(section: str, notice: str | None = None) -> None:
+            text, reply_markup = menu.build_private_panel(
                 owner_id=parsed.owner_id,
                 language=language,
                 language_source=language_source,
                 bot_username=settings.BOT_USERNAME,
+                section=section,
             )
             await _edit_panel(callback, text, reply_markup)
-            await callback.answer()
-            return
+            await callback.answer(notice) if notice else await callback.answer()
 
-        if parsed.action == menu.ACTION_SETTINGS:
-            text, reply_markup = menu.build_private_settings(
-                owner_id=parsed.owner_id,
-                language=language,
-                language_source=language_source,
-                bot_username=settings.BOT_USERNAME,
-            )
-            await _edit_panel(callback, text, reply_markup)
-            await callback.answer()
+        if parsed.action == menu.ACTION_HOME:
+            await _show_private(menu.SECTION_HOME)
             return
 
         if parsed.action == menu.ACTION_PRIVATE_LANGUAGE:
-            text, reply_markup = menu.build_private_language(
-                owner_id=parsed.owner_id,
-                language=language,
-                current_language=language,
-                language_source=language_source,
-            )
-            await _edit_panel(callback, text, reply_markup)
-            await callback.answer()
+            await _show_private(menu.SECTION_LANGUAGE)
             return
 
         if parsed.action == menu.ACTION_SET_PRIVATE_LANGUAGE:
@@ -590,29 +500,18 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
                 return
             await core.set_user_language_manual(user.id, selected_language)
             language = selected_language
-            text, reply_markup = menu.build_private_language(
-                owner_id=parsed.owner_id,
-                language=language,
-                current_language=language,
-                language_source=i18n.LANGUAGE_SOURCE_MANUAL,
-            )
-            await _edit_panel(callback, text, reply_markup)
-            await callback.answer(
-                i18n.t(language, "menu.language.updated", language_name=i18n.language_name(language))
+            language_source = i18n.LANGUAGE_SOURCE_MANUAL
+            await _show_private(
+                menu.SECTION_LANGUAGE,
+                i18n.t(language, "menu.language.updated", language_name=i18n.language_name(language)),
             )
             return
 
         if parsed.action == menu.ACTION_AUTO_PRIVATE_LANGUAGE:
             await core.clear_user_language(user.id)
             language = i18n.language_or_default(getattr(user, "language_code", None))
-            text, reply_markup = menu.build_private_language(
-                owner_id=parsed.owner_id,
-                language=language,
-                current_language=language,
-                language_source=None,
-            )
-            await _edit_panel(callback, text, reply_markup)
-            await callback.answer(i18n.t(language, "settings.updated"))
+            language_source = None
+            await _show_private(menu.SECTION_LANGUAGE, i18n.t(language, "settings.updated"))
             return
 
         await callback.answer()
@@ -624,87 +523,42 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         return
     panel, group, language, is_admin = context
 
-    if parsed.action == menu.ACTION_HOME:
-        text, reply_markup = menu.build_group_home(
-            owner_id=parsed.owner_id,
-            language=language,
-            group_language=language,
-            group_language_source=group.language_source,
-            is_admin=is_admin,
-            quote_time=_time_label(group),
-            min_messages=core.effective_group_min_messages(group),
-            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
-            pin_enabled=core.effective_group_pin_enabled(group),
-            quote_context_enabled=core.effective_group_quote_context_enabled(group),
+    async def _show_group(
+        section: str,
+        *,
+        stats_text: str | None = None,
+        stats_view: str = "user",
+        notice: str | None = None,
+    ) -> None:
+        text, reply_markup = menu.build_group_panel(
+            section=section,
+            stats_text=stats_text,
+            stats_view=stats_view,
+            **_group_panel_kwargs(parsed.owner_id, group, language, is_admin),
         )
         await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
+        await callback.answer(notice) if notice else await callback.answer()
+
+    if parsed.action == menu.ACTION_HOME:
+        await _show_group(menu.SECTION_HOME)
         return
 
-    if parsed.action in {
-        menu.ACTION_SETTINGS,
+    admin_only_actions = {
         menu.ACTION_GROUP_LANGUAGE,
         menu.ACTION_SET_GROUP_LANGUAGE,
         menu.ACTION_AUTO_GROUP_LANGUAGE,
-        menu.ACTION_GROUP_TIME,
+        menu.ACTION_GROUP_SCHEDULE,
         menu.ACTION_GROUP_TIME_ADJUST,
-        menu.ACTION_GROUP_MIN_MESSAGES,
         menu.ACTION_GROUP_MIN_ADJUST,
-        menu.ACTION_GROUP_QUOTE_DAY,
-        menu.ACTION_GROUP_PUBLICATION,
+        menu.ACTION_GROUP_BEHAVIOR,
         menu.ACTION_TOGGLE_GROUP_SETTING,
-    } and not is_admin:
+    }
+    if parsed.action in admin_only_actions and not is_admin:
         await callback.answer(i18n.t(language, "admin.admin_only"), show_alert=True)
         return
 
-    if parsed.action == menu.ACTION_SETTINGS:
-        text, reply_markup = menu.build_group_settings(
-            owner_id=parsed.owner_id,
-            language=language,
-            group_language=language,
-            group_language_source=group.language_source,
-            quote_time=_time_label(group),
-            min_messages=core.effective_group_min_messages(group),
-            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
-            pin_enabled=core.effective_group_pin_enabled(group),
-            quote_context_enabled=core.effective_group_quote_context_enabled(group),
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
-        return
-
-    if parsed.action == menu.ACTION_GROUP_QUOTE_DAY:
-        text, reply_markup = menu.build_group_quote_day(
-            owner_id=parsed.owner_id,
-            language=language,
-            quote_time=_time_label(group),
-            min_messages=core.effective_group_min_messages(group),
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
-        return
-
-    if parsed.action == menu.ACTION_GROUP_PUBLICATION:
-        text, reply_markup = menu.build_group_publication(
-            owner_id=parsed.owner_id,
-            language=language,
-            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
-            pin_enabled=core.effective_group_pin_enabled(group),
-            quote_context_enabled=core.effective_group_quote_context_enabled(group),
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
-        return
-
     if parsed.action == menu.ACTION_GROUP_LANGUAGE:
-        text, reply_markup = menu.build_group_language(
-            owner_id=parsed.owner_id,
-            language=language,
-            current_language=language,
-            language_source=group.language_source,
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
+        await _show_group(menu.SECTION_LANGUAGE)
         return
 
     if parsed.action == menu.ACTION_SET_GROUP_LANGUAGE:
@@ -715,15 +569,9 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         await core.set_group_language_manual(group.id, selected_language)
         group = await core.get_group_by_chat_id(panel.chat.id) or group
         language = i18n.group_language(group)
-        text, reply_markup = menu.build_group_language(
-            owner_id=parsed.owner_id,
-            language=language,
-            current_language=language,
-            language_source=group.language_source,
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer(
-            i18n.t(language, "menu.language.updated", language_name=i18n.language_name(language))
+        await _show_group(
+            menu.SECTION_LANGUAGE,
+            notice=i18n.t(language, "menu.language.updated", language_name=i18n.language_name(language)),
         )
         return
 
@@ -731,25 +579,14 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         await core.clear_group_language(group.id)
         group = await core.get_group_by_chat_id(panel.chat.id) or group
         language = i18n.group_language(group)
-        text, reply_markup = menu.build_group_language(
-            owner_id=parsed.owner_id,
-            language=language,
-            current_language=language,
-            language_source=group.language_source,
+        await _show_group(
+            menu.SECTION_LANGUAGE,
+            notice=i18n.t(language, "settings.group.language_auto_updated"),
         )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer(i18n.t(language, "settings.group.language_auto_updated"))
         return
 
-    if parsed.action == menu.ACTION_GROUP_TIME:
-        text, reply_markup = menu.build_group_time(
-            owner_id=parsed.owner_id,
-            language=language,
-            quote_time=_time_label(group),
-            timezone_name=settings.TIMEZONE,
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
+    if parsed.action == menu.ACTION_GROUP_SCHEDULE:
+        await _show_group(menu.SECTION_SCHEDULE)
         return
 
     if parsed.action == menu.ACTION_GROUP_TIME_ADJUST:
@@ -760,24 +597,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
             return
         group = await core.adjust_group_quote_time(group.id, delta_minutes) or group
         language = i18n.group_language(group)
-        text, reply_markup = menu.build_group_time(
-            owner_id=parsed.owner_id,
-            language=language,
-            quote_time=_time_label(group),
-            timezone_name=settings.TIMEZONE,
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer(i18n.t(language, "settings.updated"))
-        return
-
-    if parsed.action == menu.ACTION_GROUP_MIN_MESSAGES:
-        text, reply_markup = menu.build_group_min_messages(
-            owner_id=parsed.owner_id,
-            language=language,
-            min_messages=core.effective_group_min_messages(group),
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer()
+        await _show_group(menu.SECTION_SCHEDULE, notice=i18n.t(language, "settings.updated"))
         return
 
     if parsed.action == menu.ACTION_GROUP_MIN_ADJUST:
@@ -788,49 +608,35 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
             return
         group = await core.adjust_group_min_messages(group.id, delta) or group
         language = i18n.group_language(group)
-        text, reply_markup = menu.build_group_min_messages(
-            owner_id=parsed.owner_id,
-            language=language,
-            min_messages=core.effective_group_min_messages(group),
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer(i18n.t(language, "settings.updated"))
+        await _show_group(menu.SECTION_SCHEDULE, notice=i18n.t(language, "settings.updated"))
+        return
+
+    if parsed.action == menu.ACTION_GROUP_BEHAVIOR:
+        await _show_group(menu.SECTION_BEHAVIOR)
         return
 
     if parsed.action == menu.ACTION_TOGGLE_GROUP_SETTING:
         group = await core.toggle_group_setting(group.id, parsed.payload or "") or group
         language = i18n.group_language(group)
-        text, reply_markup = menu.build_group_publication(
-            owner_id=parsed.owner_id,
-            language=language,
-            boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
-            pin_enabled=core.effective_group_pin_enabled(group),
-            quote_context_enabled=core.effective_group_quote_context_enabled(group),
-        )
-        await _edit_panel(callback, text, reply_markup)
-        await callback.answer(i18n.t(language, "settings.updated"))
+        await _show_group(menu.SECTION_BEHAVIOR, notice=i18n.t(language, "settings.updated"))
         return
 
     if parsed.action == menu.ACTION_CHAT_STATS:
         stats = await core.get_chat_stats(panel.chat.id)
-        text = _format_chat_stats_text(language, stats)
-        await _edit_panel(
-            callback,
-            text,
-            menu.build_stats_keyboard(parsed.owner_id, language, active_view="chat"),
+        await _show_group(
+            menu.SECTION_STATS,
+            stats_text=_format_chat_stats_text(language, stats),
+            stats_view="chat",
         )
-        await callback.answer()
         return
 
     if parsed.action == menu.ACTION_USER_STATS:
         stats = await core.get_user_stats(panel.chat.id, user.id)
-        text = _format_user_stats_text(language, stats)
-        await _edit_panel(
-            callback,
-            text,
-            menu.build_stats_keyboard(parsed.owner_id, language, active_view="user"),
+        await _show_group(
+            menu.SECTION_STATS,
+            stats_text=_format_user_stats_text(language, stats),
+            stats_view="user",
         )
-        await callback.answer()
         return
 
     await callback.answer()

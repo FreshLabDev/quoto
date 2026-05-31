@@ -9,132 +9,132 @@
     "ai": "KI"
   },
   "menu": {
-        "button": {
-            "user_stats": "👤 Meine Statistik",
-            "chat_stats": "📊 Chat-Statistik",
-            "stats": "📊 Statistik",
-            "group_language": "🌐 Gruppensprache",
-            "settings": "⚙️ Einstellungen",
-            "back": "‹ Zurück",
-            "close": "Schließen"
-        },
+    "button": {
+      "user_stats": "Meine Statistik",
+      "chat_stats": "Chat-Statistik",
+      "stats": "Statistik",
+      "group_language": "Gruppensprache",
+      "settings": "Einstellungen",
+      "back": "‹ Zurück",
+      "close": "Schließen"
+    },
     "private": {
       "title": "🏆 <b>Quoto</b>",
-      "body": "Ich verwalte Zitat-des-Tages-Fenster in Gruppenchats. Füge mich zu einer Gruppe hinzu und nutze dort /start für die Steuerung.",
-      "language": "UI-Sprache: <b>{language_name}</b>",
-      "language_note": "Im privaten Chat folgt die Sprache deiner Telegram-App."
+      "body": "Ich wähle ein Zitat des Tages in Gruppenchats. Füge mich zu einer Gruppe hinzu und öffne dort /start.",
+      "language": "Sprache der Oberfläche: <b>{language_name}</b>",
+      "language_note": "Im privaten Chat nutze ich deine Telegram-Sprache."
     },
     "group": {
-      "title": "🏆 <b>Quoto-Steuerung</b>",
-      "admin_body": "Mit den Buttons unten verwaltest du Zitate, Statistik und Gruppeneinstellungen.",
-      "user_body": "Mit den Buttons unten öffnest du die Zitat-Statistik.",
+      "title": "🏆 <b>Quoto</b>",
+      "admin_body": "Ich beobachte den Chat und veröffentliche am Tagesende die beste Zeile. Statistik und Einstellungen unten.",
+      "user_body": "Ich beobachte den Chat und veröffentliche am Tagesende die beste Zeile.",
       "language_line": "Sprache: <b>{language_name}</b>",
-      "schedule_line": "Tägliche Auswahl: <b>{time}</b>; Überspringen bei weniger als <b>{min_messages}</b> Nachrichten."
+      "schedule_line": "Tagesfazit um <b>{time}</b> · ab <b>{min_messages}</b> Nachrichten"
     },
     "language": {
-      "title": "🌐 <b>Gruppensprache</b>",
-      "hint": "Wähle die UI-Sprache für diese Gruppe.",
-      "source_auto": "Quelle: automatisch erkannt",
-      "source_manual": "Quelle: manuell gesetzt",
-      "source_default": "Quelle: englischer Fallback",
+      "title": "<b>Gruppensprache</b>",
+      "hint": "<i>Wähle die Sprache, in der ich in dieser Gruppe spreche.</i>",
+      "source_auto": "Automatisch erkannt",
+      "source_manual": "Manuell gesetzt",
+      "source_default": "Standard · English",
       "updated": "Sprache auf {language_name} gesetzt.",
-      "invalid": "Nicht unterstützte Sprache."
+      "invalid": "Diese Sprache kenne ich nicht."
     },
-        "other_user": "Öffne dein eigenes Menü mit /start.",
-        "group_context_required": "Öffne dies aus einem Gruppenchat."
+    "other_user": "Öffne dein eigenes Menü mit /start.",
+    "group_context_required": "Öffne dies in einem Gruppenchat."
+  },
+  "settings": {
+    "updated": "Erledigt.",
+    "invalid": "Das geht nicht.",
+    "block": {
+      "interface": "Oberfläche",
+      "quote_day": "Zitat des Tages",
+      "behavior": "Verhalten"
     },
-    "settings": {
-        "updated": "Einstellungen aktualisiert.",
-        "invalid": "Ungültiger Wert.",
-        "block": {
-            "interface": "Oberfläche",
-            "quote_day": "Zitat des Tages",
-            "behavior": "Verhalten"
-        },
-        "button": {
-            "language": "🌐 Sprache",
-            "interface": "🌐 Oberfläche",
-            "quote_day": "🏆 Zitat-Tag",
-            "publication": "🧵 Veröffentlichung",
-            "time": "⏰ Zeit",
-            "min_messages": "💬 Minimum",
-            "context": "Kontext",
-            "boring_notice": "Langweiliger Tag",
-            "pin": "Anheften"
-        },
-        "private": {
-            "title": "⚙️ <b>Quoto-Einstellungen</b>",
-            "hint": "<i>Diese Einstellungen gelten nur in diesem privaten Chat.</i>",
-            "language_title": "🌐 <b>Sprache im privaten Chat</b>",
-            "language_hint": "<i>Nutze deine Telegram-Sprache oder wähle manuell.</i>",
-            "telegram_language": "Telegram-Sprache nutzen",
-            "language_source_manual": "Quelle: manuell gesetzt",
-            "language_source_telegram": "Quelle: Telegram-Sprache"
-        },
-        "group": {
-            "title": "⚙️ <b>Gruppeneinstellungen</b>",
-            "hint": "<i>Nur Admins ändern das Verhalten von Quoto in dieser Gruppe.</i>",
-            "language_auto": "Am nächsten Tag automatisch erkennen",
-            "language_auto_updated": "Die Sprache wird bei der nächsten Auswertung automatisch erkannt.",
-            "context": {
-                "short": "Zitat-Kontext",
-                "label": "Zitat-Kontext",
-                "title": "Was Kontext bedeutet",
-                "explain": "<i>Kontext sind die Nachrichten, die die KI rund um den Gewinner-Satz ausgewählt hat. Bei mehr als fünf kürzt Quoto den Block um das Zitat selbst.</i>"
-            },
-            "boring_notice": {
-                "short": "Hinweis zum langweiligen Tag",
-                "label": "Hinweis zum langweiligen Tag senden"
-            },
-            "pin": {
-                "short": "Zitat anheften",
-                "label": "Veröffentlichtes Zitat anheften"
-            },
-            "quote_day": {
-                "title": "🏆 <b>Zitat des Tages</b>",
-                "hint": "<i>Wann der Tag geschlossen wird und wie viele Nachrichten für die Auswertung nötig sind.</i>"
-            },
-            "publication": {
-                "title": "🧵 <b>Veröffentlichung</b>",
-                "hint": "<i>Wie Quoto das Ergebnis in der Gruppe formatiert.</i>"
-            },
-            "time": {
-                "title": "⏰ <b>Zeit für das Zitat</b>",
-                "hint": "<i>Zu dieser Zeit schließt Quoto den Tag und wählt das Zitat.</i>",
-                "line": "Tägliche Auswahl: <b>{time}</b>",
-                "timezone": "Zeitzone: <b>{timezone}</b>"
-            },
-            "min_messages": {
-                "title": "💬 <b>Mindestanzahl Nachrichten</b>",
-                "hint": "<i>Bei weniger Nachrichten wird der Tag ohne KI-Auswertung übersprungen.</i>",
-                "line": "Minimum für Auswertung: <b>{count}</b>"
-            }
-        }
+    "button": {
+      "language": "Sprache",
+      "interface": "Oberfläche",
+      "quote_day": "Zitat-Tag",
+      "publication": "Veröffentlichung",
+      "time": "Zeit",
+      "min_messages": "Minimum",
+      "context": "Kontext",
+      "boring_notice": "Langweiliger Tag",
+      "pin": "Anheften"
     },
-    "status": {
+    "private": {
+      "title": "<b>Einstellungen</b>",
+      "hint": "<i>Gelten nur in diesem privaten Chat.</i>",
+      "language_title": "<b>Sprache im privaten Chat</b>",
+      "language_hint": "<i>Behalte deine Telegram-Sprache oder wähle manuell.</i>",
+      "telegram_language": "Telegram-Sprache",
+      "language_source_manual": "Manuell gesetzt",
+      "language_source_telegram": "Telegram-Sprache"
+    },
+    "group": {
+      "title": "<b>Gruppeneinstellungen</b>",
+      "hint": "<i>Nur Admins können mich konfigurieren.</i>",
+      "language_auto": "Automatisch erkennen",
+      "language_auto_updated": "Ich erkenne die Sprache bei der nächsten Auswertung selbst.",
+      "context": {
+        "short": "Kontext",
+        "label": "Zitat-Kontext",
+        "title": "Was Kontext bedeutet",
+        "explain": "<i>Kontext sind die Nachrichten, die die KI rund um den Gewinner-Satz ausgewählt hat. Bei mehr als fünf kürze ich den Block um das Zitat selbst.</i>"
+      },
+      "boring_notice": {
+        "short": "Langweiliger Tag",
+        "label": "Hinweis zum langweiligen Tag senden"
+      },
+      "pin": {
+        "short": "Anheften",
+        "label": "Veröffentlichtes Zitat anheften"
+      },
+      "quote_day": {
+        "title": "<b>Zitat des Tages</b>",
+        "hint": "<i>Wann der Tag endet und wie viele Nachrichten für die Auswertung nötig sind.</i>"
+      },
+      "publication": {
+        "title": "<b>Veröffentlichung</b>",
+        "hint": "<i>Wie ich das Ergebnis in der Gruppe formatiere.</i>"
+      },
+      "time": {
+        "title": "<b>Zeit für das Zitat</b>",
+        "hint": "<i>Zu dieser Zeit schließe ich den Tag und wähle das Zitat.</i>",
+        "line": "Tagesfazit: <b>{time}</b>",
+        "timezone": "Zeitzone: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>Mindestanzahl Nachrichten</b>",
+        "hint": "<i>Bei weniger Nachrichten wird der Tag ohne Auswertung übersprungen.</i>",
+        "line": "Minimum: <b>{count}</b>"
+      }
+    }
+  },
+  "status": {
     "published": "✅ Veröffentlicht",
     "skipped_boring": "😴 Langweiliger Tag",
     "publish_failed": "⚠️ Veröffentlichung fehlgeschlagen",
-    "boring_notice_failed": "⚠️ Hinweis zum langweiligen Tag fehlgeschlagen",
-    "publish_unknown": "⚠️ Veröffentlichungsstatus ist unklar",
-    "boring_notice_unknown": "⚠️ Status des langweiligen Tages ist unklar"
+    "boring_notice_failed": "⚠️ Hinweis nicht gesendet",
+    "publish_unknown": "⚠️ Veröffentlichung nicht bestätigt",
+    "boring_notice_unknown": "⚠️ Hinweis nicht bestätigt"
   },
   "admin": {
-    "admin_only": "🔒 Dieser Befehl ist nur für Chat-Admins verfügbar."
+    "admin_only": "Das können nur Admins ändern."
   },
   "chat_member": {
-    "added": "👋 Hallo, <b>{chat_title}</b>!\n\nIch bin <b>Quoto</b>. Um <b>{time}</b> wähle und veröffentliche ich das Zitat des Tages.\n\nNutze /start, um Statistik und Gruppeneinstellungen zu öffnen.",
-    "need_admin": "⚠️ Bitte <b>mache mich zum Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i>, damit ich das Ergebnis veröffentlichen kann.",
-    "admin_granted": "✅ <b>Danke</b>, dass du mich zum Administrator gemacht hast!"
+    "added": "🏆 <b>Quoto</b>\n\nSchön, in <b>{chat_title}</b> zu sein. Jeden Tag um <b>{time}</b> wähle ich die beste Zeile und veröffentliche das Zitat des Tages.\n\nÖffne /start — Statistik und Einstellungen sind dort.",
+    "need_admin": "⚠️ Mach mich zum <b>Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i> — dann kann ich das Ergebnis veröffentlichen.",
+    "admin_granted": "Danke! Jetzt kann ich das Zitat des Tages veröffentlichen."
   },
   "private": {
-    "invalid_quote_link": "❌ Ungültiger Zitat-Link.",
-    "quote_not_found": "❌ Zitat nicht gefunden.",
-    "add_to_group": "➕ Zur Gruppe hinzufügen",
-    "hello": "🏆 <b>Hallo! Ich bin Quoto</b>\n\nIch führe Zitat-des-Tages-Fenster und veröffentliche das Ergebnis in deiner Gruppe.\n\nNutze /start, um die Steuerung zu öffnen."
+    "invalid_quote_link": "⚠️ Ungültiger Zitat-Link.",
+    "quote_not_found": "⚠️ Zitat nicht gefunden.",
+    "add_to_group": "Zur Gruppe hinzufügen",
+    "hello": "🏆 <b>Quoto</b>\n\nIch wähle ein Zitat des Tages in Gruppenchats: Ich sammle die Nachrichten des Tages und veröffentliche zur festgelegten Zeit die beste Zeile.\n\nFüge mich zu einer Gruppe hinzu und öffne dort /start."
   },
   "details": {
-    "title": "📊 <b>Tagesdetails #{id}</b>",
+    "title": "<b>Tag #{id}</b>",
     "total": "Gesamt",
     "reactions": "Reaktionen",
     "length": "Länge",
@@ -143,40 +143,40 @@
     "ai_choice": "KI-Auswahl"
   },
   "start": {
-    "group": "🏆 <b>Quoto — Zitat des Tages</b>\n\nIch sammle Nachrichten zwischen zwei Cutoff-Zeitpunkten und wähle am Tagesende den Gewinner.\n\nNutze /start, um die Steuerung zu öffnen."
+    "group": "🏆 <b>Quoto — Zitat des Tages</b>\n\nIch sammle die Nachrichten des Tages und wähle am Tagesende die beste Zeile.\n\nÖffne /start, um die Steuerung zu öffnen."
   },
   "stats": {
-    "missing": "📊 Statistik ist noch nicht verfügbar — der Bot hat diese Gruppe noch nicht registriert.",
-    "empty": "📊 Dieser Chat hat noch keine veröffentlichten Zitate.",
-    "title": "📊 <b>Chat-Statistik</b>",
-    "total_quotes": "🏆 Zitate gesamt: <b>{count}</b>",
-    "unique_authors": "👥 Eindeutige Autoren: <b>{count}</b>",
-    "avg_score": "📈 Durchschnittsbewertung: <b>{score:.1f}/10</b>",
-    "top_authors": "👑 <b>Top-Autoren:</b>",
-    "author_row": "{medal} <b>{name}</b> — {wins} 🏆 (Ø {score:.1f}/10)",
-    "best_quote": "⭐ <b>Bestes Zitat:</b>"
+    "missing": "Statistik ist noch nicht verfügbar — diese Gruppe ist nicht registriert.",
+    "empty": "Dieser Chat hat noch keine veröffentlichten Zitate.",
+    "title": "<b>Chat-Statistik</b>",
+    "total_quotes": "Zitate gesamt: <b>{count}</b>",
+    "unique_authors": "Autoren: <b>{count}</b>",
+    "avg_score": "Durchschnitt: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Top-Autoren</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Bestes Zitat</b>"
   },
   "user_stats": {
-    "missing": "📊 Statistik ist noch nicht verfügbar.",
-    "empty": "📊 <b>{user}</b>, du hast in diesem Chat noch keine veröffentlichten Zitate.\nSchreib weiter — deine Zeit kommt! 💪",
-    "title": "📊 <b>Deine Statistik</b>",
-    "user": "👤 <b>{user}</b>",
-    "wins": "🏆 Siege: <b>{count}</b>",
-    "avg_score": "📈 Durchschnittsbewertung: <b>{score:.1f}/10</b>",
-    "rank": "🏅 Platz: <b>{rank}</b> von {total}",
-    "best_quote": "⭐ <b>Bestes Zitat:</b>"
+    "missing": "Statistik ist noch nicht verfügbar.",
+    "empty": "<b>{user}</b>, du hast in diesem Chat noch keine veröffentlichten Zitate.\nSchreib weiter — deine Zeit kommt.",
+    "title": "<b>Deine Statistik</b>",
+    "user": "<b>{user}</b>",
+    "wins": "Siege: <b>{count}</b>",
+    "avg_score": "Durchschnitt: <b>{score:.1f}/10</b>",
+    "rank": "Platz: <b>{rank}</b> von {total}",
+    "best_quote": "<b>Bestes Zitat</b>"
   },
   "quote_post": {
     "titles": {
       "text": "🏆 <b>Zitat des Tages</b>",
-      "photo": "📷 <b>Foto des Tages</b>",
-      "video": "🎬 <b>Video des Tages</b>",
-      "voice": "🎙 <b>Sprachnachricht des Tages</b>",
-      "audio": "🎧 <b>Audio des Tages</b>"
+      "photo": "🏆 <b>Foto des Tages</b>",
+      "video": "🏆 <b>Video des Tages</b>",
+      "voice": "🏆 <b>Sprachnachricht des Tages</b>",
+      "audio": "🏆 <b>Audio des Tages</b>"
     }
   },
   "boring": {
-    "title": "😴 <b>Heute war ein langweiliger Tag</b>",
-    "body": "Der Bot hat kein ausreichend starkes Zitat für eine Veröffentlichung gefunden."
+    "title": "😴 <b>Heute kein Zitat des Tages</b>",
+    "body": "Ich habe keine Zeile gefunden, die den Tag wert ist. Bis morgen!"
   }
 }

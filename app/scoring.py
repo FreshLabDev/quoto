@@ -54,8 +54,8 @@ class ScoreBreakdown:
 
     @property
     def stars(self) -> str:
-        count = round(self.total * 5)
-        return "⭐️" * count + "☆" * (5 - count)
+        count = max(0, min(5, round(self.total * 5)))
+        return "★" * count + "☆" * (5 - count)
 
 
 @dataclass

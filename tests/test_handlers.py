@@ -134,7 +134,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             await handlers.private_handler(message, SimpleNamespace(args=None))
 
         self.assertIn("<b>Quoto</b>", message.answers[0])
-        self.assertIn("use /start there for controls", message.answers[0])
+        self.assertIn("Add me to a group", message.answers[0])
 
     async def test_group_start_menu_shows_admin_controls(self) -> None:
         message = DummyMessage(text="/start")
@@ -149,7 +149,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ):
             await handlers.group_start_handler(message, SimpleNamespace())
 
-        self.assertIn("Панель Quoto", message.answers[0])
+        self.assertIn("<b>Quoto</b>", message.answers[0])
         labels = [
             button.text
             for row in message.answer_markups[0].inline_keyboard
@@ -157,7 +157,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(
             labels,
-            ["📊 Статистика", "⚙️ Настройки", "Закрыть"],
+            ["Статистика", "Язык", "Цитата дня", "Публикация", "Закрыть"],
         )
 
     async def test_close_panel_deletes_panel_and_command_message(self) -> None:
@@ -215,13 +215,13 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Мова групи", panel.edits[0])
         callback.answer.assert_awaited()
 
-    async def test_group_settings_shows_minimal_sections(self) -> None:
+    async def test_group_schedule_section_shows_time_and_min_controls(self) -> None:
         panel = DummyResponse(
             chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
             message_id=902,
         )
         callback = SimpleNamespace(
-            data="menu:777:g:settings",
+            data="menu:777:g:sched",
             from_user=SimpleNamespace(id=777, language_code="ru"),
             message=panel,
             answer=AsyncMock(),
@@ -244,16 +244,15 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ):
             await handlers.start_menu_callback(callback, SimpleNamespace())
 
-        self.assertIn("Настройки группы", panel.edits[0])
+        self.assertIn("Цитата дня", panel.edits[0])
         labels = [
             button.text
             for row in panel.edit_markups[0].inline_keyboard
             for button in row
         ]
-        self.assertEqual(
-            labels,
-            ["🌐 Интерфейс", "🏆 Цитата дня", "🧵 Публикация", "‹ Назад", "Закрыть"],
-        )
+        self.assertIn("+1 ч", labels)
+        self.assertIn("+5", labels)
+        self.assertEqual(labels[-2:], ["‹ Назад", "Закрыть"])
 
     async def test_group_publication_settings_explains_quote_context(self) -> None:
         panel = DummyResponse(
@@ -261,7 +260,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             message_id=902,
         )
         callback = SimpleNamespace(
-            data="menu:777:g:publish",
+            data="menu:777:g:behavior",
             from_user=SimpleNamespace(id=777, language_code="ru"),
             message=panel,
             answer=AsyncMock(),
@@ -330,7 +329,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             for row in panel.edit_markups[0].inline_keyboard
             for button in row
         ]
-        self.assertEqual(labels, ["◉ 👤 Моя статистика", "◎ 📊 Статистика чата", "‹ Назад", "Закрыть"])
+        self.assertEqual(labels, ["◉ Моя статистика", "◎ Статистика чата", "‹ Назад", "Закрыть"])
 
     async def test_menu_callback_throttle_drops_fast_repeated_panel_clicks(self) -> None:
         panel = DummyResponse(
@@ -448,7 +447,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             await handlers.private_handler(message, SimpleNamespace(args="quote_8"))
 
         self.assertIn("<b>Alice &lt;A&gt;:</b> setup &amp; context", message.answers[0])
-        self.assertIn("💬 <b>Bob:</b> <i>«punch &lt;line&gt;»</i>", message.answers[0])
+        self.assertIn("<b>Bob:</b> <i>«punch &lt;line&gt;»</i>", message.answers[0])
 
     async def test_reaction_handler_applies_non_anonymous_delta(self) -> None:
         event = SimpleNamespace(
