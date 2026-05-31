@@ -323,7 +323,9 @@ def _valid_context_messages(
     if len(selected) > _MAX_CONTEXT_MESSAGES:
         selected = _trim_context_around_primary(selected, primary_message, _MAX_CONTEXT_MESSAGES)
 
-    return selected
+    if _is_contiguous_context(selected, messages) or _is_reply_connected_context(selected):
+        return selected
+    return []
 
 
 def _trim_context_around_primary(
@@ -358,6 +360,36 @@ def _dedupe_preserve_order(values: list[int]) -> list[int]:
         seen.add(value)
         result.append(value)
     return result
+
+
+def _is_contiguous_context(selected: list[Message], messages: list[Message]) -> bool:
+    positions = sorted(_message_position(message, messages) for message in selected)
+    return positions[-1] - positions[0] + 1 == len(positions)
+
+
+def _is_reply_connected_context(selected: list[Message]) -> bool:
+    by_message_id = {message.message_id: message.id for message in selected}
+    graph: dict[int, set[int]] = {message.id: set() for message in selected}
+
+    for message in selected:
+        reply_to_id = getattr(message, "reply_to_message_id", None)
+        if reply_to_id not in by_message_id:
+            continue
+        parent_id = by_message_id[reply_to_id]
+        graph[message.id].add(parent_id)
+        graph[parent_id].add(message.id)
+
+    start = selected[0].id
+    visited: set[int] = set()
+    stack = [start]
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        stack.extend(graph[current] - visited)
+
+    return len(visited) == len(selected)
 
 
 def _message_position(message: Message, messages: list[Message]) -> int:

@@ -8,7 +8,7 @@ from aiogram import Bot, F, Router, types
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 
-from . import core, i18n, media, menu, scoring
+from . import core, i18n, media, menu, scheduler, scoring
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
@@ -436,6 +436,38 @@ async def private_handler(message: types.Message, command: CommandObject = None)
 @router.message(Command("start"), F.chat.type.in_({"group", "supergroup"}))
 async def group_start_handler(message: types.Message, bot: Bot):
     await _send_start_menu(message, bot)
+
+
+@router.message(Command("publish_quote"), F.chat.type.in_({"group", "supergroup"}))
+async def manual_publish_handler(message: types.Message, bot: Bot):
+    if not message.from_user:
+        return
+
+    group = await core.group_getOrCreate(message.chat)
+    language = i18n.group_language(group)
+    if not await _is_chat_admin(bot, message.chat.id, message.from_user.id):
+        await message.answer(i18n.t(language, "admin.admin_only"))
+        return
+
+    processing = await message.answer(i18n.t(language, "manual_publish.checking"))
+    result = await scheduler.manual_publish_latest(bot, message.chat.id)
+
+    if result == "nothing":
+        await processing.edit_text(i18n.t(language, "manual_publish.nothing"))
+        return
+
+    if result == "already_sent":
+        await processing.edit_text(i18n.t(language, "manual_publish.already_sent"))
+        return
+
+    if result == "failed":
+        await processing.edit_text(i18n.t(language, "manual_publish.failed"))
+        return
+
+    try:
+        await processing.delete()
+    except TelegramAPIError:
+        return
 
 
 async def _group_menu_context(callback: types.CallbackQuery, bot: Bot):

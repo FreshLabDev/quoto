@@ -48,11 +48,12 @@ A Telegram bot that tracks quote days and only publishes a **quote of the day** 
 9. If the group has no saved interface language yet, the same AI run selects one of `ru`, `uk`, `en`, or `de` and the bot stores it for future UI messages
 10. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
 
-## 📌 Command
+## 📌 Commands
 
 | Command    | Description                      |
 | :--------- | :------------------------------- |
 | `/start`   | Opens the context-aware control panel |
+| `/publish_quote` | Admin-only recovery for the latest boring or failed day |
 
 ## 🚀 Quick Start
 

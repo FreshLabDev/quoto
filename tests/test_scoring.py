@@ -287,7 +287,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([message.id for message in result], [1, 3, 5])
 
-    def test_context_validator_trusts_model_selected_noncontiguous_messages(self) -> None:
+    def test_context_validator_rejects_unrelated_noncontiguous_messages(self) -> None:
         messages = [
             _message(1, 11, "root", "Alice"),
             _message(2, 12, "unrelated", "Bob"),
@@ -301,7 +301,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
 
         result = scoring._valid_context_messages(choice, messages, messages[2])
 
-        self.assertEqual([message.id for message in result], [1, 3])
+        self.assertEqual(result, [])
 
     def test_context_validator_trims_long_context_around_primary(self) -> None:
         messages = [
@@ -320,7 +320,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([message.id for message in result], [2, 3, 4, 5, 6])
 
-    def test_context_validator_keeps_usable_model_context_instead_of_killing_it(self) -> None:
+    def test_context_validator_validates_context_after_repair_and_trim(self) -> None:
         messages = [
             _message(1, 11, "one", "Alice"),
             _message(2, 12, "two", "Bob"),
@@ -342,10 +342,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
             [message.id for message in scoring._valid_context_messages(too_many_at_edge, messages, messages[5])],
             [2, 3, 4, 5, 6],
         )
-        self.assertEqual(
-            [message.id for message in scoring._valid_context_messages(missing_primary, messages, messages[5])],
-            [1, 2, 3, 6],
-        )
+        self.assertEqual(scoring._valid_context_messages(missing_primary, messages, messages[5]), [])
         self.assertEqual(
             [message.id for message in scoring._valid_context_messages(outside_day, messages, messages[5])],
             [4, 5, 6],

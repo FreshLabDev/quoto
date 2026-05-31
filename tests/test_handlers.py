@@ -160,6 +160,25 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             ["Статистика", "Язык", "Цитата дня", "Публикация", "Закрыть"],
         )
 
+    async def test_manual_publish_command_is_admin_only_recovery_path(self) -> None:
+        message = DummyMessage(text="/publish_quote")
+        bot = SimpleNamespace()
+
+        with (
+            patch.object(
+                handlers.core,
+                "group_getOrCreate",
+                new=AsyncMock(return_value=SimpleNamespace(language_code="ru", language_source=None)),
+            ),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+            patch.object(handlers.scheduler, "manual_publish_latest", new=AsyncMock(return_value="nothing")) as publish,
+        ):
+            await handlers.manual_publish_handler(message, bot)
+
+        publish.assert_awaited_once_with(bot, message.chat.id)
+        self.assertIn("Проверяю", message.answers[0])
+        self.assertIn("Нет скучного", message.responses[0].edits[0])
+
     async def test_close_panel_deletes_panel_and_command_message(self) -> None:
         panel = DummyResponse(chat=SimpleNamespace(id=-100123456), message_id=901)
         callback = SimpleNamespace(message=panel, answered=[])

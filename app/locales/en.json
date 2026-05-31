@@ -122,6 +122,12 @@
   "admin": {
     "admin_only": "Only admins can change this."
   },
+  "manual_publish": {
+    "checking": "Checking the latest recoverable day...",
+    "nothing": "No boring or failed day is waiting for manual publishing.",
+    "already_sent": "The latest day was already sent to Telegram, but the database did not confirm the final status. I will not publish a duplicate.",
+    "failed": "Manual publishing failed. Check the bot logs."
+  },
   "chat_member": {
     "added": "🏆 <b>Quoto</b>\n\nGlad to be in <b>{chat_title}</b>. Every day at <b>{time}</b> I pick the brightest line and publish the quote of the day.\n\nOpen /start — stats and settings are there.",
     "need_admin": "⚠️ Make me an <b>administrator</b> with permission to <i>pin</i> messages — then I can publish the result.",

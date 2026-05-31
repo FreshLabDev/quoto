@@ -9,7 +9,12 @@ os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
 
 from app import scheduler, scoring
-from app.quote_status import STATUS_SKIPPED_BORING
+from app.quote_status import (
+    MANUAL_PUBLISHABLE_STATUSES,
+    STATUS_BORING_NOTICE_UNKNOWN,
+    STATUS_PUBLISH_UNKNOWN,
+    STATUS_SKIPPED_BORING,
+)
 
 def _make_window() -> SimpleNamespace:
     start_utc = datetime(2026, 3, 26, 20, 0, tzinfo=timezone.utc)
@@ -21,6 +26,31 @@ def _make_window() -> SimpleNamespace:
         start_utc=start_utc,
         end_utc=end_utc,
     )
+
+
+class _DummyResult:
+    def __init__(self, rows: list[SimpleNamespace]) -> None:
+        self._rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self) -> list[SimpleNamespace]:
+        return self._rows
+
+
+class _GroupsSession:
+    def __init__(self, groups: list[SimpleNamespace]) -> None:
+        self._groups = groups
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def execute(self, _stmt):
+        return _DummyResult(self._groups)
 
 
 class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
@@ -62,6 +92,37 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, ["recover", "lookup"])
         clear_messages.assert_not_awaited()
         pick_best_quote.assert_not_awaited()
+
+    async def test_quote_job_catches_up_after_scheduled_minute(self) -> None:
+        self.group.quote_hour = 21
+        self.group.quote_minute = 0
+        now = datetime(2026, 3, 27, 19, 3, tzinfo=timezone.utc)
+
+        with (
+            patch.object(scheduler, "SessionLocal", return_value=_GroupsSession([self.group])),
+            patch.object(scheduler, "utc_now", return_value=now),
+            patch.object(scheduler, "_process_group", new=AsyncMock()) as process_group,
+        ):
+            await scheduler.quote_of_the_day_job(SimpleNamespace())
+
+        process_group.assert_awaited_once()
+        window = process_group.await_args.args[2]
+        self.assertEqual(window.end_local.hour, 21)
+        self.assertEqual(window.end_local.minute, 0)
+
+    async def test_quote_job_ignores_stale_unprocessed_cutoff(self) -> None:
+        self.group.quote_hour = 21
+        self.group.quote_minute = 0
+        now = datetime(2026, 3, 27, 21, 1, tzinfo=timezone.utc)
+
+        with (
+            patch.object(scheduler, "SessionLocal", return_value=_GroupsSession([self.group])),
+            patch.object(scheduler, "utc_now", return_value=now),
+            patch.object(scheduler, "_process_group", new=AsyncMock()) as process_group,
+        ):
+            await scheduler.quote_of_the_day_job(SimpleNamespace())
+
+        process_group.assert_not_awaited()
 
     async def test_process_group_skips_empty_window_before_ai(self) -> None:
         with (
@@ -502,3 +563,81 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         sched = scheduler.setup_scheduler(SimpleNamespace())
 
         self.assertIsNotNone(sched.get_job("pending_media_recovery"))
+
+
+class ManualPublishRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    def _make_quote(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            group=SimpleNamespace(chat_id=-100123456, name="Quoto Test Chat"),
+            author=SimpleNamespace(name="Alice"),
+            reaction_score=0.2,
+            ai_score=0.7,
+            length_score=0.1,
+            reaction_count=3,
+            ai_model="openrouter/test",
+            ai_best_text=None,
+            decision_status=STATUS_PUBLISH_UNKNOWN,
+            operation_error=None,
+        )
+
+    async def test_manual_publish_latest_accepts_timeout_based_publish_unknown(self) -> None:
+        quote = self._make_quote()
+        quote.operation_error = "In-progress quote timed out before final status confirmation."
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_latest_manual_publish_candidate", new=AsyncMock(return_value=quote)),
+            patch.object(
+                scheduler.core,
+                "claim_latest_manual_publish_candidate",
+                new=AsyncMock(return_value=(quote, STATUS_PUBLISH_UNKNOWN)),
+            ),
+            patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)) as publish_quote,
+        ):
+            result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
+
+        self.assertEqual(result, "published")
+        self.assertTrue(publish_quote.await_args.kwargs["forced_by_admin"])
+        self.assertTrue(publish_quote.await_args.kwargs["clear_window_after"])
+
+    async def test_manual_publish_latest_skips_already_sent_publish_unknown(self) -> None:
+        quote = self._make_quote()
+        quote.operation_error = "Telegram message was sent, but DB finalization failed: lost DB connection"
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_latest_manual_publish_candidate", new=AsyncMock(return_value=quote)),
+            patch.object(scheduler.core, "claim_latest_manual_publish_candidate", new=AsyncMock()) as claim_candidate,
+            patch.object(scheduler, "_publish_quote_message", new=AsyncMock()) as publish_quote,
+        ):
+            result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
+
+        self.assertEqual(result, "already_sent")
+        claim_candidate.assert_not_awaited()
+        publish_quote.assert_not_awaited()
+
+    async def test_manual_publish_latest_accepts_boring_notice_unknown(self) -> None:
+        quote = self._make_quote()
+        quote.decision_status = STATUS_BORING_NOTICE_UNKNOWN
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_latest_manual_publish_candidate", new=AsyncMock(return_value=quote)),
+            patch.object(
+                scheduler.core,
+                "claim_latest_manual_publish_candidate",
+                new=AsyncMock(return_value=(quote, STATUS_BORING_NOTICE_UNKNOWN)),
+            ),
+            patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)) as publish_quote,
+        ):
+            result = await scheduler.manual_publish_latest(SimpleNamespace(), quote.group.chat_id)
+
+        self.assertEqual(result, "published")
+        self.assertTrue(publish_quote.await_args.kwargs["forced_by_admin"])
+        self.assertTrue(publish_quote.await_args.kwargs["clear_window_after"])
+
+
+class ManualPublishableStatusesTests(unittest.TestCase):
+    def test_manual_publishable_statuses_include_unknown_recovery_states(self) -> None:
+        self.assertIn(STATUS_PUBLISH_UNKNOWN, MANUAL_PUBLISHABLE_STATUSES)
+        self.assertIn(STATUS_BORING_NOTICE_UNKNOWN, MANUAL_PUBLISHABLE_STATUSES)
