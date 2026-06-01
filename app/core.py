@@ -919,6 +919,20 @@ async def append_quote_operation_error(quote_id: int, operation_error: str) -> N
         await session.commit()
 
 
+async def delete_quote_record(quote_id: int) -> bool:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Quote).where(models.Quote.id == quote_id)
+        )
+        quote = result.scalars().first()
+        if not quote:
+            return False
+
+        await session.delete(quote)
+        await session.commit()
+        return True
+
+
 async def get_stale_in_progress_quotes(chat_id: int, older_than: datetime) -> list[models.Quote]:
     async with SessionLocal() as session:
         result = await session.execute(

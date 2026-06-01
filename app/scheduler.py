@@ -1,6 +1,6 @@
 import logging
 import json
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from html import escape
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -22,12 +22,13 @@ from .quote_status import (
     STATUS_PUBLISHING,
     STATUS_SKIPPED_BORING,
 )
-from .windows import QuoteWindow, get_closed_window, utc_now
+from .windows import QuoteWindow, closed_window_for_day, get_closed_window, utc_now
 from .windows import quote_timezone
 
 log = setup_logging(logging.getLogger(__name__))
 
 _STALE_QUOTE_AFTER = timedelta(minutes=15)
+_TECHNICAL_RETRY_AFTER = timedelta(minutes=15)
 _QUOTE_JOB_CATCH_UP_WINDOW = timedelta(hours=2)
 _MEDIA_COPY_CONTENT_TYPES = {"photo", "image", "video", "animation", "video_note", "voice", "audio"}
 _MEDIA_CAPTION_LIMIT = 1024
@@ -63,13 +64,14 @@ def _due_closed_window_for_group(group: Group, now: datetime) -> QuoteWindow | N
     cutoff = time(hour=quote_hour, minute=quote_minute)
     tz = quote_timezone()
     now_local = now.astimezone(tz)
-    cutoff_local = datetime.combine(now_local.date(), cutoff, tzinfo=tz)
-    delay = now_local - cutoff_local
+    cutoff_dates = (now_local.date(), now_local.date() - timedelta(days=1))
+    for cutoff_date in cutoff_dates:
+        cutoff_local = datetime.combine(cutoff_date, cutoff, tzinfo=tz)
+        delay = now_local - cutoff_local
+        if timedelta(0) <= delay < _QUOTE_JOB_CATCH_UP_WINDOW:
+            return closed_window_for_day(cutoff_local.date(), tz=tz, at_time=cutoff)
 
-    if delay < timedelta(0) or delay >= _QUOTE_JOB_CATCH_UP_WINDOW:
-        return None
-
-    return get_closed_window(now, at_time=cutoff)
+    return None
 
 
 async def recover_pending_media_job(bot: Bot) -> None:
@@ -97,8 +99,14 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
 
     existing = await core.get_quote_for_day(group.id, window.quote_day)
     if existing:
-        log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже обработан ({existing.decision_status})")
-        return
+        if await _prepare_existing_quote_for_retry(bot, group, existing):
+            log.info(
+                f"{group.chat_id} | 🔁 День {window.quote_day} будет пересчитан после "
+                f"технической ошибки ({existing.decision_status})"
+            )
+        else:
+            log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже обработан ({existing.decision_status})")
+            return
 
     message_count = await core.count_window_messages(group.chat_id, window)
 
@@ -233,6 +241,50 @@ def _quote_context_messages(
     enabled: bool,
 ) -> list:
     return evaluation.context_messages if enabled else []
+
+
+async def _prepare_existing_quote_for_retry(bot: Bot, group: Group, quote: Quote) -> bool:
+    if quote.decision_status == STATUS_PUBLISH_FAILED:
+        if getattr(quote, "bot_message_id", None) or not _technical_retry_due(quote):
+            return False
+        deleted = await core.delete_quote_record(quote.id)
+        if not deleted:
+            return False
+        return True
+
+    if quote.decision_status == STATUS_BORING_NOTICE_FAILED:
+        if getattr(quote, "notice_message_id", None) or not _technical_retry_due(quote):
+            return False
+        if core.effective_group_boring_notice_enabled(group):
+            await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
+            return False
+        await core.mark_quote_status(
+            quote.id,
+            STATUS_SKIPPED_BORING,
+            operation_error=None,
+        )
+        try:
+            deleted = await core.clear_window_messages(group.chat_id, _window_from_quote(quote))
+            log.debug(f"{group.chat_id} | 🗑️ Очищено {deleted} сообщений после отключённого boring notice")
+        except Exception as exc:
+            await core.append_quote_operation_error(quote.id, f"Cleanup failed: {str(exc)[:200]}")
+            log.warning(f"⚠️ Не удалось очистить скучный день в {group.chat_id}: {exc}")
+        return False
+
+    return False
+
+
+def _technical_retry_due(quote: Quote, now: datetime | None = None) -> bool:
+    changed_at = getattr(quote, "status_changed_at", None) or getattr(quote, "created_at", None)
+    if changed_at is None:
+        return True
+    return _as_utc(now or utc_now()) - _as_utc(changed_at) >= _TECHNICAL_RETRY_AFTER
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 async def _recover_stale_quotes_for_chat(chat_id: int) -> int:

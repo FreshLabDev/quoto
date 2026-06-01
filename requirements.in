@@ -5,6 +5,7 @@ pydantic-settings
 python-dotenv
 asyncpg
 sqlalchemy
+greenlet
 httpx
 apscheduler
 pytest

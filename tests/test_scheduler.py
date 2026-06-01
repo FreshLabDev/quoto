@@ -10,6 +10,10 @@ os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432
 
 from app import scheduler, scoring
 from app.quote_status import (
+    STATUS_BORING_NOTICE_FAILED,
+    STATUS_BORING_NOTICE_UNKNOWN,
+    STATUS_PUBLISH_FAILED,
+    STATUS_PUBLISH_UNKNOWN,
     STATUS_SKIPPED_BORING,
 )
 
@@ -107,6 +111,24 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(window.end_local.hour, 21)
         self.assertEqual(window.end_local.minute, 0)
 
+    async def test_quote_job_catches_up_after_midnight_for_late_cutoff(self) -> None:
+        self.group.quote_hour = 23
+        self.group.quote_minute = 30
+        now = datetime(2026, 3, 27, 22, 15, tzinfo=timezone.utc)
+
+        with (
+            patch.object(scheduler, "SessionLocal", return_value=_GroupsSession([self.group])),
+            patch.object(scheduler, "utc_now", return_value=now),
+            patch.object(scheduler, "_process_group", new=AsyncMock()) as process_group,
+        ):
+            await scheduler.quote_of_the_day_job(SimpleNamespace())
+
+        process_group.assert_awaited_once()
+        window = process_group.await_args.args[2]
+        self.assertEqual(window.quote_day, date(2026, 3, 27))
+        self.assertEqual(window.end_local.hour, 23)
+        self.assertEqual(window.end_local.minute, 30)
+
     async def test_quote_job_ignores_stale_unprocessed_cutoff(self) -> None:
         self.group.quote_hour = 21
         self.group.quote_minute = 0
@@ -121,6 +143,113 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         process_group.assert_not_awaited()
 
+    async def test_process_group_retries_publish_failed_after_cooldown(self) -> None:
+        existing = self._existing_quote(
+            decision_status=STATUS_PUBLISH_FAILED,
+            status_changed_at=datetime(2026, 3, 27, 18, 0, tzinfo=timezone.utc),
+        )
+
+        with (
+            patch.object(scheduler, "utc_now", return_value=datetime(2026, 3, 27, 18, 16, tzinfo=timezone.utc)),
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=existing)),
+            patch.object(scheduler.core, "delete_quote_record", new=AsyncMock(return_value=True)) as delete_quote,
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=0)) as count_messages,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        delete_quote.assert_awaited_once_with(existing.id)
+        count_messages.assert_awaited_once_with(self.group.chat_id, self.window)
+
+    async def test_process_group_leaves_recent_publish_failed_for_cooldown(self) -> None:
+        existing = self._existing_quote(
+            decision_status=STATUS_PUBLISH_FAILED,
+            status_changed_at=datetime(2026, 3, 27, 18, 5, tzinfo=timezone.utc),
+        )
+
+        with (
+            patch.object(scheduler, "utc_now", return_value=datetime(2026, 3, 27, 18, 16, tzinfo=timezone.utc)),
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=existing)),
+            patch.object(scheduler.core, "delete_quote_record", new=AsyncMock()) as delete_quote,
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock()) as count_messages,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        delete_quote.assert_not_awaited()
+        count_messages.assert_not_awaited()
+
+    async def test_process_group_retries_failed_boring_notice_after_cooldown(self) -> None:
+        bot = SimpleNamespace()
+        existing = self._existing_quote(
+            decision_status=STATUS_BORING_NOTICE_FAILED,
+            status_changed_at=datetime(2026, 3, 27, 18, 0, tzinfo=timezone.utc),
+        )
+
+        with (
+            patch.object(scheduler, "utc_now", return_value=datetime(2026, 3, 27, 18, 16, tzinfo=timezone.utc)),
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=existing)),
+            patch.object(scheduler, "_send_boring_notice", new=AsyncMock()) as send_notice,
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock()) as count_messages,
+        ):
+            await scheduler._process_group(bot, self.group, self.window)
+
+        send_notice.assert_awaited_once_with(
+            bot=bot,
+            group=self.group,
+            quote=existing,
+            clear_window_after=True,
+        )
+        count_messages.assert_not_awaited()
+
+    async def test_process_group_finalizes_failed_boring_notice_when_notice_disabled(self) -> None:
+        self.group.boring_notice_enabled = False
+        existing = self._existing_quote(
+            decision_status=STATUS_BORING_NOTICE_FAILED,
+            status_changed_at=datetime(2026, 3, 27, 18, 0, tzinfo=timezone.utc),
+        )
+
+        with (
+            patch.object(scheduler, "utc_now", return_value=datetime(2026, 3, 27, 18, 16, tzinfo=timezone.utc)),
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+            patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=existing)),
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+            patch.object(scheduler.core, "clear_window_messages", new=AsyncMock(return_value=4)) as clear_messages,
+            patch.object(scheduler.core, "count_window_messages", new=AsyncMock()) as count_messages,
+        ):
+            await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+        mark_status.assert_awaited_once_with(
+            existing.id,
+            STATUS_SKIPPED_BORING,
+            operation_error=None,
+        )
+        clear_messages.assert_awaited_once()
+        self.assertEqual(clear_messages.await_args.args[0], self.group.chat_id)
+        count_messages.assert_not_awaited()
+
+    async def test_process_group_does_not_auto_retry_unknown_statuses(self) -> None:
+        for status in (STATUS_PUBLISH_UNKNOWN, STATUS_BORING_NOTICE_UNKNOWN):
+            with self.subTest(status=status):
+                existing = self._existing_quote(
+                    decision_status=status,
+                    status_changed_at=datetime(2026, 3, 27, 18, 0, tzinfo=timezone.utc),
+                )
+
+                with (
+                    patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
+                    patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=existing)),
+                    patch.object(scheduler.core, "delete_quote_record", new=AsyncMock()) as delete_quote,
+                    patch.object(scheduler, "_send_boring_notice", new=AsyncMock()) as send_notice,
+                    patch.object(scheduler.core, "count_window_messages", new=AsyncMock()) as count_messages,
+                ):
+                    await scheduler._process_group(SimpleNamespace(), self.group, self.window)
+
+                delete_quote.assert_not_awaited()
+                send_notice.assert_not_awaited()
+                count_messages.assert_not_awaited()
+
     async def test_process_group_skips_empty_window_before_ai(self) -> None:
         with (
             patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock(return_value=0)),
@@ -133,6 +262,25 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         clear_messages.assert_not_awaited()
         pick_best_quote.assert_not_awaited()
+
+    def _existing_quote(
+        self,
+        *,
+        decision_status: str,
+        status_changed_at: datetime,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=90,
+            decision_status=decision_status,
+            status_changed_at=status_changed_at,
+            created_at=status_changed_at,
+            quote_day=self.window.quote_day,
+            window_start_at=self.window.start_utc,
+            window_end_at=self.window.end_utc,
+            bot_message_id=None,
+            notice_message_id=None,
+            decision_reason="boring",
+        )
 
     async def test_process_group_skips_subthreshold_window_before_ai(self) -> None:
         message_count = max(1, scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW - 1)
