@@ -53,7 +53,6 @@ A Telegram bot that tracks quote days and only publishes a **quote of the day** 
 | Command    | Description                      |
 | :--------- | :------------------------------- |
 | `/start`   | Opens the context-aware control panel |
-| `/publish_quote` | Admin-only recovery for the latest boring or failed day |
 
 ## 🚀 Quick Start
 

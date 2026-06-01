@@ -12,7 +12,6 @@ from .config import settings, setup_logging
 from .db import SessionLocal
 from .quote_status import (
     IN_PROGRESS_STATUSES,
-    MANUAL_PUBLISHABLE_STATUSES,
     STATUS_PUBLISHED,
     STATUS_PUBLISHING,
     STATUS_SKIPPED_BORING,
@@ -755,7 +754,6 @@ async def create_quote_record(
                 status_changed_at=utc_now(),
                 decision_reason=decision_reason,
                 operation_error=operation_error,
-                forced_by_admin=False,
                 created_at=utc_now(),
             )
             session.add(quote)
@@ -849,7 +847,6 @@ async def update_quote_publication(
     quote_id: int,
     bot_message_id: int,
     decision_reason: str | None = None,
-    forced_by_admin: bool = False,
 ) -> None:
     async with SessionLocal() as session:
         result = await session.execute(
@@ -865,7 +862,6 @@ async def update_quote_publication(
         if decision_reason is not None:
             quote.decision_reason = decision_reason
         quote.operation_error = None
-        quote.forced_by_admin = forced_by_admin
         await session.commit()
 
 
@@ -921,51 +917,6 @@ async def append_quote_operation_error(quote_id: int, operation_error: str) -> N
         new_error = operation_error.strip()[:250]
         quote.operation_error = f"{existing} | {new_error}".strip(" |") if existing else new_error
         await session.commit()
-
-
-async def claim_latest_manual_publish_candidate(
-    chat_id: int,
-) -> tuple[models.Quote | None, str | None]:
-    async with SessionLocal() as session:
-        async with session.begin():
-            result = await session.execute(
-                select(models.Quote)
-                .join(models.Group, models.Quote.group_id == models.Group.id)
-                .options(selectinload(models.Quote.author), selectinload(models.Quote.group))
-                .where(
-                    models.Group.chat_id == chat_id,
-                    models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
-                )
-                .order_by(models.Quote.window_end_at.desc())
-                .limit(1)
-                .with_for_update(skip_locked=True)
-            )
-            quote = result.scalars().first()
-            if not quote:
-                return None, None
-
-            previous_status = quote.decision_status
-            quote.decision_status = STATUS_PUBLISHING
-            quote.status_changed_at = utc_now()
-            quote.operation_error = None
-
-        return quote, previous_status
-
-
-async def get_latest_manual_publish_candidate(chat_id: int) -> models.Quote | None:
-    async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Quote)
-            .join(models.Group, models.Quote.group_id == models.Group.id)
-            .options(selectinload(models.Quote.author), selectinload(models.Quote.group))
-            .where(
-                models.Group.chat_id == chat_id,
-                models.Quote.decision_status.in_(MANUAL_PUBLISHABLE_STATUSES),
-            )
-            .order_by(models.Quote.window_end_at.desc())
-            .limit(1)
-        )
-        return result.scalars().first()
 
 
 async def get_stale_in_progress_quotes(chat_id: int, older_than: datetime) -> list[models.Quote]:

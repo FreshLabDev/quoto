@@ -29,11 +29,6 @@ log = setup_logging(logging.getLogger(__name__))
 
 _STALE_QUOTE_AFTER = timedelta(minutes=15)
 _QUOTE_JOB_CATCH_UP_WINDOW = timedelta(hours=2)
-_MANUAL_PUBLISH_NOTHING = "nothing"
-_MANUAL_PUBLISH_PUBLISHED = "published"
-_MANUAL_PUBLISH_FAILED = "failed"
-_MANUAL_PUBLISH_ALREADY_SENT = "already_sent"
-_PUBLISH_UNKNOWN_SENT_PREFIX = "Telegram message was sent, but DB finalization failed:"
 _MEDIA_COPY_CONTENT_TYPES = {"photo", "image", "video", "animation", "video_note", "voice", "audio"}
 _MEDIA_CAPTION_LIMIT = 1024
 
@@ -233,54 +228,6 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
 
 
-async def manual_publish_latest(bot: Bot, chat_id: int) -> str:
-    await _recover_stale_quotes_for_chat(chat_id)
-
-    latest = await core.get_latest_manual_publish_candidate(chat_id)
-    if not latest or not latest.group:
-        return _MANUAL_PUBLISH_NOTHING
-
-    if (
-        latest.decision_status == STATUS_PUBLISH_UNKNOWN
-        and _publish_unknown_already_sent(latest.operation_error)
-    ):
-        return _MANUAL_PUBLISH_ALREADY_SENT
-
-    quote, previous_status = await core.claim_latest_manual_publish_candidate(chat_id)
-    if not quote or not quote.group:
-        return _MANUAL_PUBLISH_NOTHING
-
-    author_name = quote.author.name if quote.author else "Аноним"
-    breakdown = scoring.ScoreBreakdown(
-        reaction=quote.reaction_score or 0.0,
-        ai=quote.ai_score or 0.0,
-        length=quote.length_score or 0.0,
-        reaction_count=quote.reaction_count or 0,
-        ai_model=quote.ai_model or "",
-        ai_best_text=quote.ai_best_text,
-    )
-
-    published = await _publish_quote_message(
-        bot=bot,
-        group=quote.group,
-        quote=quote,
-        author_name=author_name,
-        breakdown=breakdown,
-        clear_window_after=_manual_publish_clears_window(previous_status),
-        pin_enabled=core.effective_group_pin_enabled(quote.group),
-        forced_by_admin=True,
-    )
-    return _MANUAL_PUBLISH_PUBLISHED if published else _MANUAL_PUBLISH_FAILED
-
-
-def _manual_publish_clears_window(previous_status: str | None) -> bool:
-    return previous_status != STATUS_SKIPPED_BORING
-
-
-def _publish_unknown_already_sent(operation_error: str | None) -> bool:
-    return bool(operation_error and operation_error.startswith(_PUBLISH_UNKNOWN_SENT_PREFIX))
-
-
 def _quote_context_messages(
     evaluation: scoring.QuoteEvaluation,
     enabled: bool,
@@ -310,7 +257,6 @@ async def _publish_quote_message(
     breakdown: scoring.ScoreBreakdown,
     clear_window_after: bool,
     pin_enabled: bool = True,
-    forced_by_admin: bool = False,
 ) -> bool:
     language = i18n.group_language(group)
     info_parts = [f"<i>{breakdown.stars}</i>"]
@@ -364,14 +310,11 @@ async def _publish_quote_message(
         return False
 
     try:
-        update_kwargs = {
-            "quote_id": quote.id,
-            "bot_message_id": sent.message_id,
-            "decision_reason": quote.decision_reason,
-        }
-        if forced_by_admin:
-            update_kwargs["forced_by_admin"] = True
-        await core.update_quote_publication(**update_kwargs)
+        await core.update_quote_publication(
+            quote_id=quote.id,
+            bot_message_id=sent.message_id,
+            decision_reason=quote.decision_reason,
+        )
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,

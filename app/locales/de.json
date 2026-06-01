@@ -122,12 +122,6 @@
   "admin": {
     "admin_only": "Das können nur Admins ändern."
   },
-  "manual_publish": {
-    "checking": "Ich prüfe den letzten wiederherstellbaren Tag...",
-    "nothing": "Kein langweiliger oder fehlgeschlagener Tag wartet auf manuelles Veröffentlichen.",
-    "already_sent": "Der letzte Tag wurde bereits an Telegram gesendet, aber die Datenbank hat den Endstatus nicht bestätigt. Ich veröffentliche kein Duplikat.",
-    "failed": "Manuelles Veröffentlichen ist fehlgeschlagen. Prüfe die Bot-Logs."
-  },
   "chat_member": {
     "added": "🏆 <b>Quoto</b>\n\nSchön, in <b>{chat_title}</b> zu sein. Jeden Tag um <b>{time}</b> wähle ich die beste Zeile und veröffentliche das Zitat des Tages.\n\nÖffne /start — Statistik und Einstellungen sind dort.",
     "need_admin": "⚠️ Mach mich zum <b>Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i> — dann kann ich das Ergebnis veröffentlichen.",
