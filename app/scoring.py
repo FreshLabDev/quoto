@@ -303,11 +303,11 @@ def _valid_context_messages(
     messages: list[Message],
     primary_message: Message,
 ) -> list[Message]:
-    if not quote_choice or not quote_choice.context_needed:
+    if not quote_choice:
         return []
 
     selected_ids = _dedupe_preserve_order(quote_choice.context_ids)
-    if not selected_ids:
+    if not selected_ids and not quote_choice.context_needed:
         return []
 
     by_id = {message.id: message for message in messages}
@@ -316,23 +316,17 @@ def _valid_context_messages(
     if primary_message.id not in {message.id for message in selected}:
         selected.append(primary_message)
 
-    selected = sorted(selected, key=lambda message: _message_position(message, messages))
-    if len(selected) <= 1:
-        return []
-
-    if len(selected) > _MAX_CONTEXT_MESSAGES:
-        selected = _trim_context_around_primary(selected, primary_message, _MAX_CONTEXT_MESSAGES)
-
-    if _is_contiguous_context(selected, messages) or _is_reply_connected_context(selected):
-        return selected
-    return []
+    return _limit_context_messages(selected, primary_message, _MAX_CONTEXT_MESSAGES)
 
 
-def _trim_context_around_primary(
+def _limit_context_messages(
     selected: list[Message],
     primary_message: Message,
     limit: int,
 ) -> list[Message]:
+    if len(selected) <= limit:
+        return selected
+
     primary_index = next(
         (index for index, message in enumerate(selected) if message.id == primary_message.id),
         None,
@@ -360,37 +354,3 @@ def _dedupe_preserve_order(values: list[int]) -> list[int]:
         seen.add(value)
         result.append(value)
     return result
-
-
-def _is_contiguous_context(selected: list[Message], messages: list[Message]) -> bool:
-    positions = sorted(_message_position(message, messages) for message in selected)
-    return positions[-1] - positions[0] + 1 == len(positions)
-
-
-def _is_reply_connected_context(selected: list[Message]) -> bool:
-    by_message_id = {message.message_id: message.id for message in selected}
-    graph: dict[int, set[int]] = {message.id: set() for message in selected}
-
-    for message in selected:
-        reply_to_id = getattr(message, "reply_to_message_id", None)
-        if reply_to_id not in by_message_id:
-            continue
-        parent_id = by_message_id[reply_to_id]
-        graph[message.id].add(parent_id)
-        graph[parent_id].add(message.id)
-
-    start = selected[0].id
-    visited: set[int] = set()
-    stack = [start]
-    while stack:
-        current = stack.pop()
-        if current in visited:
-            continue
-        visited.add(current)
-        stack.extend(graph[current] - visited)
-
-    return len(visited) == len(selected)
-
-
-def _message_position(message: Message, messages: list[Message]) -> int:
-    return next(index for index, candidate in enumerate(messages) if candidate.id == message.id)
