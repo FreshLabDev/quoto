@@ -34,8 +34,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
     OPENROUTER_HTTP_REFERER: str = "https://t.me/quototbot"
     OPENROUTER_APP_TITLE: str = "Quoto"
-    OPENROUTER_REASONING_EFFORT: str = "medium"
-    OPENROUTER_EVAL_REASONING_EFFORT: str = "medium"
+    OPENROUTER_EVAL_REASONING_EFFORT: str = "low"
     OPENROUTER_MEDIA_REASONING_EFFORT: str = "medium"
     OPENROUTER_EVAL_MAX_TOKENS: int = 32000
 

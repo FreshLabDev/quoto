@@ -39,6 +39,8 @@ _SCORE_PROMPT = (
     "`primary_id`, and set `context_needed` to true when the selected moment needs more than one message. "
     "A `kind=sticker` message may only support the context; never choose a sticker as `primary_id`. "
     "Never combine unrelated messages. Max 5 context messages. "
+    "In `messages`, return ONLY the strongest candidates: at most 10 entries, ordered from best to worst. "
+    "Messages that only serve as context for a selected moment are part of that moment, not separate entries. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
     "\"messages\": [{\"id\": <id>, \"score\": <0-10>}]}."
@@ -65,6 +67,8 @@ _DAY_PROMPT = (
     "`primary_id`, and set `context_needed` to true when the selected moment needs more than one message. "
     "A `kind=sticker` message may only support the context; never choose a sticker as `primary_id`. "
     "Never combine unrelated messages. Max 5 context messages. "
+    "In `messages`, return ONLY the strongest candidates: at most 10 entries, ordered from best to worst. "
+    "Messages that only serve as context for a selected moment are part of that moment, not separate entries. "
     "Respond ONLY with a valid JSON object in this format: "
     "{\"day\": {\"should_publish\": true, \"reason_code\": \"worthy\", \"reason_text\": \"short reason\"}, "
     "\"quote\": {\"primary_id\": <id>, \"context_ids\": [<id>], \"context_needed\": <true|false>}, "
@@ -117,6 +121,7 @@ _SCORE_RESPONSE_SCHEMA = {
         },
         "messages": {
             "type": "array",
+            "maxItems": 10,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -323,7 +328,7 @@ async def evaluate_messages(
                     "status": "empty_response",
                     "actual_model": actual_model,
                 }
-                _write_ai_audit_record(audit_record)
+                await asyncio.to_thread(_write_ai_audit_record, audit_record)
                 if attempt < max_retries - 1:
                     delay = retry_delays[attempt]
                     log.warning(
@@ -367,7 +372,7 @@ async def evaluate_messages(
                 "language_choice": _language_choice_audit_payload(language_choice),
                 "day_verdict_error": verdict_error,
             }
-            _write_ai_audit_record(audit_record)
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
             log.debug(f"🤖 {actual_model} оценил {len(scores)} сообщений")
             return EvaluationResult(
                 scores=scores,
@@ -387,7 +392,7 @@ async def evaluate_messages(
                 "message": str(e),
                 "status_code": e.response.status_code,
             }
-            _write_ai_audit_record(audit_record)
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
             if _is_retryable_http_status(e.response.status_code) and attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 log.warning(
@@ -402,7 +407,7 @@ async def evaluate_messages(
                 "type": type(e).__name__,
                 "message": str(e),
             }
-            _write_ai_audit_record(audit_record)
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
             if attempt < max_retries - 1:
                 delay = retry_delays[attempt]
                 log.warning(
@@ -417,14 +422,14 @@ async def evaluate_messages(
                 "type": type(e).__name__,
                 "message": str(e),
             }
-            _write_ai_audit_record(audit_record)
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
             log.error(f"Ошибка парсинга ответа AI: {e}")
         except Exception as e:
             audit_record["error"] = {
                 "type": type(e).__name__,
                 "message": str(e),
             }
-            _write_ai_audit_record(audit_record)
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
             log.error(f"Ошибка при запросе к OpenRouter: {e}")
 
         break
@@ -578,7 +583,12 @@ async def describe_media_file(
     if not settings.OPENROUTER_API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not configured for media analysis.")
 
-    media_part = _media_content_part(path=path, mime_type=mime_type, media_kind=media_kind)
+    media_part = await asyncio.to_thread(
+        _media_content_part,
+        path=path,
+        mime_type=mime_type,
+        media_kind=media_kind,
+    )
     body: dict[str, Any] = {
         "model": settings.OPENROUTER_MEDIA_MODEL,
         "messages": [
@@ -704,11 +714,6 @@ def _normalize_scores(
             continue
         raw = max(0.0, min(10.0, float(entry["score"])))
         result[msg_id] = raw / 10.0
-
-    for msg in messages:
-        msg_id = int(msg["id"])
-        if msg_id not in result:
-            result[msg_id] = 0.5
 
     return result
 

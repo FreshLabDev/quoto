@@ -99,14 +99,21 @@ def _score_rows(
     context_internal_ids: set[int],
     created_at,
 ) -> list[models.MessageAIScore]:
+    included = [
+        message
+        for message in messages
+        if message.id in scores
+        or message.id == selected_internal_id
+        or message.id in context_internal_ids
+    ]
     ranked_ids = {
         message_id: rank
         for rank, message_id in enumerate(
             [
                 message.id
                 for message in sorted(
-                    messages,
-                    key=lambda item: (-(scores.get(item.id, 0.5)), _message_position(item, messages)),
+                    included,
+                    key=lambda item: (-(scores.get(item.id, 0.0)), _message_position(item, messages)),
                 )
             ],
             start=1,
@@ -114,8 +121,8 @@ def _score_rows(
     }
 
     rows: list[models.MessageAIScore] = []
-    for message in messages:
-        ai_score = max(0.0, min(1.0, float(scores.get(message.id, 0.5))))
+    for message in included:
+        ai_score = max(0.0, min(1.0, float(scores.get(message.id, 0.0))))
         reactions = _message_reactions_payload(message)
         media_item = _primary_media_item(message)
         rows.append(
