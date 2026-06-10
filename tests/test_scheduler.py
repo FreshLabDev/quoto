@@ -56,6 +56,7 @@ class _GroupsSession:
 
 class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
+        scheduler._completed_days.clear()
         self.group = SimpleNamespace(id=1, chat_id=-100123456, name="Quoto Test Chat")
         self.window = _make_window()
 

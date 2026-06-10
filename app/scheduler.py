@@ -1,6 +1,6 @@
 import logging
 import json
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from html import escape
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -32,6 +32,16 @@ _TECHNICAL_RETRY_AFTER = timedelta(minutes=15)
 _QUOTE_JOB_CATCH_UP_WINDOW = timedelta(hours=2)
 _MEDIA_COPY_CONTENT_TYPES = {"photo", "image", "video", "animation", "video_note", "voice", "audio"}
 _MEDIA_CAPTION_LIMIT = 1024
+_TERMINAL_EXISTING_STATUSES = {
+    STATUS_PUBLISHED,
+    STATUS_SKIPPED_BORING,
+    STATUS_PUBLISH_UNKNOWN,
+    STATUS_BORING_NOTICE_UNKNOWN,
+}
+# Дни, доведённые до терминального исхода в этом процессе: пока день в кэше,
+# повторные тики catch-up окна не трогают группу. После рестарта кэш пуст —
+# истину восстанавливает запись Quote в БД.
+_completed_days: dict[int, date] = {}
 
 
 async def quote_of_the_day_job(bot: Bot) -> None:
@@ -41,12 +51,13 @@ async def quote_of_the_day_job(bot: Bot) -> None:
         groups = result.scalars().all()
 
     if not groups:
-        log.info("📭 Нет групп для обработки")
         return
 
     for group in groups:
         window = _due_closed_window_for_group(group, now)
         if not window:
+            continue
+        if _completed_days.get(group.id) == window.quote_day:
             continue
 
         log.info(
@@ -57,6 +68,20 @@ async def quote_of_the_day_job(bot: Bot) -> None:
             await _process_group(bot, group, window)
         except Exception as e:
             log.error(f"❌ Ошибка при обработке группы {group.chat_id}: {e}")
+
+
+def _mark_day_completed(group: Group, window: QuoteWindow) -> None:
+    _completed_days[group.id] = window.quote_day
+
+
+def _existing_quote_is_terminal(quote: Quote) -> bool:
+    if quote.decision_status in _TERMINAL_EXISTING_STATUSES:
+        return True
+    if quote.decision_status == STATUS_PUBLISH_FAILED:
+        return bool(getattr(quote, "bot_message_id", None))
+    if quote.decision_status == STATUS_BORING_NOTICE_FAILED:
+        return bool(getattr(quote, "notice_message_id", None))
+    return False
 
 
 def _due_closed_window_for_group(group: Group, now: datetime) -> QuoteWindow | None:
@@ -105,17 +130,21 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
                 f"технической ошибки ({existing.decision_status})"
             )
         else:
+            if _existing_quote_is_terminal(existing):
+                _mark_day_completed(group, window)
             log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже обработан ({existing.decision_status})")
             return
 
     message_count = await core.count_window_messages(group.chat_id, window)
 
     if message_count == 0:
+        _mark_day_completed(group, window)
         log.info(f"{group.chat_id} | 📭 День {window.quote_day} пустой")
         return
 
     if message_count < min_messages:
         deleted = await core.clear_window_messages(group.chat_id, window)
+        _mark_day_completed(group, window)
         log.info(
             f"{group.chat_id} | 🤫 День {window.quote_day} пропущен: "
             f"сообщений {message_count} < {min_messages}. "
@@ -142,6 +171,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             )
 
     if evaluation.message_count == 0:
+        _mark_day_completed(group, window)
         if evaluation.source_message_count:
             deleted = await core.clear_window_messages(group.chat_id, window)
             log.info(
@@ -154,6 +184,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
 
     if evaluation.message_count < min_messages:
         deleted = await core.clear_window_messages(group.chat_id, window)
+        _mark_day_completed(group, window)
         log.info(
             f"{group.chat_id} | 🤫 День {window.quote_day} пропущен: "
             f"сообщений {evaluation.message_count} < {min_messages}. "
@@ -199,7 +230,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         if not created:
             log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
             return
-        await _publish_quote_message(
+        published = await _publish_quote_message(
             bot=bot,
             group=group,
             quote=quote,
@@ -208,6 +239,8 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             clear_window_after=True,
             pin_enabled=core.effective_group_pin_enabled(group),
         )
+        if published:
+            _mark_day_completed(group, window)
         return
 
     quote, created = await core.create_quote_record(
@@ -228,12 +261,14 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         return
     if not core.effective_group_boring_notice_enabled(group):
         deleted = await core.clear_window_messages(group.chat_id, window)
+        _mark_day_completed(group, window)
         log.info(
             f"{group.chat_id} | 😴 День {window.quote_day} помечен скучным без уведомления. "
             f"Очищено {deleted} сообщений."
         )
         return
-    await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True)
+    if await _send_boring_notice(bot=bot, group=group, quote=quote, clear_window_after=True):
+        _mark_day_completed(group, window)
 
 
 def _quote_context_messages(
@@ -410,7 +445,7 @@ async def _send_boring_notice(
     group: Group,
     quote: Quote,
     clear_window_after: bool,
-) -> None:
+) -> bool:
     language = i18n.group_language(group)
     details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
     reason_block = (
@@ -434,7 +469,7 @@ async def _send_boring_notice(
             operation_error=str(e)[:250],
         )
         log.error(f"❌ Ошибка при отправке boring-day уведомления в {group.chat_id}: {e}")
-        return
+        return False
 
     try:
         await core.update_quote_notice(quote.id, sent.message_id)
@@ -448,7 +483,7 @@ async def _send_boring_notice(
             f"❌ Boring-day уведомление отправлено, но не удалось зафиксировать статус в БД для "
             f"{group.chat_id}: {e}"
         )
-        return
+        return False
 
     if clear_window_after:
         try:
@@ -459,6 +494,7 @@ async def _send_boring_notice(
             log.warning(f"⚠️ Не удалось очистить скучный день в {group.chat_id}: {e}")
 
     log.info(f"😴 День {quote.quote_day} помечен как скучный в {group.name} ({group.chat_id})")
+    return True
 
 
 async def _recover_stale_quote(quote: Quote) -> bool:

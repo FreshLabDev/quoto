@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import math
@@ -259,7 +260,7 @@ async def _process_media_source(bot: Bot, *, db_message_id: int, source: MediaSo
     try:
         with tempfile.TemporaryDirectory() as tempdir:
             raw_path = await _download_telegram_file(bot, source, Path(tempdir))
-            normalized = _normalize_media(source, raw_path, Path(tempdir))
+            normalized = await asyncio.to_thread(_normalize_media, source, raw_path, Path(tempdir))
             cache = await _find_cache(source, sha256=normalized.sha256, phash=normalized.phash)
             if cache:
                 await _store_media_result(
