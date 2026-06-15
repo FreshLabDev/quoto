@@ -26,6 +26,11 @@ services:
       - .env
     environment:
       DB_URL: postgresql+asyncpg://quoto:quoto_secret_2026@db:5432/quoto
+      # Force UTF-8 for stdout/stderr so emoji in logs don't get mangled
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUNBUFFERED: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     volumes:
       - logs:/app/logs
 

@@ -13,6 +13,7 @@ import tempfile
 from typing import Any
 
 from aiogram import Bot, types
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -290,7 +291,14 @@ async def _process_media_source(bot: Bot, *, db_message_id: int, source: MediaSo
                 phash=normalized.phash,
             )
     except Exception as exc:
-        log.warning(f"Media analysis failed for db message {db_message_id}: {exc}")
+        # Files over Telegram's Bot API download limit (~20 MB) and transient
+        # network/DNS hiccups are expected and out of our control — log them at
+        # DEBUG so they don't drown the WARNING stream. Everything else stays a
+        # WARNING because it likely points at a real bug.
+        if _is_expected_media_failure(exc):
+            log.debug(f"Media analysis skipped for db message {db_message_id}: {exc}")
+        else:
+            log.warning(f"Media analysis failed for db message {db_message_id}: {exc}")
         await _store_media_result(
             db_message_id=db_message_id,
             source=source,
@@ -376,6 +384,19 @@ def _supports_analysis(kind: str, mime_type: str | None) -> bool:
         return True
     if kind == "sticker":
         return mime_type != "application/x-tgsticker"
+    return False
+
+
+def _is_expected_media_failure(exc: Exception) -> bool:
+    """Return True for failures we can't fix and don't want to flag as warnings.
+
+    Covers Telegram's Bot API download cap ("file is too big") and transient
+    network/DNS errors while reaching api.telegram.org.
+    """
+    if isinstance(exc, TelegramNetworkError):
+        return True
+    if isinstance(exc, TelegramBadRequest) and "too big" in str(exc).lower():
+        return True
     return False
 
 
