@@ -15,6 +15,9 @@ ALEMBIC_INI_PATH = PROJECT_ROOT / "alembic.ini"
 engine = create_async_engine(
     url=settings.DB_URL,
     pool_size=20,
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=1800,
 )
 
 SessionLocal = async_sessionmaker(

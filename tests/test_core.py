@@ -49,6 +49,17 @@ class _UpdateSession(_DummySession):
         return _DummyResult(self.value)
 
 
+class _SeqSession(_DummySession):
+    """Returns a queued result per execute() call (for multi-query helpers)."""
+
+    def __init__(self, results: list[object]) -> None:
+        super().__init__()
+        self._results = list(results)
+
+    async def execute(self, _stmt):
+        return self._results.pop(0)
+
+
 class CoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_save_message_uses_telegram_message_timestamp(self) -> None:
         session = _DummySession()
@@ -233,6 +244,25 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(
                 core.effective_group_media_analysis_enabled(SimpleNamespace(media_analysis_enabled=True))
             )
+
+    async def test_migrate_group_chat_id_rekeys_group(self) -> None:
+        group = SimpleNamespace(chat_id=-100)
+        session = _SeqSession([_DummyResult(None), _DummyResult(group), object()])
+        with patch.object(core, "SessionLocal", return_value=session):
+            ok = await core.migrate_group_chat_id(-100, -1001999)
+        self.assertTrue(ok)
+        self.assertEqual(group.chat_id, -1001999)
+        session.commit.assert_awaited_once()
+
+    async def test_migrate_group_chat_id_skips_when_target_exists(self) -> None:
+        session = _SeqSession([_DummyResult(SimpleNamespace(chat_id=-1001999))])
+        with patch.object(core, "SessionLocal", return_value=session):
+            ok = await core.migrate_group_chat_id(-100, -1001999)
+        self.assertFalse(ok)
+        session.commit.assert_not_awaited()
+
+    async def test_migrate_group_chat_id_noop_for_same_id(self) -> None:
+        self.assertFalse(await core.migrate_group_chat_id(-100, -100))
 
     def test_group_agreement_accepted_flag(self) -> None:
         self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))

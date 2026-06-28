@@ -731,6 +731,13 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
     await callback.answer()
 
 
+@router.message(F.migrate_to_chat_id)
+async def chat_migrated_handler(message: types.Message):
+    new_chat_id = message.migrate_to_chat_id
+    if new_chat_id is not None:
+        await core.migrate_group_chat_id(message.chat.id, new_chat_id)
+
+
 @router.message(F.chat.type.in_({"group", "supergroup"}))
 async def group_message_handler(message: types.Message, bot: Bot):
     if not message.from_user:

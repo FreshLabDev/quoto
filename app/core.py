@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from aiogram import types
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -164,6 +164,33 @@ async def group_getOrCreate(chat: types.Chat) -> models.Group:
                 select(models.Group).where(models.Group.chat_id == chat.id)
             )
             return result.scalars().first()
+
+
+async def migrate_group_chat_id(old_chat_id: int, new_chat_id: int) -> bool:
+    """Re-key a group when Telegram migrates it to a supergroup (chat_id changes)."""
+    if old_chat_id == new_chat_id:
+        return False
+    async with SessionLocal() as session:
+        existing_new = await session.execute(
+            select(models.Group).where(models.Group.chat_id == new_chat_id)
+        )
+        if existing_new.scalars().first():
+            return False
+        result = await session.execute(
+            select(models.Group).where(models.Group.chat_id == old_chat_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return False
+        group.chat_id = new_chat_id
+        await session.execute(
+            update(models.Message)
+            .where(models.Message.chat_id == old_chat_id)
+            .values(chat_id=new_chat_id)
+        )
+        await session.commit()
+        log.info(f"{old_chat_id} → {new_chat_id} | 🔀 Группа мигрировала в супергруппу")
+        return True
 
 
 async def get_group_by_chat_id(chat_id: int) -> models.Group | None:

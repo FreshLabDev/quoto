@@ -8,6 +8,7 @@ from html import escape
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
+from aiogram.exceptions import TelegramRetryAfter
 from sqlalchemy import select
 
 from . import agreement, core, i18n, media, scoring
@@ -46,6 +47,18 @@ _TERMINAL_EXISTING_STATUSES = {
 _completed_days: dict[int, date] = {}
 # Дни, за которые группе уже отправлено напоминание о принятии соглашения.
 _agreement_reminded: dict[int, date] = {}
+
+
+async def _send_with_retry(method, *, attempts: int = 3, **kwargs):
+    """Call a Telegram send method, honoring flood-control RetryAfter."""
+    for attempt in range(attempts):
+        try:
+            return await method(**kwargs)
+        except TelegramRetryAfter as exc:
+            if attempt < attempts - 1:
+                await asyncio.sleep(min(exc.retry_after, 60) + 1)
+                continue
+            raise
 
 
 async def quote_of_the_day_job(bot: Bot) -> None:
@@ -445,7 +458,8 @@ async def _publish_quote_message(
     try:
         if _can_copy_media_quote(quote):
             try:
-                sent = await bot.copy_message(
+                sent = await _send_with_retry(
+                    bot.copy_message,
                     chat_id=group.chat_id,
                     from_chat_id=group.chat_id,
                     message_id=quote.message_id,
@@ -462,9 +476,9 @@ async def _publish_quote_message(
             except Exception as exc:
                 media_copy_error = str(exc)[:200]
                 log.warning(f"⚠️ Не удалось скопировать медиа цитаты в {group.chat_id}: {exc}")
-                sent = await bot.send_message(chat_id=group.chat_id, text=text)
+                sent = await _send_with_retry(bot.send_message, chat_id=group.chat_id, text=text)
         else:
-            sent = await bot.send_message(chat_id=group.chat_id, text=text)
+            sent = await _send_with_retry(bot.send_message, chat_id=group.chat_id, text=text)
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,
