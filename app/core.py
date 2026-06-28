@@ -1,5 +1,6 @@
 import logging
 import json
+import random
 from datetime import date, datetime, timezone
 
 from aiogram import types
@@ -64,6 +65,14 @@ async def user_getOrCreate(telegram_user: types.User) -> models.User:
             return result.scalars().first()
 
 
+def _jittered_quote_minute() -> int | None:
+    """Spread new groups' cutoff across a few minutes to de-sync the herd."""
+    jitter = getattr(settings, "QUOTE_MINUTE_JITTER", 0) or 0
+    if jitter <= 0:
+        return None
+    return (settings.QUOTE_MINUTE + random.randint(0, jitter)) % 60
+
+
 async def group_getOrCreate(chat: types.Chat) -> models.Group:
     async with SessionLocal() as session:
         result = await session.execute(
@@ -81,6 +90,7 @@ async def group_getOrCreate(chat: types.Chat) -> models.Group:
             group = models.Group(
                 chat_id=chat.id,
                 name=chat.title,
+                quote_minute=_jittered_quote_minute(),
             )
             session.add(group)
             await session.commit()

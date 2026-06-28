@@ -166,6 +166,18 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(core.effective_group_is_premium(group))
             self.assertIsNone(core.effective_group_message_cap(group))
 
+    def test_jittered_quote_minute_within_range(self) -> None:
+        with (
+            patch.object(core.settings, "QUOTE_MINUTE", 0),
+            patch.object(core.settings, "QUOTE_MINUTE_JITTER", 10),
+        ):
+            for _ in range(50):
+                self.assertIn(core._jittered_quote_minute(), range(0, 11))
+
+    def test_jitter_disabled_returns_none(self) -> None:
+        with patch.object(core.settings, "QUOTE_MINUTE_JITTER", 0):
+            self.assertIsNone(core._jittered_quote_minute())
+
     def test_group_agreement_accepted_flag(self) -> None:
         self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))
         self.assertTrue(

@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     # the most recent N (cost safety). Premium groups bypass the cap entirely.
     MAX_MESSAGES_PER_DAILY_EVAL: int = 1500
     PREMIUM_CHAT_IDS: list[int] = []
+    # How many groups the daily sweep processes in parallel (bounded concurrency).
+    SCHEDULER_CONCURRENCY: int = 8
+    # Random 0..N minute offset added to a new group's cutoff to de-sync the herd.
+    QUOTE_MINUTE_JITTER: int = 10
 
 
 

@@ -152,6 +152,41 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(window.end_local.hour, 23)
         self.assertEqual(window.end_local.minute, 30)
 
+    async def test_quote_job_processes_multiple_due_groups(self) -> None:
+        now = datetime(2026, 3, 27, 19, 3, tzinfo=timezone.utc)
+        groups = [
+            SimpleNamespace(id=i, chat_id=-100 - i, name=f"G{i}", quote_hour=21, quote_minute=0)
+            for i in range(1, 4)
+        ]
+        with (
+            patch.object(scheduler, "SessionLocal", return_value=_GroupsSession(groups)),
+            patch.object(scheduler, "utc_now", return_value=now),
+            patch.object(scheduler, "_process_group", new=AsyncMock()) as process_group,
+        ):
+            await scheduler.quote_of_the_day_job(SimpleNamespace())
+
+        self.assertEqual(process_group.await_count, 3)
+
+    async def test_quote_job_isolates_one_failing_group(self) -> None:
+        now = datetime(2026, 3, 27, 19, 3, tzinfo=timezone.utc)
+        groups = [
+            SimpleNamespace(id=i, chat_id=-100 - i, name=f"G{i}", quote_hour=21, quote_minute=0)
+            for i in range(1, 4)
+        ]
+
+        async def proc(_bot, group, _window):
+            if group.id == 2:
+                raise RuntimeError("boom")
+
+        with (
+            patch.object(scheduler, "SessionLocal", return_value=_GroupsSession(groups)),
+            patch.object(scheduler, "utc_now", return_value=now),
+            patch.object(scheduler, "_process_group", new=AsyncMock(side_effect=proc)) as process_group,
+        ):
+            await scheduler.quote_of_the_day_job(SimpleNamespace())
+
+        self.assertEqual(process_group.await_count, 3)
+
     async def test_quote_job_ignores_stale_unprocessed_cutoff(self) -> None:
         self.group.quote_hour = 21
         self.group.quote_minute = 0

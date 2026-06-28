@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 import os
@@ -56,21 +57,32 @@ async def quote_of_the_day_job(bot: Bot) -> None:
     if not groups:
         return
 
+    due: list[tuple[Group, QuoteWindow]] = []
     for group in groups:
         window = _due_closed_window_for_group(group, now)
         if not window:
             continue
         if _completed_days.get(group.id) == window.quote_day:
             continue
+        due.append((group, window))
 
-        log.info(
-            f"{group.chat_id} | ⏰ Запуск выбора цитаты дня за день "
-            f"{window.start_local.isoformat()} -> {window.end_local.isoformat()}"
-        )
-        try:
-            await _process_group(bot, group, window)
-        except Exception as e:
-            log.error(f"❌ Ошибка при обработке группы {group.chat_id}: {e}")
+    if not due:
+        return
+
+    semaphore = asyncio.Semaphore(max(1, settings.SCHEDULER_CONCURRENCY))
+
+    async def _run(group: Group, window: QuoteWindow) -> None:
+        async with semaphore:
+            log.info(
+                f"{group.chat_id} | ⏰ Запуск выбора цитаты дня за день "
+                f"{window.start_local.isoformat()} -> {window.end_local.isoformat()}"
+            )
+            try:
+                await _process_group(bot, group, window)
+            except Exception as e:
+                log.error(f"❌ Ошибка при обработке группы {group.chat_id}: {e}")
+
+    await asyncio.gather(*(_run(group, window) for group, window in due))
 
 
 def _mark_day_completed(group: Group, window: QuoteWindow) -> None:
