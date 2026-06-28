@@ -221,6 +221,19 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             result = await core.set_group_timezone(1, "Bogus/Zone")
         self.assertIsNone(result)
 
+    def test_effective_group_media_analysis_respects_both_switches(self) -> None:
+        with patch.object(core.settings, "MEDIA_ANALYSIS_ENABLED", True):
+            self.assertTrue(
+                core.effective_group_media_analysis_enabled(SimpleNamespace(media_analysis_enabled=None))
+            )
+            self.assertFalse(
+                core.effective_group_media_analysis_enabled(SimpleNamespace(media_analysis_enabled=False))
+            )
+        with patch.object(core.settings, "MEDIA_ANALYSIS_ENABLED", False):
+            self.assertFalse(
+                core.effective_group_media_analysis_enabled(SimpleNamespace(media_analysis_enabled=True))
+            )
+
     def test_group_agreement_accepted_flag(self) -> None:
         self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))
         self.assertTrue(

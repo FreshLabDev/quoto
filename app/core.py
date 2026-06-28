@@ -30,6 +30,7 @@ GROUP_TOGGLE_FIELDS = {
     "context": "quote_context_enabled",
     "boring": "boring_notice_enabled",
     "pin": "pin_enabled",
+    "media": "media_analysis_enabled",
 }
 # Best-effort default timezone when a group's language is auto-detected.
 LANGUAGE_DEFAULT_TIMEZONE = {
@@ -313,6 +314,17 @@ def effective_group_quote_context_enabled(group: models.Group | None) -> bool:
     return True if value is None else bool(value)
 
 
+def group_media_analysis_setting(group: models.Group | None) -> bool:
+    """The group's own media-analysis preference (default on), ignoring the global switch."""
+    value = getattr(group, "media_analysis_enabled", None)
+    return True if value is None else bool(value)
+
+
+def effective_group_media_analysis_enabled(group: models.Group | None) -> bool:
+    """Media is analysed only when both the global switch and the group allow it."""
+    return bool(settings.MEDIA_ANALYSIS_ENABLED) and group_media_analysis_setting(group)
+
+
 def effective_group_is_premium(group: models.Group | None) -> bool:
     if bool(getattr(group, "is_premium", None)):
         return True
@@ -425,6 +437,8 @@ def _effective_group_toggle(group: models.Group, setting_key: str) -> bool:
         return effective_group_boring_notice_enabled(group)
     if setting_key == "pin":
         return effective_group_pin_enabled(group)
+    if setting_key == "media":
+        return group_media_analysis_setting(group)
     return False
 
 

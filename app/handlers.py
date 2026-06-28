@@ -273,6 +273,7 @@ def _group_panel_kwargs(owner_id: int, group, language: str, is_admin: bool) -> 
         boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
         pin_enabled=core.effective_group_pin_enabled(group),
         quote_context_enabled=core.effective_group_quote_context_enabled(group),
+        media_analysis_enabled=core.group_media_analysis_setting(group),
     )
 
 
@@ -742,9 +743,9 @@ async def group_message_handler(message: types.Message, bot: Bot):
         return
 
     user = await core.user_getOrCreate(message.from_user)
-    await core.group_getOrCreate(message.chat)
+    group = await core.group_getOrCreate(message.chat)
     db_message = await core.save_message(message, user)
-    if db_message:
+    if db_message and core.effective_group_media_analysis_enabled(group):
         await media.process_message_media(bot, message, db_message)
 
 

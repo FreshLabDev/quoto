@@ -61,7 +61,8 @@
       "context": "Kontext",
       "boring_notice": "Langweiliger Tag",
       "pin": "Anheften",
-      "timezone": "Zeitzone"
+      "timezone": "Zeitzone",
+      "media": "Medien"
     },
     "private": {
       "title": "<b>Einstellungen</b>",
@@ -90,6 +91,10 @@
       "pin": {
         "short": "Anheften",
         "label": "Veröffentlichtes Zitat anheften"
+      },
+      "media": {
+        "short": "Medien",
+        "label": "Medien analysieren (an OpenRouter)"
       },
       "quote_day": {
         "title": "<b>Zitat des Tages</b>",

@@ -47,6 +47,7 @@ class Group(Base):
     quote_context_enabled = Column(Boolean, nullable=True)
     is_premium = Column(Boolean, nullable=True)
     timezone = Column(String, nullable=True)
+    media_analysis_enabled = Column(Boolean, nullable=True)
     agreement_accepted_at = Column(DateTime(timezone=True), nullable=True)
     agreement_accepted_by = Column(BigInteger, nullable=True)
     agreement_language = Column(String, nullable=True)

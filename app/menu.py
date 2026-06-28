@@ -260,6 +260,7 @@ def _group_dashboard(
     boring_notice_enabled: bool,
     pin_enabled: bool,
     quote_context_enabled: bool,
+    media_analysis_enabled: bool = True,
 ) -> str:
     return _quote(
         [
@@ -268,6 +269,7 @@ def _group_dashboard(
             _toggle_line(i18n.t(language, "settings.group.context.short"), quote_context_enabled),
             _toggle_line(i18n.t(language, "settings.group.boring_notice.short"), boring_notice_enabled),
             _toggle_line(i18n.t(language, "settings.group.pin.short"), pin_enabled),
+            _toggle_line(i18n.t(language, "settings.group.media.short"), media_analysis_enabled),
         ]
     )
 
@@ -285,6 +287,7 @@ def build_group_panel(
     boring_notice_enabled: bool,
     pin_enabled: bool,
     quote_context_enabled: bool,
+    media_analysis_enabled: bool = True,
     section: str = SECTION_HOME,
     stats_text: str | None = None,
     stats_view: str = "user",
@@ -379,6 +382,7 @@ def build_group_panel(
                 _toggle_line(i18n.t(language, "settings.group.context.label"), quote_context_enabled),
                 _toggle_line(i18n.t(language, "settings.group.boring_notice.label"), boring_notice_enabled),
                 _toggle_line(i18n.t(language, "settings.group.pin.label"), pin_enabled),
+                _toggle_line(i18n.t(language, "settings.group.media.label"), media_analysis_enabled),
             ]
         )
         text = _screen(
@@ -404,6 +408,12 @@ def build_group_panel(
                     types.InlineKeyboardButton(
                         text=_toggle_line(i18n.t(language, "settings.button.pin"), pin_enabled),
                         callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "pin"),
+                    ),
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=_toggle_line(i18n.t(language, "settings.button.media"), media_analysis_enabled),
+                        callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "media"),
                     ),
                 ],
                 _nav_row(owner_id, SCOPE_GROUP, language),

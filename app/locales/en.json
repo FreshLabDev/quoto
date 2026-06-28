@@ -61,7 +61,8 @@
       "context": "Context",
       "boring_notice": "Boring day",
       "pin": "Pin",
-      "timezone": "Timezone"
+      "timezone": "Timezone",
+      "media": "Media"
     },
     "private": {
       "title": "<b>Settings</b>",
@@ -90,6 +91,10 @@
       "pin": {
         "short": "Pin",
         "label": "Pin the published quote"
+      },
+      "media": {
+        "short": "Media",
+        "label": "Analyze media (sent to OpenRouter)"
       },
       "quote_day": {
         "title": "<b>Quote of the day</b>",
