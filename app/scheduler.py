@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 from datetime import date, datetime, time, timedelta, timezone
 from html import escape
 
@@ -113,6 +114,23 @@ async def recover_pending_media_job(bot: Bot) -> None:
 
     if processed:
         log.info(f"♻️ Обработано pending media: {processed}")
+
+
+def _heartbeat_path() -> str:
+    return os.environ.get("HEARTBEAT_FILE") or os.path.join(settings.LOGS_PATH, "heartbeat")
+
+
+async def heartbeat_job() -> None:
+    """Refresh the liveness heartbeat; a stale file means the loop is wedged."""
+    path = _heartbeat_path()
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(utc_now().isoformat())
+    except Exception as exc:
+        log.debug(f"heartbeat write failed: {exc}")
 
 
 async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, language: str) -> None:
@@ -733,6 +751,16 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
         coalesce=True,
         max_instances=1,
         next_run_time=utc_now() + timedelta(seconds=settings.MEDIA_PENDING_RETRY_INTERVAL_SECONDS),
+    )
+    scheduler.add_job(
+        heartbeat_job,
+        trigger=IntervalTrigger(seconds=30, timezone=settings.TIMEZONE),
+        id="heartbeat",
+        name="Heartbeat",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        next_run_time=utc_now(),
     )
 
     log.info(

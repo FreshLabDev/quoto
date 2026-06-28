@@ -13,7 +13,7 @@ from app import config
 class ConfigTests(unittest.TestCase):
     def test_load_settings_rejects_blank_bot_username(self) -> None:
         with patch.object(config, "Settings", return_value=SimpleNamespace(BOT_USERNAME="   ")):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(SystemExit):
                 config._load_settings()
 
     def test_load_settings_strips_leading_at_from_bot_username(self) -> None:

@@ -14,6 +14,8 @@ bot = Bot(
 log = config.setup_logging(logging.getLogger(__name__))
 
 async def main():
+    config.validate_runtime()
+
     dp = Dispatcher()
     dp.include_router(handlers.router)
 

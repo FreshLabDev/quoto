@@ -1,5 +1,8 @@
 import logging
 import os
+from zoneinfo import ZoneInfo
+
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -204,11 +207,27 @@ def setup_logging(logger):
     return logger
 
 
+def _fail(message: str) -> None:
+    # Turn cryptic import-time errors into a single actionable line, then stop.
+    logging.critical(message)
+    raise SystemExit(1)
+
+
 def _load_settings() -> Settings:
-    loaded = Settings()
+    try:
+        loaded = Settings()
+    except ValidationError as exc:
+        missing = ", ".join(
+            str(error["loc"][0]) for error in exc.errors() if error.get("type") == "missing"
+        )
+        detail = missing or str(exc)
+        _fail(
+            "❌ Configuration error: missing required environment variables: "
+            f"{detail}. Set them in .env (see .env.example) before starting the bot."
+        )
     loaded.BOT_USERNAME = loaded.BOT_USERNAME.strip().lstrip("@")
     if not loaded.BOT_USERNAME:
-        raise ValueError("BOT_USERNAME must be configured with the bot public username.")
+        _fail("❌ Configuration error: BOT_USERNAME must be set to the bot's public username.")
     if not getattr(loaded, "OPENROUTER_EVAL_MODEL", ""):
         loaded.OPENROUTER_EVAL_MODEL = getattr(loaded, "OPENROUTER_MODEL", "google/gemini-3.5-flash")
     loaded.OPENROUTER_MODEL = loaded.OPENROUTER_EVAL_MODEL
@@ -216,3 +235,14 @@ def _load_settings() -> Settings:
 
 
 settings = _load_settings()
+
+
+def validate_runtime() -> None:
+    """Non-fatal startup checks for config that pydantic can't catch."""
+    log = logging.getLogger(__name__)
+    if not settings.OPENROUTER_API_KEY:
+        log.critical("⚠️ OPENROUTER_API_KEY is empty — AI scoring and media analysis will fail. Set it in .env.")
+    try:
+        ZoneInfo(settings.TIMEZONE)
+    except Exception:
+        log.critical(f"⚠️ TIMEZONE '{settings.TIMEZONE}' is not a valid IANA timezone.")

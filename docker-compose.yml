@@ -3,15 +3,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: quoto
-      POSTGRES_PASSWORD: quoto_secret_2026
-      POSTGRES_DB: quoto
+      POSTGRES_USER: ${POSTGRES_USER:-quoto}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-quoto}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quoto -d quoto"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quoto} -d ${POSTGRES_DB:-quoto}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -25,7 +25,8 @@ services:
     env_file:
       - .env
     environment:
-      DB_URL: postgresql+asyncpg://quoto:quoto_secret_2026@db:5432/quoto
+      # Built from the POSTGRES_* vars so no credentials live in this file.
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-quoto}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-quoto}
       # Force UTF-8 for stdout/stderr so emoji in logs don't get mangled
       PYTHONIOENCODING: "utf-8"
       PYTHONUNBUFFERED: "1"
@@ -33,6 +34,12 @@ services:
       LC_ALL: C.UTF-8
     volumes:
       - logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
 
 volumes:
   pgdata:
