@@ -207,6 +207,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
                 return FakeResponse()
 
         sleep = AsyncMock()
+        ai._breaker_record_success()  # ensure breaker closed for an isolated run
 
         with (
             patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
@@ -220,7 +221,8 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(attempts, 2)
-        sleep.assert_awaited_once_with(5)
+        sleep.assert_awaited_once()
+        self.assertTrue(4 <= sleep.await_args.args[0] <= 6)
         self.assertEqual(result.actual_model, "openrouter/test")
         self.assertEqual(result.scores, {1: 0.7})
 
@@ -338,3 +340,59 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("old", {record.get("request_id") for record in records})
         self.assertIn("fresh", {record.get("request_id") for record in records})
         self.assertEqual(len(records), 2)
+
+
+class AIResilienceTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        ai._breaker_record_success()
+
+    def tearDown(self) -> None:
+        ai._breaker_record_success()
+
+    def test_injection_guard_appended_to_system_prompt(self) -> None:
+        self.assertIn("untrusted data", ai._INJECTION_GUARD)
+
+    def test_redact_removes_key_and_bearer(self) -> None:
+        with patch.object(ai.settings, "OPENROUTER_API_KEY", "sk-secret-value"):
+            out = ai._redact("auth=sk-secret-value and Bearer abc.def-123")
+        self.assertNotIn("sk-secret-value", out)
+        self.assertNotIn("abc.def-123", out)
+
+    def test_message_payload_truncates_long_fields(self) -> None:
+        payload = ai._message_payload({"id": 1, "author": "a" * 500, "text": "x" * 5000})
+        self.assertEqual(len(payload["t"]), ai._MAX_MESSAGE_TEXT)
+        self.assertEqual(len(payload["a"]), ai._MAX_AUTHOR_NAME)
+
+    def test_compute_backoff_is_bounded(self) -> None:
+        self.assertGreaterEqual(ai._compute_backoff(0), 4)
+        self.assertLessEqual(ai._compute_backoff(0), 6)
+        self.assertLessEqual(ai._compute_backoff(10), 62)
+
+    async def test_circuit_breaker_short_circuits_when_open(self) -> None:
+        for _ in range(ai._BREAKER_THRESHOLD):
+            ai._breaker_record_failure()
+        self.assertTrue(ai._breaker_is_open())
+
+        calls = 0
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def post(self, *a, **k):
+                nonlocal calls
+                calls += 1
+                raise AssertionError("OpenRouter must not be called while breaker is open")
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+        ):
+            result = await ai.evaluate_messages([{"id": 1, "author": "a", "text": "hi"}])
+
+        self.assertEqual(calls, 0)
+        self.assertEqual(result.status, "ai_failed")
+        self.assertEqual(result.scores, {1: 0.5})
