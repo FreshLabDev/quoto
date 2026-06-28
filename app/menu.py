@@ -17,6 +17,8 @@ ACTION_AUTO_GROUP_LANGUAGE = "autolang"
 ACTION_GROUP_SCHEDULE = "sched"
 ACTION_GROUP_TIME_ADJUST = "timeadj"
 ACTION_GROUP_MIN_ADJUST = "minadj"
+ACTION_GROUP_TIMEZONE = "tz"
+ACTION_SET_GROUP_TIMEZONE = "settz"
 ACTION_GROUP_BEHAVIOR = "behavior"
 ACTION_TOGGLE_GROUP_SETTING = "toggle"
 ACTION_CHAT_STATS = "chatstats"
@@ -28,10 +30,26 @@ ACTION_AUTO_PRIVATE_LANGUAGE = "autoplang"
 SECTION_HOME = "home"
 SECTION_LANGUAGE = "lang"
 SECTION_SCHEDULE = "sched"
+SECTION_TIMEZONE = "tz"
 SECTION_BEHAVIOR = "behavior"
 SECTION_STATS = "stats"
 
 LANGUAGE_BUTTON_ORDER = ("uk", "ru", "en", "de")
+TIMEZONE_CHOICES = (
+    "UTC",
+    "Europe/London",
+    "Europe/Berlin",
+    "Europe/Kyiv",
+    "Europe/Moscow",
+    "America/New_York",
+    "America/Chicago",
+    "America/Los_Angeles",
+    "America/Sao_Paulo",
+    "Asia/Dubai",
+    "Asia/Kolkata",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+)
 TOGGLE_ON = "◉"
 TOGGLE_OFF = "◎"
 
@@ -141,6 +159,25 @@ def _language_buttons(
             )
         )
     return [buttons[:2], buttons[2:]]
+
+
+def _timezone_buttons(owner_id: int, current_timezone: str) -> list[list[types.InlineKeyboardButton]]:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    row: list[types.InlineKeyboardButton] = []
+    for tz_name in TIMEZONE_CHOICES:
+        text = f"{_toggle_icon(tz_name == current_timezone)} {tz_name}"
+        row.append(
+            types.InlineKeyboardButton(
+                text=text,
+                callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_SET_GROUP_TIMEZONE, tz_name),
+            )
+        )
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return rows
 
 
 # ── private hub ─────────────────────────────────────────────────────────
@@ -311,10 +348,30 @@ def build_group_panel(
                     _adjust_button(owner_id, ACTION_GROUP_MIN_ADJUST, "-1", "−1"),
                     _adjust_button(owner_id, ACTION_GROUP_MIN_ADJUST, "1", "+1"),
                 ],
+                [
+                    types.InlineKeyboardButton(
+                        text=i18n.t(language, "settings.button.timezone"),
+                        callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_TIMEZONE),
+                    )
+                ],
                 _nav_row(owner_id, SCOPE_GROUP, language),
             ]
         )
         return text, keyboard
+
+    if section == SECTION_TIMEZONE:
+        readout = _quote(
+            [i18n.t(language, "settings.group.time.timezone", timezone=timezone_name)]
+        )
+        text = _screen(
+            header,
+            i18n.t(language, "settings.group.tz.title"),
+            i18n.t(language, "settings.group.tz.hint"),
+            readout,
+        )
+        rows = _timezone_buttons(owner_id, timezone_name)
+        rows.append(_nav_row(owner_id, SCOPE_GROUP, language))
+        return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
 
     if section == SECTION_BEHAVIOR:
         readout = _quote(

@@ -269,7 +269,7 @@ def _group_panel_kwargs(owner_id: int, group, language: str, is_admin: bool) -> 
         is_admin=is_admin,
         quote_time=_time_label(group),
         min_messages=core.effective_group_min_messages(group),
-        timezone_name=settings.TIMEZONE,
+        timezone_name=core.effective_group_timezone_name(group),
         boring_notice_enabled=core.effective_group_boring_notice_enabled(group),
         pin_enabled=core.effective_group_pin_enabled(group),
         quote_context_enabled=core.effective_group_quote_context_enabled(group),
@@ -622,6 +622,8 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         menu.ACTION_GROUP_SCHEDULE,
         menu.ACTION_GROUP_TIME_ADJUST,
         menu.ACTION_GROUP_MIN_ADJUST,
+        menu.ACTION_GROUP_TIMEZONE,
+        menu.ACTION_SET_GROUP_TIMEZONE,
         menu.ACTION_GROUP_BEHAVIOR,
         menu.ACTION_TOGGLE_GROUP_SETTING,
     }
@@ -681,6 +683,20 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         group = await core.adjust_group_min_messages(group.id, delta) or group
         language = i18n.group_language(group)
         await _show_group(menu.SECTION_SCHEDULE, notice=i18n.t(language, "settings.updated"))
+        return
+
+    if parsed.action == menu.ACTION_GROUP_TIMEZONE:
+        await _show_group(menu.SECTION_TIMEZONE)
+        return
+
+    if parsed.action == menu.ACTION_SET_GROUP_TIMEZONE:
+        updated = await core.set_group_timezone(group.id, parsed.payload or "")
+        if not updated:
+            await callback.answer(i18n.t(language, "settings.invalid"), show_alert=True)
+            return
+        group = await core.get_group_by_chat_id(panel.chat.id) or group
+        language = i18n.group_language(group)
+        await _show_group(menu.SECTION_TIMEZONE, notice=i18n.t(language, "settings.updated"))
         return
 
     if parsed.action == menu.ACTION_GROUP_BEHAVIOR:

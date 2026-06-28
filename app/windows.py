@@ -22,6 +22,16 @@ def quote_timezone() -> ZoneInfo:
     return ZoneInfo(settings.TIMEZONE)
 
 
+def resolve_timezone(name: str | None) -> ZoneInfo:
+    """A group's timezone, falling back to the global default if unset/invalid."""
+    if name:
+        try:
+            return ZoneInfo(name)
+        except Exception:
+            pass
+    return quote_timezone()
+
+
 def cutoff_time(hour: int | None = None, minute: int | None = None) -> time:
     return time(
         hour=settings.QUOTE_HOUR if hour is None else int(hour) % 24,
@@ -93,7 +103,14 @@ def get_open_window(now: datetime | None = None, at_time: time | None = None) ->
     )
 
 
-def get_closed_window(now: datetime | None = None, at_time: time | None = None) -> QuoteWindow:
+def get_closed_window(
+    now: datetime | None = None,
+    at_time: time | None = None,
+    tz: ZoneInfo | None = None,
+) -> QuoteWindow:
     now_utc = now or utc_now()
-    now_local = now_utc.astimezone(quote_timezone())
-    return closed_window_for_day(quote_day_from_local(now_local, at_time=at_time), at_time=at_time)
+    target_tz = tz or quote_timezone()
+    now_local = now_utc.astimezone(target_tz)
+    return closed_window_for_day(
+        quote_day_from_local(now_local, at_time=at_time), tz=target_tz, at_time=at_time
+    )

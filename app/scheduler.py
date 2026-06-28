@@ -25,7 +25,7 @@ from .quote_status import (
     STATUS_SKIPPED_BORING,
 )
 from .windows import QuoteWindow, closed_window_for_day, get_closed_window, utc_now
-from .windows import quote_timezone
+from .windows import quote_timezone, resolve_timezone
 
 log = setup_logging(logging.getLogger(__name__))
 
@@ -102,7 +102,7 @@ def _existing_quote_is_terminal(quote: Quote) -> bool:
 def _due_closed_window_for_group(group: Group, now: datetime) -> QuoteWindow | None:
     quote_hour, quote_minute = core.effective_group_quote_time(group)
     cutoff = time(hour=quote_hour, minute=quote_minute)
-    tz = quote_timezone()
+    tz = resolve_timezone(core.effective_group_timezone_name(group))
     now_local = now.astimezone(tz)
     cutoff_dates = (now_local.date(), now_local.date() - timedelta(days=1))
     for cutoff_date in cutoff_dates:
@@ -163,7 +163,10 @@ async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, languag
 
 async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = None) -> None:
     quote_hour, quote_minute = core.effective_group_quote_time(group)
-    window = window or get_closed_window(at_time=time(hour=quote_hour, minute=quote_minute))
+    window = window or get_closed_window(
+        at_time=time(hour=quote_hour, minute=quote_minute),
+        tz=resolve_timezone(core.effective_group_timezone_name(group)),
+    )
     min_messages = core.effective_group_min_messages(group)
     context_messages_enabled = core.effective_group_quote_context_enabled(group)
     max_messages = core.effective_group_message_cap(group)
@@ -225,6 +228,12 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
                 f"{group.chat_id} | 🌐 Язык интерфейса выбран автоматически: "
                 f"{evaluation.detected_language_code} ({evaluation.detected_chat_language or 'unknown'})"
             )
+
+    if getattr(group, "timezone", None) is None and evaluation.detected_language_code:
+        tz_name = core.default_timezone_for_language(evaluation.detected_language_code)
+        if await core.set_group_timezone_auto(group.id, tz_name):
+            group.timezone = tz_name
+            log.info(f"{group.chat_id} | 🕐 Часовой пояс по умолчанию выбран: {tz_name}")
 
     if evaluation.message_count == 0:
         _mark_day_completed(group, window)

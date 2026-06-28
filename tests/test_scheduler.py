@@ -62,6 +62,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             id=1,
             chat_id=-100123456,
             name="Quoto Test Chat",
+            timezone="Europe/Kyiv",
             agreement_accepted_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
         )
         self.window = _make_window()

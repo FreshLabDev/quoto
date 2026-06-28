@@ -2,6 +2,7 @@ import logging
 import json
 import random
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from aiogram import types
 from sqlalchemy import func, select
@@ -30,6 +31,65 @@ GROUP_TOGGLE_FIELDS = {
     "boring": "boring_notice_enabled",
     "pin": "pin_enabled",
 }
+# Best-effort default timezone when a group's language is auto-detected.
+LANGUAGE_DEFAULT_TIMEZONE = {
+    "ru": "Europe/Moscow",
+    "uk": "Europe/Kyiv",
+    "en": "UTC",
+    "de": "Europe/Berlin",
+}
+
+
+def is_valid_timezone(name: str | None) -> bool:
+    if not name:
+        return False
+    try:
+        ZoneInfo(name)
+        return True
+    except Exception:
+        return False
+
+
+def effective_group_timezone_name(group: models.Group | None) -> str:
+    name = getattr(group, "timezone", None)
+    return name if is_valid_timezone(name) else settings.TIMEZONE
+
+
+def default_timezone_for_language(language_code: str | None) -> str:
+    code = i18n.normalize_language_code(language_code) or ""
+    return LANGUAGE_DEFAULT_TIMEZONE.get(code, settings.TIMEZONE)
+
+
+async def set_group_timezone(group_id: int, timezone_name: str) -> models.Group | None:
+    if not is_valid_timezone(timezone_name):
+        return None
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return None
+        group.timezone = timezone_name
+        await session.commit()
+        await session.refresh(group)
+        return group
+
+
+async def set_group_timezone_auto(group_id: int, timezone_name: str) -> bool:
+    """Set a default timezone only if the group has none yet."""
+    if not is_valid_timezone(timezone_name):
+        return False
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group or getattr(group, "timezone", None):
+            return False
+        group.timezone = timezone_name
+        await session.commit()
+        return True
 
 
 async def user_getOrCreate(telegram_user: types.User) -> models.User:

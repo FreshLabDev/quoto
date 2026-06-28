@@ -178,6 +178,49 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(core.settings, "QUOTE_MINUTE_JITTER", 0):
             self.assertIsNone(core._jittered_quote_minute())
 
+    def test_effective_group_timezone_prefers_valid_group_value(self) -> None:
+        with patch.object(core.settings, "TIMEZONE", "Europe/Kyiv"):
+            self.assertEqual(
+                core.effective_group_timezone_name(SimpleNamespace(timezone="Asia/Tokyo")),
+                "Asia/Tokyo",
+            )
+            self.assertEqual(
+                core.effective_group_timezone_name(SimpleNamespace(timezone="Bogus/Zone")),
+                "Europe/Kyiv",
+            )
+            self.assertEqual(
+                core.effective_group_timezone_name(SimpleNamespace(timezone=None)),
+                "Europe/Kyiv",
+            )
+
+    def test_default_timezone_for_language(self) -> None:
+        with patch.object(core.settings, "TIMEZONE", "Europe/Kyiv"):
+            self.assertEqual(core.default_timezone_for_language("de"), "Europe/Berlin")
+            self.assertEqual(core.default_timezone_for_language("xx"), "Europe/Kyiv")
+
+    async def test_set_group_timezone_auto_only_when_empty(self) -> None:
+        group = SimpleNamespace(timezone=None)
+        session = _UpdateSession(group)
+        with patch.object(core, "SessionLocal", return_value=session):
+            ok = await core.set_group_timezone_auto(1, "Asia/Tokyo")
+        self.assertTrue(ok)
+        self.assertEqual(group.timezone, "Asia/Tokyo")
+
+    async def test_set_group_timezone_auto_skips_when_already_set(self) -> None:
+        group = SimpleNamespace(timezone="UTC")
+        session = _UpdateSession(group)
+        with patch.object(core, "SessionLocal", return_value=session):
+            ok = await core.set_group_timezone_auto(1, "Asia/Tokyo")
+        self.assertFalse(ok)
+        self.assertEqual(group.timezone, "UTC")
+
+    async def test_set_group_timezone_rejects_invalid(self) -> None:
+        group = SimpleNamespace(timezone=None)
+        session = _UpdateSession(group)
+        with patch.object(core, "SessionLocal", return_value=session):
+            result = await core.set_group_timezone(1, "Bogus/Zone")
+        self.assertIsNone(result)
+
     def test_group_agreement_accepted_flag(self) -> None:
         self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))
         self.assertTrue(

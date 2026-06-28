@@ -60,7 +60,8 @@
       "min_messages": "Minimum",
       "context": "Context",
       "boring_notice": "Boring day",
-      "pin": "Pin"
+      "pin": "Pin",
+      "timezone": "Timezone"
     },
     "private": {
       "title": "<b>Settings</b>",
@@ -108,6 +109,10 @@
         "title": "<b>Minimum messages</b>",
         "hint": "<i>With fewer messages the day is skipped without review.</i>",
         "line": "Minimum: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "<b>Timezone</b>",
+        "hint": "<i>I compute the day's window and cutoff in this timezone.</i>"
       }
     }
   },

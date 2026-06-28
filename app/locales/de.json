@@ -60,7 +60,8 @@
       "min_messages": "Minimum",
       "context": "Kontext",
       "boring_notice": "Langweiliger Tag",
-      "pin": "Anheften"
+      "pin": "Anheften",
+      "timezone": "Zeitzone"
     },
     "private": {
       "title": "<b>Einstellungen</b>",
@@ -108,6 +109,10 @@
         "title": "<b>Mindestanzahl Nachrichten</b>",
         "hint": "<i>Bei weniger Nachrichten wird der Tag ohne Auswertung übersprungen.</i>",
         "line": "Minimum: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "<b>Zeitzone</b>",
+        "hint": "<i>In dieser Zeitzone berechne ich das Tagesfenster und die Schlusszeit.</i>"
       }
     }
   },
