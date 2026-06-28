@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from collections import Counter
@@ -407,12 +408,30 @@ async def agreement_callback(callback: types.CallbackQuery, bot: Bot):
             await callback.answer(i18n.t(language, "agreement.admin_only"), show_alert=True)
             return
         group = await core.group_getOrCreate(chat)
-        await core.accept_group_agreement(group.id, callback.from_user.id, language)
+        updated = await core.accept_group_agreement(group.id, callback.from_user.id, language) or group
         await _edit_panel(callback, agreement.build_accepted(language), None)
         await callback.answer(i18n.t(language, "agreement.accepted_toast"))
+        # If today's cutoff already passed, catch the day up now so a late
+        # acceptance doesn't lose the quote of the day.
+        asyncio.create_task(_catch_up_after_accept(bot, updated))
         return
 
     await callback.answer()
+
+
+async def _catch_up_after_accept(bot: Bot, group) -> None:
+    from datetime import time as _time
+
+    from . import scheduler
+    from .windows import get_closed_window, resolve_timezone
+
+    try:
+        quote_hour, quote_minute = core.effective_group_quote_time(group)
+        tz = resolve_timezone(core.effective_group_timezone_name(group))
+        window = get_closed_window(tz=tz, at_time=_time(hour=quote_hour, minute=quote_minute))
+        await scheduler._process_group(bot, group, window)
+    except Exception as exc:
+        log.error(f"{getattr(group, 'chat_id', '?')} | catch-up after accept failed: {exc}")
 
 
 @router.message(or_f(and_f(F.chat.type == "private", CommandStart()), F.chat.type == "private"))

@@ -620,3 +620,24 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             await handlers.edited_group_message_handler(message)
 
         update_message.assert_not_awaited()
+
+
+class CatchUpAfterAcceptTests(unittest.IsolatedAsyncioTestCase):
+    async def test_catch_up_processes_current_closed_window(self) -> None:
+        from app import scheduler
+
+        group = SimpleNamespace(chat_id=-100, timezone="Europe/Kyiv")
+        with patch.object(scheduler, "_process_group", new=AsyncMock()) as process_group:
+            await handlers._catch_up_after_accept(SimpleNamespace(), group)
+
+        process_group.assert_awaited_once()
+        window = process_group.await_args.args[2]
+        self.assertTrue(hasattr(window, "quote_day"))
+
+    async def test_catch_up_swallows_errors(self) -> None:
+        from app import scheduler
+
+        group = SimpleNamespace(chat_id=-100, timezone="Europe/Kyiv")
+        with patch.object(scheduler, "_process_group", new=AsyncMock(side_effect=RuntimeError("boom"))):
+            # must not raise
+            await handlers._catch_up_after_accept(SimpleNamespace(), group)
