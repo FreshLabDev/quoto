@@ -269,6 +269,43 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([message.id for message in kwargs["source_messages"]], [1, 2, 3])
         self.assertEqual([message.id for message in kwargs["scored_messages"]], [2, 3])
 
+    async def test_pick_best_quote_truncates_to_max_messages_and_flags(self) -> None:
+        messages = [_message(i, 100 + i, f"line {i}", "Alice") for i in range(1, 7)]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(
+            scores={5: 0.8, 6: 0.9},
+            actual_model="openrouter/test",
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)) as evaluate,
+        ):
+            result = await scoring.pick_best_quote(-100123456, window, max_messages=2)
+
+        payload = evaluate.await_args.args[0]
+        self.assertEqual([item["id"] for item in payload], [5, 6])
+        self.assertTrue(result.context_truncated)
+        self.assertEqual(result.context_truncated_total, 6)
+
+    async def test_pick_best_quote_no_truncation_within_cap(self) -> None:
+        messages = [_message(i, 100 + i, f"line {i}", "Alice") for i in range(1, 4)]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(
+            scores={1: 0.2, 2: 0.3, 3: 0.9},
+            actual_model="openrouter/test",
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)) as evaluate,
+        ):
+            result = await scoring.pick_best_quote(-100123456, window, max_messages=1500)
+
+        payload = evaluate.await_args.args[0]
+        self.assertEqual(len(payload), 3)
+        self.assertFalse(result.context_truncated)
+
     def test_context_validator_accepts_reply_connected_noncontiguous_thread(self) -> None:
         messages = [
             _message(1, 11, "root", "Alice"),

@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     TIMEZONE: str = "Europe/Kyiv"
     MIN_MESSAGES_FOR_AUTO_REVIEW: int = 10
 
+    # -- LIMITS --
+    # Max messages fed to the AI per group per day. Groups above this keep only
+    # the most recent N (cost safety). Premium groups bypass the cap entirely.
+    MAX_MESSAGES_PER_DAILY_EVAL: int = 1500
+    PREMIUM_CHAT_IDS: list[int] = []
+
 
 
 # === НАСТРОЙКА ЛОГИРОВАНИЯ ===

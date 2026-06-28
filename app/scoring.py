@@ -71,6 +71,8 @@ class QuoteEvaluation:
     day_verdict_error: str = ""
     detected_language_code: str | None = None
     detected_chat_language: str = ""
+    context_truncated: bool = False
+    context_truncated_total: int = 0
 
 
 def calculate_length_score(text: str) -> float:
@@ -100,6 +102,7 @@ async def pick_best_quote(
     day_verdict_min_messages: int | None = None,
     group_id: int | None = None,
     detect_interface_language: bool = False,
+    max_messages: int | None = None,
 ) -> QuoteEvaluation:
     async with SessionLocal() as session:
         stmt = (
@@ -133,6 +136,16 @@ async def pick_best_quote(
             f"{len(messages)} < {day_verdict_min_messages}"
         )
         return QuoteEvaluation(message_count=len(messages), source_message_count=len(source_messages))
+
+    context_truncated = False
+    context_truncated_total = len(messages)
+    if max_messages and max_messages > 0 and len(messages) > max_messages:
+        messages = messages[-max_messages:]
+        context_truncated = True
+        log.warning(
+            f"{chat_id} | ✂️ Контекст урезан из-за объёма: "
+            f"{context_truncated_total} -> {max_messages} сообщений"
+        )
 
     reaction_totals: dict[int, int] = {
         msg.id: sum(r.count for r in msg.reactions)
@@ -236,6 +249,8 @@ async def pick_best_quote(
         detected_chat_language=(
             evaluation.language_choice.chat_language if evaluation.language_choice else ""
         ),
+        context_truncated=context_truncated,
+        context_truncated_total=context_truncated_total,
     )
 
 

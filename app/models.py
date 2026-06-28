@@ -45,6 +45,7 @@ class Group(Base):
     boring_notice_enabled = Column(Boolean, nullable=True)
     pin_enabled = Column(Boolean, nullable=True)
     quote_context_enabled = Column(Boolean, nullable=True)
+    is_premium = Column(Boolean, nullable=True)
 
     quotes = relationship("Quote", back_populates="group")
 

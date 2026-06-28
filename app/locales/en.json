@@ -173,7 +173,8 @@
       "video": "🏆 <b>Video of the Day</b>",
       "voice": "🏆 <b>Voice of the Day</b>",
       "audio": "🏆 <b>Audio of the Day</b>"
-    }
+    },
+    "context_truncated": "ℹ️ Counted the last {shown} of {total} messages — context trimmed due to volume."
   },
   "boring": {
     "title": "😴 <b>No quote of the day today</b>",

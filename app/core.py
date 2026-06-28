@@ -243,6 +243,21 @@ def effective_group_quote_context_enabled(group: models.Group | None) -> bool:
     return True if value is None else bool(value)
 
 
+def effective_group_is_premium(group: models.Group | None) -> bool:
+    if bool(getattr(group, "is_premium", None)):
+        return True
+    chat_id = getattr(group, "chat_id", None)
+    return chat_id is not None and chat_id in settings.PREMIUM_CHAT_IDS
+
+
+def effective_group_message_cap(group: models.Group | None) -> int | None:
+    """Max messages to feed the AI for this group, or None for unlimited (premium)."""
+    if effective_group_is_premium(group):
+        return None
+    cap = settings.MAX_MESSAGES_PER_DAILY_EVAL
+    return cap if cap and cap > 0 else None
+
+
 def clamp_min_messages(value: int | str) -> int:
     try:
         parsed = int(value)

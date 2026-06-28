@@ -144,3 +144,24 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(result)
         session.commit.assert_not_awaited()
+
+    def test_message_cap_applies_to_regular_group(self) -> None:
+        group = SimpleNamespace(chat_id=-100, is_premium=None)
+        with (
+            patch.object(core.settings, "MAX_MESSAGES_PER_DAILY_EVAL", 1500),
+            patch.object(core.settings, "PREMIUM_CHAT_IDS", []),
+        ):
+            self.assertFalse(core.effective_group_is_premium(group))
+            self.assertEqual(core.effective_group_message_cap(group), 1500)
+
+    def test_premium_flag_bypasses_message_cap(self) -> None:
+        group = SimpleNamespace(chat_id=-100, is_premium=True)
+        with patch.object(core.settings, "PREMIUM_CHAT_IDS", []):
+            self.assertTrue(core.effective_group_is_premium(group))
+            self.assertIsNone(core.effective_group_message_cap(group))
+
+    def test_premium_chat_ids_bypass_message_cap(self) -> None:
+        group = SimpleNamespace(chat_id=-100, is_premium=None)
+        with patch.object(core.settings, "PREMIUM_CHAT_IDS", [-100]):
+            self.assertTrue(core.effective_group_is_premium(group))
+            self.assertIsNone(core.effective_group_message_cap(group))

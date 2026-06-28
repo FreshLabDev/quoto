@@ -327,6 +327,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             day_verdict_min_messages=scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
             group_id=self.group.id,
             detect_interface_language=True,
+            max_messages=scheduler.settings.MAX_MESSAGES_PER_DAILY_EVAL,
         )
 
     async def test_process_group_uses_group_min_messages_setting(self) -> None:

@@ -173,7 +173,8 @@
       "video": "🏆 <b>Video des Tages</b>",
       "voice": "🏆 <b>Sprachnachricht des Tages</b>",
       "audio": "🏆 <b>Audio des Tages</b>"
-    }
+    },
+    "context_truncated": "ℹ️ Die letzten {shown} von {total} Nachrichten berücksichtigt — Kontext wegen Menge gekürzt."
   },
   "boring": {
     "title": "😴 <b>Heute kein Zitat des Tages</b>",

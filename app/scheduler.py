@@ -118,6 +118,8 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     window = window or get_closed_window(at_time=time(hour=quote_hour, minute=quote_minute))
     min_messages = core.effective_group_min_messages(group)
     context_messages_enabled = core.effective_group_quote_context_enabled(group)
+    max_messages = core.effective_group_message_cap(group)
+    language = i18n.group_language(group)
     log.debug(f"{group.chat_id} | ⏳ Обработка дня {window.quote_day} для группы {group.name}")
 
     await _recover_stale_quotes_for_chat(group.chat_id)
@@ -159,6 +161,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         day_verdict_min_messages=min_messages,
         group_id=group.id,
         detect_interface_language=not i18n.group_language_is_set(group),
+        max_messages=max_messages,
     )
 
     if not i18n.group_language_is_set(group) and evaluation.detected_language_code:
@@ -230,6 +233,16 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         if not created:
             log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
             return
+        truncated_note = (
+            i18n.t(
+                language,
+                "quote_post.context_truncated",
+                shown=max_messages,
+                total=evaluation.context_truncated_total,
+            )
+            if evaluation.context_truncated and max_messages
+            else None
+        )
         published = await _publish_quote_message(
             bot=bot,
             group=group,
@@ -238,6 +251,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             breakdown=evaluation.breakdown,
             clear_window_after=True,
             pin_enabled=core.effective_group_pin_enabled(group),
+            extra_note=truncated_note,
         )
         if published:
             _mark_day_completed(group, window)
@@ -344,6 +358,7 @@ async def _publish_quote_message(
     breakdown: scoring.ScoreBreakdown,
     clear_window_after: bool,
     pin_enabled: bool = True,
+    extra_note: str | None = None,
 ) -> bool:
     language = i18n.group_language(group)
     info_parts = [f"<i>{breakdown.stars}</i>"]
@@ -361,6 +376,7 @@ async def _publish_quote_message(
         info_line=info_line,
         msg_link=msg_link,
         details_link=details_link,
+        extra_note=extra_note,
     )
 
     media_copy_error: str | None = None
@@ -571,6 +587,7 @@ def _build_quote_post_text(
     msg_link: str,
     details_link: str,
     media_caption: bool = False,
+    extra_note: str | None = None,
 ) -> str:
     quote_text = _display_quote_text(quote.text, media_caption=media_caption)
     safe_author_name = escape(author_name)
@@ -581,12 +598,15 @@ def _build_quote_post_text(
     )
 
     def _compose(body: str) -> str:
-        return (
-            f"{_quote_day_title(quote, language)}\n\n"
-            f"<blockquote>{body}</blockquote>\n\n"
-            f"{info_line}\n\n"
-            f"{footer}"
-        )
+        parts = [
+            _quote_day_title(quote, language),
+            f"<blockquote>{body}</blockquote>",
+            info_line,
+        ]
+        if extra_note and not media_caption:
+            parts.append(f"<i>{extra_note}</i>")
+        parts.append(footer)
+        return "\n\n".join(parts)
 
     if context_lines and not media_caption:
         body = _format_context_quote_body(context_lines)
