@@ -165,3 +165,41 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(core.settings, "PREMIUM_CHAT_IDS", [-100]):
             self.assertTrue(core.effective_group_is_premium(group))
             self.assertIsNone(core.effective_group_message_cap(group))
+
+    def test_group_agreement_accepted_flag(self) -> None:
+        self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))
+        self.assertTrue(
+            core.group_agreement_accepted(
+                SimpleNamespace(agreement_accepted_at=datetime.now(timezone.utc))
+            )
+        )
+
+    async def test_accept_group_agreement_sets_fields(self) -> None:
+        group = SimpleNamespace(
+            agreement_accepted_at=None,
+            agreement_accepted_by=None,
+            agreement_language=None,
+        )
+        session = _UpdateSession(group)
+        with patch.object(core, "SessionLocal", return_value=session):
+            result = await core.accept_group_agreement(1, 42, "ru")
+
+        self.assertIsNotNone(result.agreement_accepted_at)
+        self.assertEqual(result.agreement_accepted_by, 42)
+        self.assertEqual(result.agreement_language, "ru")
+        session.commit.assert_awaited_once()
+
+    async def test_accept_group_agreement_is_idempotent(self) -> None:
+        existing = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        group = SimpleNamespace(
+            agreement_accepted_at=existing,
+            agreement_accepted_by=7,
+            agreement_language="en",
+        )
+        session = _UpdateSession(group)
+        with patch.object(core, "SessionLocal", return_value=session):
+            result = await core.accept_group_agreement(1, 42, "ru")
+
+        self.assertEqual(result.agreement_accepted_at, existing)
+        self.assertEqual(result.agreement_accepted_by, 7)
+        session.commit.assert_not_awaited()

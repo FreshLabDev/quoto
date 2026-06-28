@@ -258,6 +258,32 @@ def effective_group_message_cap(group: models.Group | None) -> int | None:
     return cap if cap and cap > 0 else None
 
 
+def group_agreement_accepted(group: models.Group | None) -> bool:
+    return getattr(group, "agreement_accepted_at", None) is not None
+
+
+async def accept_group_agreement(
+    group_id: int,
+    user_id: int,
+    language: str | None,
+) -> models.Group | None:
+    normalized = i18n.normalize_language_code(language) or i18n.DEFAULT_LANGUAGE
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.Group).where(models.Group.id == group_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return None
+        if group.agreement_accepted_at is None:
+            group.agreement_accepted_at = utc_now()
+            group.agreement_accepted_by = int(user_id)
+            group.agreement_language = normalized
+            await session.commit()
+            await session.refresh(group)
+        return group
+
+
 def clamp_min_messages(value: int | str) -> int:
     try:
         parsed = int(value)

@@ -8,7 +8,7 @@ from aiogram import Bot, F, Router, types
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 
-from . import core, i18n, media, menu, scoring
+from . import agreement, core, i18n, media, menu, scoring
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
@@ -308,6 +308,7 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
     chat = event.chat
     text = ""
     text_log = ""
+    reply_markup: types.InlineKeyboardMarkup | None = None
     language = i18n.language_or_default(getattr(getattr(event, "from_user", None), "language_code", None))
     safe_chat_title = _html(chat.title or "этот чат")
 
@@ -329,6 +330,9 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
             text += f"\n\n{i18n.t(language, 'chat_member.need_admin')}"
             text_log += " без прав администратора!"
 
+        text += f"\n\n{i18n.t(language, 'agreement.welcome_note')}"
+        reply_markup = agreement.build_welcome_keyboard(language)
+
     elif event.new_chat_member.status == "administrator" and event.old_chat_member.status in ["member", "restricted"]:
         text = i18n.t(language, "chat_member.admin_granted")
         text_log = f"{chat.id} | Бот назначен администратором"
@@ -338,8 +342,76 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
         text_log = f"{chat.id} | Бот снят с администратора"
 
     if text:
-        await event.answer(text)
+        try:
+            await event.answer(text, reply_markup=reply_markup)
+        except TelegramAPIError as exc:
+            log.warning(f"{chat.id} | ⚠️ Не удалось отправить приветствие: {exc}")
         log.debug(text_log)
+
+
+@router.message(Command("privacy"))
+async def privacy_command(message: types.Message, bot: Bot):
+    chat = message.chat
+    if chat.type == "private":
+        db_user = await core.user_getOrCreate(message.from_user)
+        language = _private_message_language(message, db_user)
+        text, markup = agreement.build_document(language, can_accept=False, accepted=False)
+        await message.answer(text, reply_markup=markup)
+        return
+
+    group = await core.group_getOrCreate(chat)
+    language = i18n.group_language(group)
+    is_admin = (
+        await _is_chat_admin(bot, chat.id, message.from_user.id)
+        if message.from_user
+        else False
+    )
+    accepted = core.group_agreement_accepted(group)
+    text, markup = agreement.build_document(
+        language, can_accept=is_admin and not accepted, accepted=accepted
+    )
+    await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith(f"{agreement.CALLBACK_PREFIX}:"))
+async def agreement_callback(callback: types.CallbackQuery, bot: Bot):
+    parsed = agreement.parse_callback(callback.data)
+    if not parsed:
+        await callback.answer()
+        return
+    action, raw_language = parsed
+    language = i18n.language_or_default(raw_language)
+    chat = getattr(callback.message, "chat", None)
+    in_group = bool(chat and chat.type in {"group", "supergroup"})
+
+    if action == agreement.ACTION_VIEW:
+        if in_group:
+            group = await core.group_getOrCreate(chat)
+            is_admin = await _is_chat_admin(bot, chat.id, callback.from_user.id)
+            accepted = core.group_agreement_accepted(group)
+            text, markup = agreement.build_document(
+                language, can_accept=is_admin and not accepted, accepted=accepted
+            )
+        else:
+            text, markup = agreement.build_document(language, can_accept=False, accepted=False)
+        await _edit_panel(callback, text, markup)
+        await callback.answer()
+        return
+
+    if action == agreement.ACTION_ACCEPT:
+        if not in_group:
+            await callback.answer()
+            return
+        if not await _is_chat_admin(bot, chat.id, callback.from_user.id):
+            await callback.answer(i18n.t(language, "agreement.admin_only"), show_alert=True)
+            return
+        group = await core.group_getOrCreate(chat)
+        await core.accept_group_agreement(group.id, callback.from_user.id, language)
+        await _edit_panel(callback, agreement.build_accepted(language), None)
+        await callback.answer(i18n.t(language, "agreement.accepted_toast"))
+        return
+
+    await callback.answer()
 
 
 @router.message(or_f(and_f(F.chat.type == "private", CommandStart()), F.chat.type == "private"))

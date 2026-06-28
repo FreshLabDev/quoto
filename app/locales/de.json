@@ -179,5 +179,20 @@
   "boring": {
     "title": "😴 <b>Heute kein Zitat des Tages</b>",
     "body": "Ich habe keine Zeile gefunden, die den Tag wert ist. Bis morgen!"
+  },
+  "agreement": {
+    "title": "📄 <b>Quoto — Nutzungsvereinbarung &amp; Datenschutz</b>",
+    "summary": "<i>Mit der Nutzung von Quoto in dieser Gruppe akzeptierst du die folgenden Bedingungen. Zum Ausklappen tippen.</i>",
+    "body": "<b>1. Was Quoto tut.</b> Tagsüber lese ich Nachrichten in dieser Gruppe und veröffentliche zur eingestellten Zeit ein „Zitat des Tages“.\n\n<b>2. Was verarbeitet wird.</b> Nachrichtentext und Bildunterschriften, Reaktionen, Medien (Fotos, Videos, Sprachnachrichten, Audio), der Name des Autors und seine Telegram-ID sowie ID und Titel der Gruppe.\n\n<b>3. KI-Verarbeitung.</b> Zur Auswahl eines Zitats werden Nachrichtentext und Medien zur Analyse an unseren KI-Anbieter <b>OpenRouter</b> und dessen Modellanbieter gesendet. Teile keine Passwörter oder sensiblen Daten in Chats, in denen Quoto aktiv ist.\n\n<b>4. Speicherung.</b> Die Nachrichten eines Tages werden nach dessen Auswertung gelöscht. Veröffentlichte Zitate und grundlegende Kennungen (Nutzer, Gruppe) bleiben für die Statistik erhalten.\n\n<b>5. Deine Daten.</b> Ich verkaufe deine Daten nicht. Für eine Löschung schreibe an @amti_yo.\n\n<b>6. Verantwortung des Admins.</b> Mit der Annahme bestätigt ein Gruppen-Admin, dass er den Bot hinzufügen darf und dass die Mitglieder wissen, dass der Chat von Quoto verarbeitet wird.\n\n<b>7. Ohne Gewähr.</b> Der Dienst wird „wie besehen“ ohne Gewährleistung bereitgestellt; die Bedingungen können sich ändern, die weitere Nutzung gilt als Zustimmung.",
+    "doc_footer": "<i>Um das Zitat des Tages zu aktivieren, tippt ein Admin auf „Akzeptieren“. Fragen: @amti_yo.</i>",
+    "welcome_note": "<i>Bevor ich etwas veröffentliche, muss ein Gruppen-Admin die Nutzungsvereinbarung akzeptieren.</i>",
+    "view_button": "📄 Nutzungsvereinbarung",
+    "accept_button": "✅ Akzeptieren",
+    "accepted": "✅ <b>Nutzungsvereinbarung akzeptiert.</b> Danke!",
+    "accepted_admin_hint": "<i>Mach mich jetzt zum Administrator mit der Berechtigung, Nachrichten anzuheften, damit ich das Zitat des Tages veröffentlichen kann.</i>",
+    "accepted_toast": "Akzeptiert — danke!",
+    "already": "✅ <i>Diese Gruppe hat die Vereinbarung bereits akzeptiert.</i>",
+    "admin_only": "Nur ein Gruppen-Admin kann die Vereinbarung akzeptieren.",
+    "reminder": "📄 Um das Zitat des Tages zu veröffentlichen, muss ein Gruppen-Admin die Quoto-Nutzungsvereinbarung akzeptieren."
   }
 }

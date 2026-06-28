@@ -179,5 +179,20 @@
   "boring": {
     "title": "😴 <b>No quote of the day today</b>",
     "body": "I didn't find a line worth the day. See you tomorrow!"
+  },
+  "agreement": {
+    "title": "📄 <b>Quoto — User Agreement &amp; Privacy</b>",
+    "summary": "<i>By using Quoto in this group you accept the terms below. Tap to expand.</i>",
+    "body": "<b>1. What Quoto does.</b> During the day I read messages sent in this group and, at the set time, publish one “quote of the day”.\n\n<b>2. What is processed.</b> Message text and captions, reactions, media (photos, videos, voice, audio), the author's name and Telegram ID, and the group's ID and title.\n\n<b>3. AI processing.</b> To choose a quote, message text and media are sent to our AI provider <b>OpenRouter</b> and its model providers for analysis. Don't share passwords or sensitive data in chats where Quoto is active.\n\n<b>4. Storage.</b> A day's messages are deleted after that day is processed. Published quotes and basic identifiers (user, group) are kept so statistics work.\n\n<b>5. Your data.</b> I don't sell your data. To request deletion, contact @amti_yo.\n\n<b>6. Admin responsibility.</b> By accepting, a group admin confirms they may add this bot and that members know the chat is processed by Quoto.\n\n<b>7. As-is.</b> The service is provided “as is”, without warranties, and the terms may change; continued use means acceptance.",
+    "doc_footer": "<i>To enable the quote of the day, a group admin taps “Accept”. Questions: @amti_yo.</i>",
+    "welcome_note": "<i>Before I publish anything, a group admin needs to accept the user agreement.</i>",
+    "view_button": "📄 User agreement",
+    "accept_button": "✅ Accept",
+    "accepted": "✅ <b>User agreement accepted.</b> Thank you!",
+    "accepted_admin_hint": "<i>Now make me an administrator with the right to pin messages, so I can publish the quote of the day.</i>",
+    "accepted_toast": "Accepted — thank you!",
+    "already": "✅ <i>This group has already accepted the agreement.</i>",
+    "admin_only": "Only a group admin can accept the agreement.",
+    "reminder": "📄 To publish the quote of the day, a group admin needs to accept the Quoto user agreement."
   }
 }

@@ -19,7 +19,10 @@ async def main():
 
     await db.init_db()
     await bot.set_my_commands(
-        [types.BotCommand(command="start", description="Open Quoto menu")]
+        [
+            types.BotCommand(command="start", description="Open Quoto menu"),
+            types.BotCommand(command="privacy", description="User agreement & privacy"),
+        ]
     )
 
     # Инициализация планировщика

@@ -8,7 +8,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
 from sqlalchemy import select
 
-from . import core, i18n, media, scoring
+from . import agreement, core, i18n, media, scoring
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .models import Group, Quote
@@ -42,6 +42,8 @@ _TERMINAL_EXISTING_STATUSES = {
 # повторные тики catch-up окна не трогают группу. После рестарта кэш пуст —
 # истину восстанавливает запись Quote в БД.
 _completed_days: dict[int, date] = {}
+# Дни, за которые группе уже отправлено напоминание о принятии соглашения.
+_agreement_reminded: dict[int, date] = {}
 
 
 async def quote_of_the_day_job(bot: Bot) -> None:
@@ -113,6 +115,22 @@ async def recover_pending_media_job(bot: Bot) -> None:
         log.info(f"♻️ Обработано pending media: {processed}")
 
 
+async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, language: str) -> None:
+    """Once per quote day, nudge the group to accept the user agreement."""
+    if _agreement_reminded.get(group.id) == window.quote_day:
+        return
+    _agreement_reminded[group.id] = window.quote_day
+    try:
+        await bot.send_message(
+            group.chat_id,
+            i18n.t(language, "agreement.reminder"),
+            reply_markup=agreement.build_welcome_keyboard(language),
+        )
+        log.info(f"{group.chat_id} | 📄 Отправлено напоминание о пользовательском соглашении")
+    except Exception as exc:
+        log.warning(f"{group.chat_id} | ⚠️ Не удалось отправить напоминание о соглашении: {exc}")
+
+
 async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = None) -> None:
     quote_hour, quote_minute = core.effective_group_quote_time(group)
     window = window or get_closed_window(at_time=time(hour=quote_hour, minute=quote_minute))
@@ -121,6 +139,11 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     max_messages = core.effective_group_message_cap(group)
     language = i18n.group_language(group)
     log.debug(f"{group.chat_id} | ⏳ Обработка дня {window.quote_day} для группы {group.name}")
+
+    if not core.group_agreement_accepted(group):
+        log.info(f"{group.chat_id} | 📄 День {window.quote_day} пропущен: соглашение не принято")
+        await _remind_agreement(bot, group, window, language)
+        return
 
     await _recover_stale_quotes_for_chat(group.chat_id)
 

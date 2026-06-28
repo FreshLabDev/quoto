@@ -57,8 +57,30 @@ class _GroupsSession:
 class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         scheduler._completed_days.clear()
-        self.group = SimpleNamespace(id=1, chat_id=-100123456, name="Quoto Test Chat")
+        scheduler._agreement_reminded.clear()
+        self.group = SimpleNamespace(
+            id=1,
+            chat_id=-100123456,
+            name="Quoto Test Chat",
+            agreement_accepted_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
         self.window = _make_window()
+
+    async def test_process_group_skips_and_reminds_when_agreement_not_accepted(self) -> None:
+        self.group.agreement_accepted_at = None
+        bot = SimpleNamespace(send_message=AsyncMock())
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock()) as recover,
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock()) as pick_best_quote,
+        ):
+            await scheduler._process_group(bot, self.group, self.window)
+            # A second tick the same day must not re-send the reminder.
+            await scheduler._process_group(bot, self.group, self.window)
+
+        recover.assert_not_awaited()
+        pick_best_quote.assert_not_awaited()
+        bot.send_message.assert_awaited_once()
 
     async def test_process_group_recovers_stale_quotes_before_day_lookup(self) -> None:
         calls: list[str] = []

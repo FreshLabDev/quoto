@@ -46,6 +46,9 @@ class Group(Base):
     pin_enabled = Column(Boolean, nullable=True)
     quote_context_enabled = Column(Boolean, nullable=True)
     is_premium = Column(Boolean, nullable=True)
+    agreement_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    agreement_accepted_by = Column(BigInteger, nullable=True)
+    agreement_language = Column(String, nullable=True)
 
     quotes = relationship("Quote", back_populates="group")
 
