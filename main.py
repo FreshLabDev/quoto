@@ -13,11 +13,24 @@ bot = Bot(
 
 log = config.setup_logging(logging.getLogger(__name__))
 
+
+async def on_update_error(event: types.ErrorEvent) -> bool:
+    """Catch any unhandled error so a single bad update can't kill polling."""
+    exc = event.exception
+    log.error(f"❌ Необработанная ошибка обновления: {exc}", exc_info=exc)
+    await utils.notify_developers(
+        f"❌ Update error: {type(exc).__name__}: {exc}",
+        dedupe_key=f"update:{type(exc).__name__}",
+    )
+    return True
+
+
 async def main():
     config.validate_runtime()
 
     dp = Dispatcher()
     dp.include_router(handlers.router)
+    dp.errors.register(on_update_error)
 
     await db.init_db()
     await bot.set_my_commands(
