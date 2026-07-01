@@ -226,7 +226,16 @@ async def process_pending_media(bot: Bot, *, limit: int = 10) -> int:
 
     for item in pending_items:
         source = _source_from_media_item(item)
-        await _process_media_source(bot, db_message_id=item.message_db_id, source=source)
+        try:
+            await asyncio.wait_for(
+                _process_media_source(bot, db_message_id=item.message_db_id, source=source),
+                timeout=settings.MEDIA_PENDING_ITEM_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                f"Media analysis timed out for db message {item.message_db_id}; will retry next cycle"
+            )
+            continue
         processed += 1
 
     remaining = max(0, limit - processed)

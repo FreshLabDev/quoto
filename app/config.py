@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "google/gemini-3.5-flash"
     OPENROUTER_EVAL_MODEL: str = ""
-    OPENROUTER_MEDIA_MODEL: str = "google/gemini-3.1-flash-lite"
+    OPENROUTER_MEDIA_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    # Used only if the primary media model errors out after retries.
+    OPENROUTER_MEDIA_FALLBACK_MODEL: str = "google/gemini-2.5-flash-lite"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
     OPENROUTER_HTTP_REFERER: str = "https://t.me/quototbot"
     OPENROUTER_APP_TITLE: str = "Quoto"
@@ -57,6 +59,9 @@ class Settings(BaseSettings):
     MEDIA_COMMAND_TIMEOUT_SECONDS: int = 300
     MEDIA_PENDING_RETRY_INTERVAL_SECONDS: int = 300
     MEDIA_PENDING_RETRY_BATCH_SIZE: int = 10
+    # Bounds one item's worst-case retry chain (primary + fallback model) so a
+    # struggling provider can't stall the whole recovery batch for hours.
+    MEDIA_PENDING_ITEM_TIMEOUT_SECONDS: int = 600
 
     # -- SCORING WEIGHTS --
     WEIGHT_REACTIONS: float = 0.0

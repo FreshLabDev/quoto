@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -196,6 +197,35 @@ class MediaPendingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(process_media_source.await_args.kwargs["db_message_id"], 55)
         self.assertEqual(process_media_source.await_args.kwargs["source"].kind, "photo")
         self.assertEqual(process_media_source.await_args.kwargs["source"].file_id, "file-1")
+
+    async def test_process_pending_media_times_out_slow_item_and_continues(self) -> None:
+        item = SimpleNamespace(
+            message_db_id=77,
+            media_kind="photo",
+            telegram_file_id="file-2",
+            telegram_file_unique_id="unique-2",
+            mime_type="image/jpeg",
+            file_name=None,
+            file_size=123,
+            width=640,
+            height=480,
+            duration=None,
+        )
+        bot = SimpleNamespace()
+
+        async def _hang(*_args, **_kwargs) -> None:
+            await asyncio.sleep(10)
+
+        with (
+            patch.object(media, "_load_pending_media_items", new=AsyncMock(return_value=[item])),
+            patch.object(media, "_process_media_source", new=_hang),
+            patch.object(media, "_mark_orphan_pending_messages_failed", new=AsyncMock(return_value=0)),
+            patch.object(media.settings, "MEDIA_PENDING_ITEM_TIMEOUT_SECONDS", 0.01),
+        ):
+            processed = await media.process_pending_media(bot, limit=10)
+
+        # A stuck item is skipped (not counted as processed) instead of blocking the whole batch.
+        self.assertEqual(processed, 0)
 
     async def test_store_media_result_updates_existing_pending_item(self) -> None:
         message = SimpleNamespace(id=55, caption=None, text="old", media_status="pending")
@@ -494,3 +524,183 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("ключевыми фразами", prompt)
         self.assertIn("1-4 коротких предложения", prompt)
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "input_audio")
+
+    async def test_describe_media_file_falls_back_to_secondary_model_after_primary_failure(self) -> None:
+        primary_attempts = 0
+
+        class FakeResponse:
+            status_code = 200
+            text = json.dumps(
+                {
+                    "model": "google/gemini-2.5-flash-lite",
+                    "choices": [{"message": {"content": "запасное описание"}}],
+                    "usage": {"prompt_tokens": 5, "completion_tokens": 5, "total_tokens": 10},
+                }
+            )
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal primary_attempts
+                if kwargs["json"]["model"] == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free":
+                    primary_attempts += 1
+                    raise ai.httpx.ReadTimeout("primary model unavailable")
+                return FakeResponse()
+
+        sleep = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            image_path = Path(tempdir) / "image.jpg"
+            image_path.write_bytes(b"image")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(
+                    ai.settings, "OPENROUTER_MEDIA_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+                ),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", "google/gemini-2.5-flash-lite"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+                patch.object(ai.asyncio, "sleep", new=sleep),
+            ):
+                result = await ai.describe_media_file(
+                    path=image_path,
+                    mime_type="image/jpeg",
+                    media_kind="photo",
+                )
+
+        # 3 retries against the primary model before giving up and falling back.
+        self.assertEqual(primary_attempts, 3)
+        self.assertEqual(result.description, "запасное описание")
+        self.assertEqual(result.actual_model, "google/gemini-2.5-flash-lite")
+
+    async def test_describe_media_file_raises_when_no_fallback_configured(self) -> None:
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                raise ai.httpx.ReadTimeout("primary model unavailable")
+
+        sleep = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            image_path = Path(tempdir) / "image.jpg"
+            image_path.write_bytes(b"image")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "primary/model"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", ""),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+                patch.object(ai.asyncio, "sleep", new=sleep),
+            ):
+                with self.assertRaises(ai.httpx.ReadTimeout):
+                    await ai.describe_media_file(
+                        path=image_path,
+                        mime_type="image/jpeg",
+                        media_kind="photo",
+                    )
+
+    async def test_describe_media_file_falls_back_when_primary_returns_non_json_body(self) -> None:
+        class FakeResponse:
+            status_code = 200
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                raise json.JSONDecodeError("Expecting value", "not json", 0)
+
+        class FakeSuccessResponse:
+            status_code = 200
+            text = json.dumps(
+                {
+                    "model": "google/gemini-2.5-flash-lite",
+                    "choices": [{"message": {"content": "запасное описание"}}],
+                    "usage": {},
+                }
+            )
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                if kwargs["json"]["model"] == "primary/model":
+                    return FakeResponse()
+                return FakeSuccessResponse()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            image_path = Path(tempdir) / "image.jpg"
+            image_path.write_bytes(b"image")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "primary/model"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", "google/gemini-2.5-flash-lite"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            ):
+                result = await ai.describe_media_file(
+                    path=image_path,
+                    mime_type="image/jpeg",
+                    media_kind="photo",
+                )
+
+        # A non-JSON 200 response from the primary model must still trigger the fallback.
+        self.assertEqual(result.description, "запасное описание")
+        self.assertEqual(result.actual_model, "google/gemini-2.5-flash-lite")
+
+    async def test_describe_media_file_error_mentions_both_models_when_both_fail(self) -> None:
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                model = kwargs["json"]["model"]
+                raise ai.httpx.ReadTimeout(f"{model} unavailable")
+
+        sleep = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            image_path = Path(tempdir) / "image.jpg"
+            image_path.write_bytes(b"image")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "primary/model"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", "fallback/model"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+                patch.object(ai.asyncio, "sleep", new=sleep),
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    await ai.describe_media_file(
+                        path=image_path,
+                        mime_type="image/jpeg",
+                        media_kind="photo",
+                    )
+
+        # Both models' failure reasons must survive into the error persisted as analysis_error.
+        self.assertIn("primary/model", str(ctx.exception))
+        self.assertIn("fallback/model", str(ctx.exception))

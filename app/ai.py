@@ -660,6 +660,42 @@ def _response_format(
     }
 
 
+class _MediaModelResponseError(RuntimeError):
+    """A specific media model returned a response we can't use (bad shape or empty)."""
+
+
+def _media_model_candidates() -> list[str]:
+    models = [settings.OPENROUTER_MEDIA_MODEL]
+    fallback = settings.OPENROUTER_MEDIA_FALLBACK_MODEL
+    if fallback and fallback not in models:
+        models.append(fallback)
+    return models
+
+
+async def _post_media_request(body: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post(
+                    settings.OPENROUTER_BASE_URL,
+                    json=body,
+                    headers=headers,
+                )
+                response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            if _is_retryable_http_status(exc.response.status_code) and attempt < 2:
+                await asyncio.sleep(_retry_after_seconds(exc.response) or _compute_backoff(attempt))
+                continue
+            raise
+        except httpx.RequestError:
+            if attempt < 2:
+                await asyncio.sleep(_compute_backoff(attempt))
+                continue
+            raise
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 async def describe_media_file(
     *,
     path: Path,
@@ -675,60 +711,63 @@ async def describe_media_file(
         mime_type=mime_type,
         media_kind=media_kind,
     )
-    body: dict[str, Any] = {
-        "model": settings.OPENROUTER_MEDIA_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": _media_description_prompt(media_kind)},
-                    media_part,
-                ],
-            }
-        ],
-    }
-    if settings.OPENROUTER_MEDIA_REASONING_EFFORT:
-        body["reasoning"] = {
-            "enabled": True,
-            "effort": settings.OPENROUTER_MEDIA_REASONING_EFFORT,
-            "exclude": True,
-        }
-
     headers = _openrouter_headers()
-    for attempt in range(3):
-        try:
-            async with httpx.AsyncClient(timeout=180.0) as client:
-                response = await client.post(
-                    settings.OPENROUTER_BASE_URL,
-                    json=body,
-                    headers=headers,
-                )
-                response.raise_for_status()
-            break
-        except httpx.HTTPStatusError as exc:
-            if _is_retryable_http_status(exc.response.status_code) and attempt < 2:
-                await asyncio.sleep(_retry_after_seconds(exc.response) or _compute_backoff(attempt))
-                continue
-            raise
-        except httpx.RequestError:
-            if attempt < 2:
-                await asyncio.sleep(_compute_backoff(attempt))
-                continue
-            raise
+    models = _media_model_candidates()
+    attempt_errors: list[str] = []
 
-    data = response.json()
-    content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
-    usage = data.get("usage") or {}
-    description = str(content).strip()
-    if not description:
-        raise RuntimeError("Media model returned an empty description.")
-    return MediaDescriptionResult(
-        description=description,
-        actual_model=data.get("model", settings.OPENROUTER_MEDIA_MODEL),
-        prompt_tokens=_optional_int(usage.get("prompt_tokens")),
-        completion_tokens=_optional_int(usage.get("completion_tokens")),
-        total_tokens=_optional_int(usage.get("total_tokens")),
-    )
+    for model_index, model in enumerate(models):
+        body: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": _media_description_prompt(media_kind)},
+                        media_part,
+                    ],
+                }
+            ],
+        }
+        if settings.OPENROUTER_MEDIA_REASONING_EFFORT:
+            body["reasoning"] = {
+                "enabled": True,
+                "effort": settings.OPENROUTER_MEDIA_REASONING_EFFORT,
+                "exclude": True,
+            }
+
+        is_last_model = model_index == len(models) - 1
+        try:
+            response = await _post_media_request(body, headers)
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise _MediaModelResponseError(f"Media model {model} returned a non-JSON response.") from exc
+            if not isinstance(data, dict):
+                raise _MediaModelResponseError(f"Media model {model} returned an unexpected response shape.")
+            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
+            usage = data.get("usage") or {}
+            description = str(content).strip()
+            if not description:
+                raise _MediaModelResponseError(f"Media model {model} returned an empty description.")
+            return MediaDescriptionResult(
+                description=description,
+                actual_model=data.get("model", model),
+                prompt_tokens=_optional_int(usage.get("prompt_tokens")),
+                completion_tokens=_optional_int(usage.get("completion_tokens")),
+                total_tokens=_optional_int(usage.get("total_tokens")),
+            )
+        except (httpx.HTTPStatusError, httpx.RequestError, _MediaModelResponseError) as exc:
+            attempt_errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            if is_last_model:
+                if len(attempt_errors) > 1:
+                    raise RuntimeError("All media models failed — " + "; ".join(attempt_errors)) from exc
+                raise
+            log.warning(
+                f"⚠️ Media model {model} failed ({type(exc).__name__}: {exc}); "
+                f"falling back to {models[model_index + 1]}"
+            )
+
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _media_description_prompt(media_kind: str) -> str:
@@ -774,7 +813,7 @@ def _media_content_part(*, path: Path, mime_type: str, media_kind: str) -> dict[
                 "format": _audio_format(mime_type, path),
             },
         }
-    raise ValueError(f"Unsupported media kind for {settings.OPENROUTER_MEDIA_MODEL}: {media_kind}")
+    raise ValueError(f"Unsupported media kind: {media_kind}")
 
 
 def _audio_format(mime_type: str, path: Path) -> str:
