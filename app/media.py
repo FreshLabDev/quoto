@@ -174,7 +174,7 @@ def initial_message_text(message: types.Message) -> str:
     caption = message_caption(message)
     source = extract_media_source(message)
     if source:
-        return _canonical_text(source.kind, caption, _metadata_description(source))
+        return canonical_text(source.kind, caption, _metadata_description(source))
     if caption:
         return caption
     return f"{message_content_type(message)}: сообщение без текста"
@@ -677,7 +677,7 @@ async def _store_media_result(
         if not message:
             return
         if description:
-            message.text = _canonical_text(source.kind, message.caption, description)
+            message.text = canonical_text(source.kind, message.caption, description)
         message.media_status = status
         result = await session.execute(
             select(models.MessageMedia)
@@ -708,7 +708,7 @@ async def _store_media_result(
         await session.commit()
 
 
-def _canonical_text(kind: str, caption: str | None, description: str | None) -> str:
+def canonical_text(kind: str, caption: str | None, description: str | None) -> str:
     parts: list[str] = []
     if caption:
         parts.append(caption.strip())

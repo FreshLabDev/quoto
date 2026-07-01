@@ -19,7 +19,7 @@ from .quote_status import (
     STATUS_SKIPPED_BORING,
     VISIBLE_IN_STATS,
 )
-from .scoring import ScoreBreakdown
+from .scoring import ScoreBreakdown, resolved_message_text
 from .windows import QuoteWindow, utc_now
 
 log = setup_logging(logging.getLogger(__name__))
@@ -887,7 +887,7 @@ async def create_quote_record(
             quote = models.Quote(
                 group_id=group.id,
                 author_id=best_message.user_id,
-                text=best_message.text,
+                text=resolved_message_text(best_message),
                 score=breakdown.total,
                 reaction_score=breakdown.reaction,
                 ai_score=breakdown.ai,
@@ -938,7 +938,7 @@ def _serialize_context_messages(
         {
             "message_id": int(message.message_id),
             "author": message.author.name if message.author else "Аноним",
-            "text": message.text,
+            "text": resolved_message_text(message),
             "is_primary": message.id == primary_message_id,
         }
         for message in context_messages

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from . import ai, ai_reports
+from . import ai, ai_reports, media
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .models import Message
@@ -167,7 +167,7 @@ async def pick_best_quote(
         caption = getattr(msg, "caption", None)
         if caption:
             payload["caption"] = caption
-        media_description = _message_media_description(msg)
+        media_description = message_media_description(msg)
         if media_description:
             payload["desc"] = media_description
         reply_to_id = telegram_to_internal.get(getattr(msg, "reply_to_message_id", None))
@@ -209,7 +209,7 @@ async def pick_best_quote(
         break
 
     if ai_best_msg and best_msg and ai_best_msg.id != best_msg.id:
-        best_breakdown.ai_best_text = ai_best_msg.text
+        best_breakdown.ai_best_text = resolved_message_text(ai_best_msg)
     context_messages = _valid_context_messages(evaluation.quote_choice, messages, best_msg) if best_msg else []
 
     day_verdict = evaluation.day_verdict
@@ -268,7 +268,7 @@ def _message_text_payload(message: Message) -> str:
     return ""
 
 
-def _message_media_description(message: Message) -> str | None:
+def message_media_description(message: Message) -> str | None:
     media_items = getattr(message, "media_items", None) or []
     for item in media_items:
         description = getattr(item, "description_snapshot", None)
@@ -277,6 +277,20 @@ def _message_media_description(message: Message) -> str | None:
     if getattr(message, "content_type", None) != "text" and message.text:
         return message.text
     return None
+
+
+def resolved_message_text(message: Message) -> str:
+    """The message's display text, preferring the AI media description over
+    a stale `Message.text` (which may still hold the pre-analysis placeholder)."""
+    media_items = getattr(message, "media_items", None) or []
+    description = next(
+        (item.description_snapshot for item in media_items if item.description_snapshot),
+        None,
+    )
+    if description:
+        kind = getattr(message, "content_type", None) or "text"
+        return media.canonical_text(kind, getattr(message, "caption", None), description)
+    return message.text
 
 
 def _contains_quoto_hashtag(text: str | None) -> bool:

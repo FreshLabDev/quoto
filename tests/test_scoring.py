@@ -66,6 +66,26 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(breakdown.total, 0.2)
 
+    def test_resolved_message_text_prefers_ai_description_over_stale_text(self) -> None:
+        message = _message(
+            1,
+            11,
+            "photo: Файл: photo, mime=image/jpeg, size=45388",
+            "Alice",
+            content_type="photo",
+            media_items=[SimpleNamespace(description_snapshot="На экране приложения видно профиль пользователя.")],
+        )
+
+        self.assertEqual(
+            scoring.resolved_message_text(message),
+            "photo: На экране приложения видно профиль пользователя.",
+        )
+
+    def test_resolved_message_text_falls_back_to_raw_text_for_plain_messages(self) -> None:
+        message = _message(1, 11, "обычный текст", "Alice")
+
+        self.assertEqual(scoring.resolved_message_text(message), "обычный текст")
+
     async def test_pick_best_quote_sends_reactions_context_and_uses_ai_winner(self) -> None:
         messages = [
             _message(
@@ -153,6 +173,39 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload[1]["desc"], "человек показывает табличку")
         self.assertNotIn("text", payload[1])
         self.assertNotIn("message_id", payload[1])
+
+    async def test_pick_best_quote_ai_best_text_uses_media_description_not_stale_text(self) -> None:
+        # message.text can lag behind the AI analysis (media.py backfill race); ai_best_text
+        # must prefer the media description over that stale placeholder.
+        messages = [
+            _message(1, 11, "normal text", "Alice"),
+            _message(
+                2,
+                12,
+                "photo: Файл: photo, mime=image/jpeg, size=45388",
+                "Bob",
+                content_type="photo",
+                media_items=[SimpleNamespace(description_snapshot="скриншот профиля в приложении знакомств")],
+            ),
+        ]
+        window = SimpleNamespace(start_utc=1, end_utc=2, start_local=1, end_local=2)
+        evaluation_result = ai.EvaluationResult(
+            scores={1: 0.9, 2: 0.95},
+            actual_model="openrouter/test",
+            quote_choice=ai.QuoteContextChoice(primary_id=1, context_ids=[], context_needed=False),
+        )
+
+        with (
+            patch.object(scoring, "SessionLocal", return_value=_DummySession(messages)),
+            patch.object(scoring.ai, "evaluate_messages", new=AsyncMock(return_value=evaluation_result)),
+        ):
+            result = await scoring.pick_best_quote(-100123456, window)
+
+        self.assertEqual(result.best_message.id, 1)
+        self.assertEqual(
+            result.breakdown.ai_best_text,
+            "photo: скриншот профиля в приложении знакомств",
+        )
 
     async def test_pick_best_quote_does_not_allow_sticker_as_primary(self) -> None:
         messages = [

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 import os
 from types import SimpleNamespace
 import unittest
@@ -301,3 +302,36 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.agreement_accepted_at, existing)
         self.assertEqual(result.agreement_accepted_by, 7)
         session.commit.assert_not_awaited()
+
+    def test_serialize_context_messages_uses_media_description_not_stale_text(self) -> None:
+        primary = SimpleNamespace(
+            id=2,
+            message_id=707000,
+            text="нихуя себе зеля",
+            content_type="text",
+            caption=None,
+            author=SimpleNamespace(name="_amti"),
+            media_items=[],
+        )
+        photo_context = SimpleNamespace(
+            id=1,
+            message_id=706998,
+            text="photo: Файл: photo, mime=image/jpeg, size=45388",
+            content_type="photo",
+            caption=None,
+            author=SimpleNamespace(name="_amti"),
+            media_items=[SimpleNamespace(description_snapshot="На экране приложения видно профиль пользователя.")],
+        )
+
+        ids_json, snapshot_json = core._serialize_context_messages(
+            [photo_context, primary],
+            primary_message_id=2,
+        )
+
+        snapshot = json.loads(snapshot_json)
+        self.assertEqual(json.loads(ids_json), [706998, 707000])
+        self.assertEqual(
+            snapshot[0]["text"],
+            "photo: На экране приложения видно профиль пользователя.",
+        )
+        self.assertEqual(snapshot[1]["text"], "нихуя себе зеля")
