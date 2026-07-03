@@ -107,7 +107,7 @@ async def pick_best_quote(
     async with SessionLocal() as session:
         stmt = (
             select(Message)
-            .options(selectinload(Message.reactions), selectinload(Message.author), selectinload(Message.media_items))
+            .options(selectinload(Message.reactions), selectinload(Message.media_items))
             .where(
                 Message.chat_id == chat_id,
                 Message.created_at >= window.start_utc,
@@ -117,6 +117,13 @@ async def pick_best_quote(
         )
         result = await session.execute(stmt)
         source_messages = result.scalars().all()
+        # Author display names now live in core.person (no Message.author rel).
+        # Deferred import: core imports scoring at module load, so a top-level
+        # `from . import core` here would be a circular import.
+        from . import core
+        author_names = await core.resolve_author_names(
+            session, [m.user_id for m in source_messages]
+        )
 
     if not source_messages:
         log.debug(f"{chat_id} | 📭 Нет сообщений за день {window.start_local} -> {window.end_local}")
@@ -158,7 +165,7 @@ async def pick_best_quote(
     for msg in messages:
         payload = {
             "id": msg.id,
-            "author": msg.author.name if msg.author else "Unknown",
+            "author": author_names.get(msg.user_id, "Unknown"),
             "kind": getattr(msg, "content_type", None) or "text",
         }
         text_payload = _message_text_payload(msg)
@@ -231,6 +238,7 @@ async def pick_best_quote(
             reaction_totals=reaction_totals,
             evaluation=evaluation,
             selected_message=best_msg,
+            author_names=author_names,
         )
 
     return QuoteEvaluation(

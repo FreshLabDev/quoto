@@ -14,7 +14,10 @@ from sqlalchemy import select
 from . import agreement, core, i18n, media, scoring
 from .config import settings, setup_logging
 from .db import SessionLocal
-from .models import Group, Quote
+# GroupSettings is the group's persistent row (natural chat_id PK); identity and
+# language live in core and are hydrated onto it as transient attrs. Aliased to
+# `Group` here because these functions treat it as "the group" object.
+from .models import GroupSettings as Group, Quote
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
     STATUS_BORING_NOTICE_UNKNOWN,
@@ -65,7 +68,7 @@ async def quote_of_the_day_job(bot: Bot) -> None:
     now = utc_now()
     async with SessionLocal() as session:
         result = await session.execute(select(Group))
-        groups = result.scalars().all()
+        groups = list(result.scalars().all())
 
     if not groups:
         return
@@ -75,12 +78,18 @@ async def quote_of_the_day_job(bot: Bot) -> None:
         window = _due_closed_window_for_group(group, now)
         if not window:
             continue
-        if _completed_days.get(group.id) == window.quote_day:
+        if _completed_days.get(group.chat_id) == window.quote_day:
             continue
         due.append((group, window))
 
     if not due:
         return
+
+    # Attach identity/language from core onto the groups we're about to process
+    # (broadcast text + language decisions need group.name / group.language_code).
+    async with SessionLocal() as session:
+        for group, _window in due:
+            await core.hydrate_group(session, group)
 
     semaphore = asyncio.Semaphore(max(1, settings.SCHEDULER_CONCURRENCY))
 
@@ -99,7 +108,7 @@ async def quote_of_the_day_job(bot: Bot) -> None:
 
 
 def _mark_day_completed(group: Group, window: QuoteWindow) -> None:
-    _completed_days[group.id] = window.quote_day
+    _completed_days[group.chat_id] = window.quote_day
 
 
 def _existing_quote_is_terminal(quote: Quote) -> bool:
@@ -160,9 +169,9 @@ async def heartbeat_job() -> None:
 
 async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, language: str) -> None:
     """Once per quote day, nudge the group to accept the user agreement."""
-    if _agreement_reminded.get(group.id) == window.quote_day:
+    if _agreement_reminded.get(group.chat_id) == window.quote_day:
         return
-    _agreement_reminded[group.id] = window.quote_day
+    _agreement_reminded[group.chat_id] = window.quote_day
     try:
         await bot.send_message(
             group.chat_id,
@@ -172,6 +181,20 @@ async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, languag
         log.info(f"{group.chat_id} | 📄 Отправлено напоминание о пользовательском соглашении")
     except Exception as exc:
         log.warning(f"{group.chat_id} | ⚠️ Не удалось отправить напоминание о соглашении: {exc}")
+
+
+def _chat_language_already_claimed(group: Group) -> bool:
+    """True if core already holds ANY chat-scope language for this group.
+
+    Gates interface-language auto-detection. Uses the RAW hydrated claim rather
+    than i18n.group_language_is_set (which normalizes against quoto's supported
+    set): if another core bot claimed this chat in a language quoto can't render
+    (e.g. 'fr'), set_group_language_auto would refuse to overwrite the claim, yet
+    a normalized "is set" check would stay False and re-run detection every day.
+    Honouring any existing claim stops that loop; rendering still falls back to
+    the default language for unsupported codes.
+    """
+    return getattr(group, "language_code", None) is not None
 
 
 async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = None) -> None:
@@ -193,7 +216,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
 
     await _recover_stale_quotes_for_chat(group.chat_id)
 
-    existing = await core.get_quote_for_day(group.id, window.quote_day)
+    existing = await core.get_quote_for_day(group.chat_id, window.quote_day)
     if existing:
         if await _prepare_existing_quote_for_retry(bot, group, existing):
             log.info(
@@ -228,23 +251,27 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         window,
         include_day_verdict=True,
         day_verdict_min_messages=min_messages,
-        group_id=group.id,
-        detect_interface_language=not i18n.group_language_is_set(group),
+        group_id=group.chat_id,
+        detect_interface_language=not _chat_language_already_claimed(group),
         max_messages=max_messages,
     )
 
-    if not i18n.group_language_is_set(group) and evaluation.detected_language_code:
-        if await core.set_group_language_auto(group.id, evaluation.detected_language_code):
+    if not _chat_language_already_claimed(group) and evaluation.detected_language_code:
+        if await core.set_group_language_auto(group.chat_id, evaluation.detected_language_code):
             group.language_code = evaluation.detected_language_code
             group.language_source = i18n.LANGUAGE_SOURCE_AUTO
             log.info(
                 f"{group.chat_id} | 🌐 Язык интерфейса выбран автоматически: "
                 f"{evaluation.detected_language_code} ({evaluation.detected_chat_language or 'unknown'})"
             )
+            # Re-read after auto-detect so the post text below (incl. the
+            # truncated-context note) renders in the freshly chosen language,
+            # not the pre-detection default.
+            language = i18n.group_language(group)
 
     if getattr(group, "timezone", None) is None and evaluation.detected_language_code:
         tz_name = core.default_timezone_for_language(evaluation.detected_language_code)
-        if await core.set_group_timezone_auto(group.id, tz_name):
+        if await core.set_group_timezone_auto(group.chat_id, tz_name):
             group.timezone = tz_name
             log.info(f"{group.chat_id} | 🕐 Часовой пояс по умолчанию выбран: {tz_name}")
 
@@ -276,7 +303,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
 
     if evaluation.day_verdict_error:
         quote, created = await core.create_quote_record(
-            group=group,
+            chat_id=group.chat_id,
             best_message=evaluation.best_message,
             breakdown=evaluation.breakdown,
             window=window,
@@ -293,11 +320,11 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
             log.info(f"{group.chat_id} | ⏭️ День {window.quote_day} уже забрал другой воркер")
         return
 
-    author_name = evaluation.best_message.author.name if evaluation.best_message.author else "Аноним"
+    author_name = await core.author_name(evaluation.best_message.user_id)
 
     if evaluation.should_publish:
         quote, created = await core.create_quote_record(
-            group=group,
+            chat_id=group.chat_id,
             best_message=evaluation.best_message,
             breakdown=evaluation.breakdown,
             window=window,
@@ -333,7 +360,7 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
         return
 
     quote, created = await core.create_quote_record(
-        group=group,
+        chat_id=group.chat_id,
         best_message=evaluation.best_message,
         breakdown=evaluation.breakdown,
         window=window,

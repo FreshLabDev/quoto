@@ -39,6 +39,14 @@ class _DummyResult:
     def all(self) -> list[SimpleNamespace]:
         return self._rows
 
+    # core.hydrate_group reads core.chat title / language_pref via scalar()/first();
+    # return None so hydration is a harmless no-op in these mocked-session tests.
+    def scalar(self):
+        return None
+
+    def first(self):
+        return None
+
 
 class _GroupsSession:
     def __init__(self, groups: list[SimpleNamespace]) -> None:
@@ -91,8 +99,8 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             calls.append("recover")
             return 1
 
-        async def get_quote_for_day(group_id: int, quote_day: date):
-            self.assertEqual(group_id, self.group.id)
+        async def get_quote_for_day(chat_id: int, quote_day: date):
+            self.assertEqual(chat_id, self.group.chat_id)
             self.assertEqual(quote_day, self.window.quote_day)
             calls.append("lookup")
             return None
@@ -383,7 +391,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             self.window,
             include_day_verdict=True,
             day_verdict_min_messages=scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW,
-            group_id=self.group.id,
+            group_id=self.group.chat_id,
             detect_interface_language=True,
             max_messages=scheduler.settings.MAX_MESSAGES_PER_DAILY_EVAL,
         )
@@ -429,7 +437,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_process_group_persists_detected_language_before_publish(self) -> None:
         message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
-        best_message = SimpleNamespace(author=SimpleNamespace(name="Alice"))
+        best_message = SimpleNamespace(user_id=111)
         evaluation = scoring.QuoteEvaluation(
             message_count=message_count,
             best_message=best_message,
@@ -444,20 +452,21 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
             patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
             patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
+            patch.object(scheduler.core, "author_name", new=AsyncMock(return_value="Alice")),
             patch.object(scheduler.core, "set_group_language_auto", new=AsyncMock(return_value=True)) as set_language,
             patch.object(scheduler.core, "create_quote_record", new=AsyncMock(return_value=(quote, True))),
             patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)) as publish,
         ):
             await scheduler._process_group(SimpleNamespace(), self.group, self.window)
 
-        set_language.assert_awaited_once_with(self.group.id, "uk")
+        set_language.assert_awaited_once_with(self.group.chat_id, "uk")
         self.assertEqual(self.group.language_code, "uk")
         publish.assert_awaited_once()
 
     async def test_process_group_disables_quote_context_storage(self) -> None:
         self.group.quote_context_enabled = False
         message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
-        best_message = SimpleNamespace(author=SimpleNamespace(name="Alice"))
+        best_message = SimpleNamespace(user_id=111)
         context_message = SimpleNamespace()
         evaluation = scoring.QuoteEvaluation(
             message_count=message_count,
@@ -472,6 +481,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
             patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
             patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
+            patch.object(scheduler.core, "author_name", new=AsyncMock(return_value="Alice")),
             patch.object(scheduler.core, "create_quote_record", new=AsyncMock(return_value=(quote, True))) as create_quote,
             patch.object(scheduler, "_publish_quote_message", new=AsyncMock(return_value=True)),
         ):
@@ -482,7 +492,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_process_group_skips_boring_notice_when_disabled(self) -> None:
         self.group.boring_notice_enabled = False
         message_count = scheduler.settings.MIN_MESSAGES_FOR_AUTO_REVIEW
-        best_message = SimpleNamespace(author=SimpleNamespace(name="Alice"))
+        best_message = SimpleNamespace(user_id=111)
         evaluation = scoring.QuoteEvaluation(
             message_count=message_count,
             best_message=best_message,
@@ -496,6 +506,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             patch.object(scheduler.core, "get_quote_for_day", new=AsyncMock(return_value=None)),
             patch.object(scheduler.core, "count_window_messages", new=AsyncMock(return_value=message_count)),
             patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock(return_value=evaluation)),
+            patch.object(scheduler.core, "author_name", new=AsyncMock(return_value="Alice")),
             patch.object(scheduler.core, "create_quote_record", new=AsyncMock(return_value=(quote, True))) as create_quote,
             patch.object(
                 scheduler.core,

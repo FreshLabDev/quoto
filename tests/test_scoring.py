@@ -61,6 +61,17 @@ class _DummySession:
 
 
 class ScoringTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        # Author display names now resolve from core.person via
+        # core.resolve_author_names; stub it so the message-only mocked session
+        # doesn't have to also serve core.person rows.
+        patcher = patch(
+            "app.core.resolve_author_names",
+            new=AsyncMock(side_effect=lambda session, ids: {i: "Alice" for i in ids}),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_score_breakdown_total_uses_ai_only(self) -> None:
         breakdown = scoring.ScoreBreakdown(reaction=1.0, ai=0.2, length=1.0)
 

@@ -9,36 +9,61 @@ from sqlalchemy import (
     Index,
     Integer,
     BigInteger,
+    MetaData,
     String,
+    Table,
     Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
-Base = declarative_base()
+# quoto's domain tables live in the `quoto` schema inside the shared core-postgres.
+Base = declarative_base(metadata=MetaData(schema="quoto"))
+
+# ---------------------------------------------------------------------------
+# Shared-core FK-target stubs.
+#
+# Identity / presence / language live in the central `core` schema
+# (core.person, core.chat), owned and migrated centrally in core-postgres.
+# These lightweight Table stubs exist ONLY so SQLAlchemy can resolve the
+# cross-schema ForeignKey("core.person...") / ("core.chat...") references when
+# it sorts tables for a flush -- without them, every ORM flush that touches a
+# core FK raises NoReferencedTableError -- and so quoto can read author / chat
+# display names. They are declared with just the columns quoto needs; they are
+# NEVER created, dropped or migrated by quoto (the alembic env excludes the
+# `core` schema, and create_all is not used against core).
+# ---------------------------------------------------------------------------
+core_person = Table(
+    "person",
+    Base.metadata,
+    Column("telegram_user_id", BigInteger, primary_key=True),
+    Column("username", String),
+    Column("first_name", String),
+    Column("last_name", String),
+    schema="core",
+)
+
+core_chat = Table(
+    "chat",
+    Base.metadata,
+    Column("chat_id", BigInteger, primary_key=True),
+    Column("type", String),
+    Column("title", String),
+    Column("username", String),
+    schema="core",
+)
 
 
-class User(Base):
-    __tablename__ = "users"
+class GroupSettings(Base):
+    """Per-group quoto configuration, keyed on the natural Telegram ``chat_id``.
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    telegram_id = Column(BigInteger, unique=True, index=True, nullable=False)
-    name = Column(String)
-    language_code = Column(String, nullable=True)
-    language_source = Column(String, nullable=True)
+    Group identity (name) lives in ``core.chat`` and group language in the core
+    language hub; this table holds only quoto's own per-group settings.
+    """
 
-    quotes = relationship("Quote", back_populates="author")
-    messages = relationship("Message", back_populates="author")
+    __tablename__ = "group_settings"
 
-
-class Group(Base):
-    __tablename__ = "groups"
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    chat_id = Column(BigInteger, unique=True, index=True, nullable=False)
-    name = Column(String)
-    language_code = Column(String, nullable=True)
-    language_source = Column(String, nullable=True)
+    chat_id = Column(BigInteger, ForeignKey("core.chat.chat_id"), primary_key=True)
     quote_hour = Column(Integer, nullable=True)
     quote_minute = Column(Integer, nullable=True)
     min_messages = Column(Integer, nullable=True)
@@ -52,8 +77,6 @@ class Group(Base):
     agreement_accepted_by = Column(BigInteger, nullable=True)
     agreement_language = Column(String, nullable=True)
 
-    quotes = relationship("Quote", back_populates="group")
-
 
 class Message(Base):
     __tablename__ = "messages"
@@ -61,7 +84,8 @@ class Message(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     message_id = Column(BigInteger, nullable=False)
     chat_id = Column(BigInteger, nullable=False)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    # Global Telegram user id -> core.person (was a surrogate users.id FK).
+    user_id = Column(BigInteger, ForeignKey("core.person.telegram_user_id"), nullable=False)
     text = Column(Text, nullable=False)
     content_type = Column(String, nullable=False, default="text")
     caption = Column(Text, nullable=True)
@@ -69,7 +93,6 @@ class Message(Base):
     reply_to_message_id = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
-    author = relationship("User", back_populates="messages")
     reactions = relationship("Reaction", back_populates="message", cascade="all, delete-orphan")
     media_items = relationship("MessageMedia", back_populates="message", cascade="all, delete-orphan")
 
@@ -82,7 +105,7 @@ class Reaction(Base):
     __tablename__ = "reactions"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    message_db_id = Column(BigInteger, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    message_db_id = Column(BigInteger, ForeignKey("quoto.messages.id", ondelete="CASCADE"), nullable=False)
     emoji = Column(String, nullable=False)
     count = Column(Integer, default=1, nullable=False)
 
@@ -126,8 +149,8 @@ class MessageMedia(Base):
     __tablename__ = "message_media"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    message_db_id = Column(BigInteger, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
-    media_cache_id = Column(BigInteger, ForeignKey("media_cache.id", ondelete="SET NULL"), nullable=True)
+    message_db_id = Column(BigInteger, ForeignKey("quoto.messages.id", ondelete="CASCADE"), nullable=False)
+    media_cache_id = Column(BigInteger, ForeignKey("quoto.media_cache.id", ondelete="SET NULL"), nullable=True)
     media_kind = Column(String, nullable=False)
     telegram_file_id = Column(String, nullable=True)
     telegram_file_unique_id = Column(String, nullable=True)
@@ -158,8 +181,10 @@ class Quote(Base):
     __tablename__ = "quotes"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    group_id = Column(BigInteger, ForeignKey("groups.id"), nullable=False)
-    author_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    # Natural Telegram chat_id / user id -> core.chat / core.person
+    # (were surrogate groups.id / users.id FKs).
+    group_id = Column(BigInteger, ForeignKey("core.chat.chat_id"), nullable=False)
+    author_id = Column(BigInteger, ForeignKey("core.person.telegram_user_id"), nullable=False)
     text = Column(String, nullable=False)
     score = Column(Float, nullable=False)
     reaction_score = Column(Float, default=0.0)
@@ -184,9 +209,6 @@ class Quote(Base):
     forced_by_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
-    group = relationship("Group", back_populates="quotes")
-    author = relationship("User", back_populates="quotes")
-
     __table_args__ = (
         UniqueConstraint("group_id", "quote_day", name="uq_quote_group_day"),
     )
@@ -196,7 +218,8 @@ class AIEvaluationRun(Base):
     __tablename__ = "ai_evaluation_runs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    group_id = Column(BigInteger, ForeignKey("groups.id"), nullable=False)
+    # Natural chat_id -> core.chat (was surrogate groups.id).
+    group_id = Column(BigInteger, ForeignKey("core.chat.chat_id"), nullable=False)
     chat_id = Column(BigInteger, nullable=False)
     quote_day = Column(Date, nullable=False)
     window_start_at = Column(DateTime(timezone=True), nullable=False)
@@ -227,14 +250,16 @@ class MessageAIScore(Base):
     __tablename__ = "message_ai_scores"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    run_id = Column(BigInteger, ForeignKey("ai_evaluation_runs.id", ondelete="CASCADE"), nullable=False)
-    group_id = Column(BigInteger, ForeignKey("groups.id"), nullable=False)
+    run_id = Column(BigInteger, ForeignKey("quoto.ai_evaluation_runs.id", ondelete="CASCADE"), nullable=False)
+    # Natural chat_id -> core.chat (was surrogate groups.id).
+    group_id = Column(BigInteger, ForeignKey("core.chat.chat_id"), nullable=False)
     chat_id = Column(BigInteger, nullable=False)
     quote_day = Column(Date, nullable=False)
-    message_db_id = Column(BigInteger, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    message_db_id = Column(BigInteger, ForeignKey("quoto.messages.id", ondelete="SET NULL"), nullable=True)
     telegram_message_id = Column(BigInteger, nullable=False)
     reply_to_message_id = Column(BigInteger, nullable=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
+    # Natural Telegram user id -> core.person (was surrogate users.id); nullable.
+    user_id = Column(BigInteger, ForeignKey("core.person.telegram_user_id"), nullable=True)
     author_name_snapshot = Column(String, nullable=False)
     text_snapshot = Column(Text, nullable=False)
     content_type = Column(String, nullable=False, default="text")

@@ -9,7 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from . import i18n, media, models
+from . import core_client, i18n, media, models
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .quote_status import (
@@ -51,7 +51,7 @@ def is_valid_timezone(name: str | None) -> bool:
         return False
 
 
-def effective_group_timezone_name(group: models.Group | None) -> str:
+def effective_group_timezone_name(group: models.GroupSettings | None) -> str:
     name = getattr(group, "timezone", None)
     return name if is_valid_timezone(name) else settings.TIMEZONE
 
@@ -61,12 +61,12 @@ def default_timezone_for_language(language_code: str | None) -> str:
     return LANGUAGE_DEFAULT_TIMEZONE.get(code, settings.TIMEZONE)
 
 
-async def set_group_timezone(group_id: int, timezone_name: str) -> models.Group | None:
+async def set_group_timezone(chat_id: int, timezone_name: str) -> models.GroupSettings | None:
     if not is_valid_timezone(timezone_name):
         return None
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
         group = result.scalars().first()
         if not group:
@@ -74,16 +74,16 @@ async def set_group_timezone(group_id: int, timezone_name: str) -> models.Group 
         group.timezone = timezone_name
         await session.commit()
         await session.refresh(group)
-        return group
+        return await hydrate_group(session, group)
 
 
-async def set_group_timezone_auto(group_id: int, timezone_name: str) -> bool:
+async def set_group_timezone_auto(chat_id: int, timezone_name: str) -> bool:
     """Set a default timezone only if the group has none yet."""
     if not is_valid_timezone(timezone_name):
         return False
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
         group = result.scalars().first()
         if not group or getattr(group, "timezone", None):
@@ -93,37 +93,14 @@ async def set_group_timezone_auto(group_id: int, timezone_name: str) -> bool:
         return True
 
 
-async def user_getOrCreate(telegram_user: types.User) -> models.User:
-    telegram_name = getattr(telegram_user, "full_name", None) or f"User {telegram_user.id}"
-
+async def user_getOrCreate(telegram_user: types.User) -> int:
+    """Upsert the caller into the shared ``core.person`` hub; returns the global
+    telegram id (which is what domain rows reference now that the local users
+    table is gone)."""
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.User).where(models.User.telegram_id == telegram_user.id)
-        )
-        db_user = result.scalars().first()
-
-        if db_user:
-            if not db_user.name or db_user.name != telegram_name:
-                db_user.name = telegram_name
-                await session.commit()
-            return db_user
-
-        try:
-            user = models.User(
-                telegram_id=telegram_user.id,
-                name=telegram_name,
-            )
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-            log.debug(f"{user.telegram_id} | ✅ Создан пользователь: {user.name}")
-            return user
-        except IntegrityError:
-            await session.rollback()
-            result = await session.execute(
-                select(models.User).where(models.User.telegram_id == telegram_user.id)
-            )
-            return result.scalars().first()
+        await core_client.touch_user(session, telegram_user)
+        await session.commit()
+        return telegram_user.id
 
 
 def _jittered_quote_minute() -> int | None:
@@ -134,36 +111,44 @@ def _jittered_quote_minute() -> int | None:
     return (settings.QUOTE_MINUTE + random.randint(0, jitter)) % 60
 
 
-async def group_getOrCreate(chat: types.Chat) -> models.Group:
+async def group_getOrCreate(
+    chat: types.Chat, actor: types.User, hydrate: bool = False
+) -> models.GroupSettings | None:
+    """Upsert chat identity into ``core.chat`` (via ``core.touch``, which needs
+    the acting user) and ensure a ``group_settings`` row exists. Returns the
+    group's settings row (natural ``chat_id`` PK). ``actor`` is the user acting
+    in the chat (sender / the user who added the bot / ran the command).
+
+    Pass ``hydrate=True`` on display / broadcast paths to also attach the
+    transient ``.name`` / ``.language_code`` / ``.language_source`` fields from
+    core; the hot message-ingest path leaves it False (it only needs settings).
+    """
     async with SessionLocal() as session:
+        await core_client.touch_group(session, chat, actor)
         result = await session.execute(
-            select(models.Group).where(models.Group.chat_id == chat.id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat.id)
         )
-        db_group = result.scalars().first()
-
-        if db_group:
-            if not db_group.name or db_group.name != chat.title:
-                db_group.name = chat.title
+        group = result.scalars().first()
+        if group is None:
+            try:
+                group = models.GroupSettings(
+                    chat_id=chat.id,
+                    quote_minute=_jittered_quote_minute(),
+                )
+                session.add(group)
                 await session.commit()
-            return db_group
-
-        try:
-            group = models.Group(
-                chat_id=chat.id,
-                name=chat.title,
-                quote_minute=_jittered_quote_minute(),
-            )
-            session.add(group)
+                await session.refresh(group)
+                log.debug(f"{chat.id} | ✅ Создана группа")
+            except IntegrityError:
+                await session.rollback()
+                group = (await session.execute(
+                    select(models.GroupSettings).where(
+                        models.GroupSettings.chat_id == chat.id
+                    )
+                )).scalars().first()
+        else:
             await session.commit()
-            await session.refresh(group)
-            log.debug(f"{group.chat_id} | ✅ Создана группа: {group.name}")
-            return group
-        except IntegrityError:
-            await session.rollback()
-            result = await session.execute(
-                select(models.Group).where(models.Group.chat_id == chat.id)
-            )
-            return result.scalars().first()
+        return await hydrate_group(session, group) if hydrate else group
 
 
 async def migrate_group_chat_id(old_chat_id: int, new_chat_id: int) -> bool:
@@ -171,85 +156,154 @@ async def migrate_group_chat_id(old_chat_id: int, new_chat_id: int) -> bool:
     if old_chat_id == new_chat_id:
         return False
     async with SessionLocal() as session:
+        # The new chat identity must already be in core.chat (touched) so the
+        # repointed FKs hold; if not, skip -- the next message under the new id
+        # recreates the group fresh.
+        if (await session.execute(
+            select(models.core_chat.c.chat_id).where(models.core_chat.c.chat_id == new_chat_id)
+        )).first() is None:
+            return False
         existing_new = await session.execute(
-            select(models.Group).where(models.Group.chat_id == new_chat_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == new_chat_id)
         )
         if existing_new.scalars().first():
             return False
-        result = await session.execute(
-            select(models.Group).where(models.Group.chat_id == old_chat_id)
-        )
-        group = result.scalars().first()
+        group = (await session.execute(
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == old_chat_id)
+        )).scalars().first()
         if not group:
             return False
         group.chat_id = new_chat_id
         await session.execute(
-            update(models.Message)
-            .where(models.Message.chat_id == old_chat_id)
-            .values(chat_id=new_chat_id)
+            update(models.Message).where(models.Message.chat_id == old_chat_id).values(chat_id=new_chat_id)
         )
+        for model in (models.Quote, models.AIEvaluationRun, models.MessageAIScore):
+            await session.execute(
+                update(model).where(model.group_id == old_chat_id).values(group_id=new_chat_id)
+            )
+        for model in (models.AIEvaluationRun, models.MessageAIScore):
+            await session.execute(
+                update(model).where(model.chat_id == old_chat_id).values(chat_id=new_chat_id)
+            )
         await session.commit()
         log.info(f"{old_chat_id} → {new_chat_id} | 🔀 Группа мигрировала в супергруппу")
         return True
 
 
-async def get_group_by_chat_id(chat_id: int) -> models.Group | None:
+async def _author_names(session, telegram_ids) -> dict[int, str]:
+    """Resolve display names for a set of telegram ids from core.person."""
+    ids = [i for i in {tid for tid in telegram_ids} if i is not None]
+    if not ids:
+        return {}
+    rows = (await session.execute(
+        select(
+            models.core_person.c.telegram_user_id,
+            models.core_person.c.first_name,
+            models.core_person.c.last_name,
+            models.core_person.c.username,
+        ).where(models.core_person.c.telegram_user_id.in_(ids))
+    )).all()
+    out: dict[int, str] = {}
+    for row in rows:
+        name = (row.first_name or "").strip()
+        if row.last_name:
+            name = f"{name} {row.last_name.strip()}".strip()
+        if not name:
+            name = (row.username or "").strip()
+        out[row.telegram_user_id] = name or "Аноним"
+    return out
+
+
+async def _chat_title(session, chat_id: int) -> str | None:
+    """Resolve a group's display title from core.chat (was Group.name)."""
+    return (await session.execute(
+        select(models.core_chat.c.title).where(
+            models.core_chat.c.chat_id == chat_id
+        )
+    )).scalar()
+
+
+async def hydrate_group(session, group: models.GroupSettings | None) -> models.GroupSettings | None:
+    """Attach transient identity/language fields onto a GroupSettings instance.
+
+    quoto.group_settings holds only settings; the group's display name lives in
+    core.chat and its language in the core language hub. Duck-typed helpers
+    (i18n.group_language / group_language_is_set) and log lines expect
+    ``.name`` / ``.language_code`` / ``.language_source`` on the group object, so
+    we populate them here as NON-persisted attributes right after loading. Every
+    code path that loads a group for display or broadcast must hydrate it.
+    """
+    if group is None:
+        return None
+    group.name = await _chat_title(session, group.chat_id)
+    lang, source = await core_client.language_claim(
+        session, core_client.SCOPE_CHAT, group.chat_id
+    )
+    group.language_code = lang
+    group.language_source = source
+    return group
+
+
+async def author_name(user_id: int | None) -> str:
+    """Display name for a single Telegram user, resolved from core.person."""
+    async with SessionLocal() as session:
+        names = await _author_names(session, [user_id])
+    return names.get(user_id, "Аноним")
+
+
+async def resolve_author_names(session, telegram_ids) -> dict[int, str]:
+    """Public batch name resolver from core.person, on the caller's session.
+
+    Lets scoring / reporting resolve author display names inside their own
+    transaction without importing core at module level (core imports scoring).
+    """
+    return await _author_names(session, telegram_ids)
+
+
+async def get_group_by_chat_id(chat_id: int) -> models.GroupSettings | None:
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.chat_id == chat_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
-        return result.scalars().first()
+        return await hydrate_group(session, result.scalars().first())
 
 
-async def set_group_language_auto(group_id: int, language_code: str | None) -> bool:
+async def set_group_language_auto(chat_id: int, language_code: str | None) -> bool:
     normalized = i18n.normalize_language_code(language_code)
     if not normalized:
         return False
 
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+        # Only auto-set when the chat has no language claim yet (core keeps any
+        # manual claim winning; this just avoids churning an existing claim).
+        existing = await core_client.effective_language(
+            session, None, chat_id, core_client.SCOPE_CHAT
         )
-        group = result.scalars().first()
-        if not group or i18n.normalize_language_code(group.language_code):
+        if existing:
             return False
-
-        group.language_code = normalized
-        group.language_source = i18n.LANGUAGE_SOURCE_AUTO
+        await core_client.set_language(
+            session, core_client.SCOPE_CHAT, chat_id, normalized, core_client.SOURCE_AUTO
+        )
         await session.commit()
         return True
 
 
-async def set_group_language_manual(group_id: int, language_code: str | None) -> bool:
+async def set_group_language_manual(chat_id: int, language_code: str | None) -> bool:
     normalized = i18n.normalize_language_code(language_code)
     if not normalized:
         return False
 
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+        await core_client.set_language(
+            session, core_client.SCOPE_CHAT, chat_id, normalized, core_client.SOURCE_MANUAL
         )
-        group = result.scalars().first()
-        if not group:
-            return False
-
-        group.language_code = normalized
-        group.language_source = i18n.LANGUAGE_SOURCE_MANUAL
         await session.commit()
         return True
 
 
-async def clear_group_language(group_id: int) -> bool:
+async def clear_group_language(chat_id: int) -> bool:
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
-        )
-        group = result.scalars().first()
-        if not group:
-            return False
-
-        group.language_code = None
-        group.language_source = None
+        await core_client.clear_language(session, core_client.SCOPE_CHAT, chat_id)
         await session.commit()
         return True
 
@@ -260,42 +314,42 @@ async def set_user_language_manual(telegram_id: int, language_code: str | None) 
         return False
 
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.User).where(models.User.telegram_id == telegram_id)
+        await core_client.set_language(
+            session, core_client.SCOPE_USER, telegram_id, normalized, core_client.SOURCE_MANUAL
         )
-        user = result.scalars().first()
-        if not user:
-            return False
-
-        user.language_code = normalized
-        user.language_source = i18n.LANGUAGE_SOURCE_MANUAL
         await session.commit()
         return True
 
 
 async def clear_user_language(telegram_id: int) -> bool:
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.User).where(models.User.telegram_id == telegram_id)
-        )
-        user = result.scalars().first()
-        if not user:
-            return False
-
-        user.language_code = None
-        user.language_source = None
+        await core_client.clear_language(session, core_client.SCOPE_USER, telegram_id)
         await session.commit()
         return True
 
 
-def effective_user_language(user: models.User | None, telegram_language_code: str | None) -> str:
-    manual_language = i18n.normalize_language_code(getattr(user, "language_code", None))
-    if manual_language:
-        return manual_language
-    return i18n.language_or_default(telegram_language_code)
+async def user_language_state(
+    telegram_id: int | None, telegram_language_code: str | None
+) -> tuple[str, str | None]:
+    """Resolve a user's personal language AND its source for the settings UI.
+
+    Returns ``(language, source)`` where source is the core claim source
+    ('manual' / 'auto' / 'client' / ...) or None when nothing is stored (falling
+    back to the Telegram hint / default). The menu labels 'manual' distinctly and
+    treats everything else as the Telegram default. The language is normalized to
+    a supported code (unsupported locales -> default) so the panel renders and
+    highlights the same language instead of showing an unselectable claim.
+    """
+    async with SessionLocal() as session:
+        lang, source = await core_client.language_claim(
+            session, core_client.SCOPE_USER, telegram_id
+        )
+    if lang:
+        return i18n.language_or_default(lang), source
+    return i18n.language_or_default(telegram_language_code), None
 
 
-def effective_group_quote_hour(group: models.Group | None) -> int:
+def effective_group_quote_hour(group: models.GroupSettings | None) -> int:
     value = getattr(group, "quote_hour", None)
     if value is None:
         value = settings.QUOTE_HOUR
@@ -305,7 +359,7 @@ def effective_group_quote_hour(group: models.Group | None) -> int:
         return settings.QUOTE_HOUR % 24
 
 
-def effective_group_quote_minute(group: models.Group | None) -> int:
+def effective_group_quote_minute(group: models.GroupSettings | None) -> int:
     value = getattr(group, "quote_minute", None)
     if value is None:
         value = settings.QUOTE_MINUTE
@@ -315,51 +369,51 @@ def effective_group_quote_minute(group: models.Group | None) -> int:
         return settings.QUOTE_MINUTE % 60
 
 
-def effective_group_quote_time(group: models.Group | None) -> tuple[int, int]:
+def effective_group_quote_time(group: models.GroupSettings | None) -> tuple[int, int]:
     return effective_group_quote_hour(group), effective_group_quote_minute(group)
 
 
-def effective_group_min_messages(group: models.Group | None) -> int:
+def effective_group_min_messages(group: models.GroupSettings | None) -> int:
     value = getattr(group, "min_messages", None)
     if value is None:
         value = settings.MIN_MESSAGES_FOR_AUTO_REVIEW
     return clamp_min_messages(value)
 
 
-def effective_group_boring_notice_enabled(group: models.Group | None) -> bool:
+def effective_group_boring_notice_enabled(group: models.GroupSettings | None) -> bool:
     value = getattr(group, "boring_notice_enabled", None)
     return True if value is None else bool(value)
 
 
-def effective_group_pin_enabled(group: models.Group | None) -> bool:
+def effective_group_pin_enabled(group: models.GroupSettings | None) -> bool:
     value = getattr(group, "pin_enabled", None)
     return True if value is None else bool(value)
 
 
-def effective_group_quote_context_enabled(group: models.Group | None) -> bool:
+def effective_group_quote_context_enabled(group: models.GroupSettings | None) -> bool:
     value = getattr(group, "quote_context_enabled", None)
     return True if value is None else bool(value)
 
 
-def group_media_analysis_setting(group: models.Group | None) -> bool:
+def group_media_analysis_setting(group: models.GroupSettings | None) -> bool:
     """The group's own media-analysis preference (default on), ignoring the global switch."""
     value = getattr(group, "media_analysis_enabled", None)
     return True if value is None else bool(value)
 
 
-def effective_group_media_analysis_enabled(group: models.Group | None) -> bool:
+def effective_group_media_analysis_enabled(group: models.GroupSettings | None) -> bool:
     """Media is analysed only when both the global switch and the group allow it."""
     return bool(settings.MEDIA_ANALYSIS_ENABLED) and group_media_analysis_setting(group)
 
 
-def effective_group_is_premium(group: models.Group | None) -> bool:
+def effective_group_is_premium(group: models.GroupSettings | None) -> bool:
     if bool(getattr(group, "is_premium", None)):
         return True
     chat_id = getattr(group, "chat_id", None)
     return chat_id is not None and chat_id in settings.PREMIUM_CHAT_IDS
 
 
-def effective_group_message_cap(group: models.Group | None) -> int | None:
+def effective_group_message_cap(group: models.GroupSettings | None) -> int | None:
     """Max messages to feed the AI for this group, or None for unlimited (premium)."""
     if effective_group_is_premium(group):
         return None
@@ -367,19 +421,19 @@ def effective_group_message_cap(group: models.Group | None) -> int | None:
     return cap if cap and cap > 0 else None
 
 
-def group_agreement_accepted(group: models.Group | None) -> bool:
+def group_agreement_accepted(group: models.GroupSettings | None) -> bool:
     return getattr(group, "agreement_accepted_at", None) is not None
 
 
 async def accept_group_agreement(
-    group_id: int,
+    chat_id: int,
     user_id: int,
     language: str | None,
-) -> models.Group | None:
+) -> models.GroupSettings | None:
     normalized = i18n.normalize_language_code(language) or i18n.DEFAULT_LANGUAGE
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
         group = result.scalars().first()
         if not group:
@@ -390,7 +444,7 @@ async def accept_group_agreement(
             group.agreement_language = normalized
             await session.commit()
             await session.refresh(group)
-        return group
+        return await hydrate_group(session, group)
 
 
 def clamp_min_messages(value: int | str) -> int:
@@ -406,10 +460,10 @@ def normalize_quote_time(hour: int, minute: int) -> tuple[int, int]:
     return divmod(total, 60)
 
 
-async def adjust_group_quote_time(group_id: int, delta_minutes: int) -> models.Group | None:
+async def adjust_group_quote_time(chat_id: int, delta_minutes: int) -> models.GroupSettings | None:
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
         group = result.scalars().first()
         if not group:
@@ -419,13 +473,13 @@ async def adjust_group_quote_time(group_id: int, delta_minutes: int) -> models.G
         group.quote_hour, group.quote_minute = normalize_quote_time(hour, minute + int(delta_minutes))
         await session.commit()
         await session.refresh(group)
-        return group
+        return await hydrate_group(session, group)
 
 
-async def adjust_group_min_messages(group_id: int, delta: int) -> models.Group | None:
+async def adjust_group_min_messages(chat_id: int, delta: int) -> models.GroupSettings | None:
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
         group = result.scalars().first()
         if not group:
@@ -434,17 +488,17 @@ async def adjust_group_min_messages(group_id: int, delta: int) -> models.Group |
         group.min_messages = clamp_min_messages(effective_group_min_messages(group) + int(delta))
         await session.commit()
         await session.refresh(group)
-        return group
+        return await hydrate_group(session, group)
 
 
-async def toggle_group_setting(group_id: int, setting_key: str) -> models.Group | None:
+async def toggle_group_setting(chat_id: int, setting_key: str) -> models.GroupSettings | None:
     field_name = GROUP_TOGGLE_FIELDS.get(setting_key)
     if not field_name:
         return None
 
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Group).where(models.Group.id == group_id)
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
         )
         group = result.scalars().first()
         if not group:
@@ -454,10 +508,10 @@ async def toggle_group_setting(group_id: int, setting_key: str) -> models.Group 
         setattr(group, field_name, not current)
         await session.commit()
         await session.refresh(group)
-        return group
+        return await hydrate_group(session, group)
 
 
-def _effective_group_toggle(group: models.Group, setting_key: str) -> bool:
+def _effective_group_toggle(group: models.GroupSettings, setting_key: str) -> bool:
     if setting_key == "context":
         return effective_group_quote_context_enabled(group)
     if setting_key == "boring":
@@ -469,7 +523,7 @@ def _effective_group_toggle(group: models.Group, setting_key: str) -> bool:
     return False
 
 
-async def save_message(message: types.Message, user: models.User) -> models.Message | None:
+async def save_message(message: types.Message, user_id: int) -> models.Message | None:
     message_created_at = getattr(message, "date", None) or utc_now()
     if message_created_at.tzinfo is None:
         message_created_at = message_created_at.replace(tzinfo=timezone.utc)
@@ -484,7 +538,7 @@ async def save_message(message: types.Message, user: models.User) -> models.Mess
             db_msg = models.Message(
                 message_id=message.message_id,
                 chat_id=message.chat.id,
-                user_id=user.id,
+                user_id=user_id,
                 text=media.initial_message_text(message),
                 content_type=media.message_content_type(message),
                 caption=media.message_caption(message),
@@ -636,16 +690,15 @@ def _extract_emoji(reaction_type: types.ReactionType) -> str | None:
 async def get_quote_detail(quote_id: int) -> dict | None:
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Quote)
-            .options(
-                selectinload(models.Quote.author),
-                selectinload(models.Quote.group),
-            )
-            .where(models.Quote.id == quote_id)
+            select(models.Quote).where(models.Quote.id == quote_id)
         )
         quote = result.scalars().first()
         if not quote:
             return None
+
+        # group_id is the natural chat_id; identity/name live in core.
+        author_names = await _author_names(session, [quote.author_id])
+        group_name = await _chat_title(session, quote.group_id) or "—"
 
         return {
             "id": quote.id,
@@ -655,10 +708,8 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "ai_score": quote.ai_score or 0.0,
             "length_score": quote.length_score or 0.0,
             "reaction_count": quote.reaction_count or 0,
-            "author_name": quote.author.name if quote.author else "Аноним",
-            "group_name": quote.group.name if quote.group else "—",
-            "language_code": quote.group.language_code if quote.group else None,
-            "language_source": quote.group.language_source if quote.group else None,
+            "author_name": author_names.get(quote.author_id, "Аноним"),
+            "group_name": group_name,
             "created_at": quote.created_at,
             "ai_model": quote.ai_model,
             "ai_best_text": quote.ai_best_text,
@@ -666,7 +717,7 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "context_messages": _load_context_snapshot(quote.context_snapshot),
             "message_id": quote.message_id,
             "content_type": quote.content_type,
-            "chat_id": quote.group.chat_id if quote.group else None,
+            "chat_id": quote.group_id,
             "decision_status": quote.decision_status,
             "decision_reason": quote.decision_reason,
             "operation_error": quote.operation_error,
@@ -676,27 +727,29 @@ async def get_quote_detail(quote_id: int) -> dict | None:
 
 async def get_chat_stats(chat_id: int) -> dict | None:
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Group).where(models.Group.chat_id == chat_id)
+        settings = await session.execute(
+            select(models.GroupSettings.chat_id).where(
+                models.GroupSettings.chat_id == chat_id
+            )
         )
-        group = result.scalars().first()
-        if not group:
+        if settings.scalar() is None:
             return None
+        group_name = await _chat_title(session, chat_id) or "—"
 
         total_q = await session.execute(
             select(func.count(models.Quote.id)).where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
         )
         total_quotes = total_q.scalar() or 0
 
         if total_quotes == 0:
-            return {"group_name": group.name, "total_quotes": 0}
+            return {"group_name": group_name, "total_quotes": 0}
 
         unique_a = await session.execute(
             select(func.count(func.distinct(models.Quote.author_id))).where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
         )
@@ -704,7 +757,7 @@ async def get_chat_stats(chat_id: int) -> dict | None:
 
         avg_s = await session.execute(
             select(func.avg(models.Quote.score)).where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
         )
@@ -712,28 +765,33 @@ async def get_chat_stats(chat_id: int) -> dict | None:
 
         top_authors_q = await session.execute(
             select(
-                models.User.name,
+                models.Quote.author_id,
                 func.count(models.Quote.id).label("wins"),
                 func.avg(models.Quote.score).label("avg_score"),
             )
-            .join(models.User, models.Quote.author_id == models.User.id)
             .where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
-            .group_by(models.User.id, models.User.name)
+            .group_by(models.Quote.author_id)
             .order_by(func.count(models.Quote.id).desc())
             .limit(3)
         )
+        top_rows = top_authors_q.all()
+        names = await _author_names(session, [r.author_id for r in top_rows])
         top_authors = [
-            {"name": row.name, "wins": row.wins, "avg_score": float(row.avg_score or 0)}
-            for row in top_authors_q
+            {
+                "name": names.get(row.author_id, "Аноним"),
+                "wins": row.wins,
+                "avg_score": float(row.avg_score or 0),
+            }
+            for row in top_rows
         ]
 
         best_q = await session.execute(
             select(models.Quote)
             .where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
             .order_by(models.Quote.score.desc())
@@ -743,19 +801,16 @@ async def get_chat_stats(chat_id: int) -> dict | None:
 
         best_quote_info = None
         if best_quote:
-            author_q = await session.execute(
-                select(models.User.name).where(models.User.id == best_quote.author_id)
-            )
-            author_name = author_q.scalar() or "Аноним"
+            author_names = await _author_names(session, [best_quote.author_id])
             best_quote_info = {
                 "text": best_quote.text,
                 "score": best_quote.score,
-                "author": author_name,
+                "author": author_names.get(best_quote.author_id, "Аноним"),
                 "date": best_quote.created_at,
             }
 
         return {
-            "group_name": group.name,
+            "group_name": group_name,
             "total_quotes": total_quotes,
             "unique_authors": unique_authors,
             "avg_score": float(avg_score),
@@ -766,36 +821,33 @@ async def get_chat_stats(chat_id: int) -> dict | None:
 
 async def get_user_stats(chat_id: int, telegram_id: int) -> dict | None:
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Group).where(models.Group.chat_id == chat_id)
+        settings = await session.execute(
+            select(models.GroupSettings.chat_id).where(
+                models.GroupSettings.chat_id == chat_id
+            )
         )
-        group = result.scalars().first()
-        if not group:
+        if settings.scalar() is None:
             return None
 
-        result = await session.execute(
-            select(models.User).where(models.User.telegram_id == telegram_id)
-        )
-        user = result.scalars().first()
-        if not user:
-            return None
+        names = await _author_names(session, [telegram_id])
+        user_name = names.get(telegram_id, "Аноним")
 
         wins_q = await session.execute(
             select(func.count(models.Quote.id)).where(
-                models.Quote.group_id == group.id,
-                models.Quote.author_id == user.id,
+                models.Quote.group_id == chat_id,
+                models.Quote.author_id == telegram_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
         )
         wins = wins_q.scalar() or 0
 
         if wins == 0:
-            return {"user_name": user.name, "wins": 0}
+            return {"user_name": user_name, "wins": 0}
 
         avg_q = await session.execute(
             select(func.avg(models.Quote.score)).where(
-                models.Quote.group_id == group.id,
-                models.Quote.author_id == user.id,
+                models.Quote.group_id == chat_id,
+                models.Quote.author_id == telegram_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
         )
@@ -804,8 +856,8 @@ async def get_user_stats(chat_id: int, telegram_id: int) -> dict | None:
         best_q = await session.execute(
             select(models.Quote)
             .where(
-                models.Quote.group_id == group.id,
-                models.Quote.author_id == user.id,
+                models.Quote.group_id == chat_id,
+                models.Quote.author_id == telegram_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
             .order_by(models.Quote.score.desc())
@@ -826,7 +878,7 @@ async def get_user_stats(chat_id: int, telegram_id: int) -> dict | None:
                 func.count(models.Quote.id).label("cnt"),
             )
             .where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
             .group_by(models.Quote.author_id)
@@ -839,14 +891,14 @@ async def get_user_stats(chat_id: int, telegram_id: int) -> dict | None:
 
         total_p = await session.execute(
             select(func.count(func.distinct(models.Quote.author_id))).where(
-                models.Quote.group_id == group.id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(VISIBLE_IN_STATS),
             )
         )
         total_participants = total_p.scalar() or 0
 
         return {
-            "user_name": user.name,
+            "user_name": user_name,
             "wins": wins,
             "avg_score": avg_score,
             "best_quote": best_info,
@@ -855,13 +907,11 @@ async def get_user_stats(chat_id: int, telegram_id: int) -> dict | None:
         }
 
 
-async def get_quote_for_day(group_id: int, quote_day: date) -> models.Quote | None:
+async def get_quote_for_day(chat_id: int, quote_day: date) -> models.Quote | None:
     async with SessionLocal() as session:
         result = await session.execute(
-            select(models.Quote)
-            .options(selectinload(models.Quote.author), selectinload(models.Quote.group))
-            .where(
-                models.Quote.group_id == group_id,
+            select(models.Quote).where(
+                models.Quote.group_id == chat_id,
                 models.Quote.quote_day == quote_day,
             )
         )
@@ -869,7 +919,7 @@ async def get_quote_for_day(group_id: int, quote_day: date) -> models.Quote | No
 
 
 async def create_quote_record(
-    group: models.Group,
+    chat_id: int,
     best_message: models.Message,
     breakdown: ScoreBreakdown,
     window: QuoteWindow,
@@ -878,14 +928,20 @@ async def create_quote_record(
     operation_error: str | None = None,
     context_messages: list[models.Message] | None = None,
 ) -> tuple[models.Quote, bool]:
-    context_message_ids, context_snapshot = _serialize_context_messages(
-        context_messages or [],
-        primary_message_id=best_message.id,
-    )
+    context_messages = context_messages or []
     async with SessionLocal() as session:
+        # Snapshot author display names from core.person at capture time.
+        context_names = await _author_names(
+            session, [m.user_id for m in context_messages]
+        )
+        context_message_ids, context_snapshot = _serialize_context_messages(
+            context_messages,
+            primary_message_id=best_message.id,
+            author_names=context_names,
+        )
         try:
             quote = models.Quote(
-                group_id=group.id,
+                group_id=chat_id,
                 author_id=best_message.user_id,
                 text=resolved_message_text(best_message),
                 score=breakdown.total,
@@ -916,7 +972,7 @@ async def create_quote_record(
             await session.rollback()
             result = await session.execute(
                 select(models.Quote).where(
-                    models.Quote.group_id == group.id,
+                    models.Quote.group_id == chat_id,
                     models.Quote.quote_day == window.quote_day,
                 )
             )
@@ -929,15 +985,17 @@ async def create_quote_record(
 def _serialize_context_messages(
     context_messages: list[models.Message],
     primary_message_id: int,
+    author_names: dict[int, str] | None = None,
 ) -> tuple[str | None, str | None]:
     if len(context_messages) <= 1:
         return None, None
 
+    author_names = author_names or {}
     ids = [int(message.message_id) for message in context_messages]
     snapshot = [
         {
             "message_id": int(message.message_id),
-            "author": message.author.name if message.author else "Аноним",
+            "author": author_names.get(getattr(message, "user_id", None), "Аноним"),
             "text": resolved_message_text(message),
             "is_primary": message.id == primary_message_id,
         }
@@ -1089,9 +1147,8 @@ async def get_stale_in_progress_quotes(chat_id: int, older_than: datetime) -> li
     async with SessionLocal() as session:
         result = await session.execute(
             select(models.Quote)
-            .join(models.Group, models.Quote.group_id == models.Group.id)
             .where(
-                models.Group.chat_id == chat_id,
+                models.Quote.group_id == chat_id,
                 models.Quote.decision_status.in_(IN_PROGRESS_STATUSES),
                 models.Quote.status_changed_at < older_than,
             )
