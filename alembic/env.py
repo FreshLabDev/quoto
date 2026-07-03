@@ -59,9 +59,17 @@ def do_run_migrations(connection) -> None:
     # The alembic version table lives in the `quoto` schema
     # (version_table_schema). alembic creates quoto.alembic_version *before*
     # running the migration body, and Table.create() never auto-creates a
-    # schema -- so on a fresh core-postgres the schema must exist first or the
-    # version-table DDL aborts with InvalidSchemaName. Create it up front.
-    connection.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS quoto")
+    # schema -- so on a fresh database the schema must exist first or the
+    # version-table DDL aborts with InvalidSchemaName. Create it up front, but
+    # ONLY when it's actually missing: on the shared core-postgres the schema is
+    # pre-provisioned by a superuser and the restricted runtime role (quoto_core)
+    # has no CREATE on the database, so an unconditional CREATE SCHEMA raises
+    # InsufficientPrivilege on every boot. pg_namespace is world-readable.
+    has_schema = connection.exec_driver_sql(
+        "SELECT 1 FROM pg_namespace WHERE nspname = 'quoto'"
+    ).scalar()
+    if not has_schema:
+        connection.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS quoto")
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
