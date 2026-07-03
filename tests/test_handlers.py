@@ -193,7 +193,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 handlers.core,
                 "group_getOrCreate",
-                new=AsyncMock(return_value=SimpleNamespace(id=1, language_code="ru", language_source=None)),
+                new=AsyncMock(return_value=SimpleNamespace(chat_id=-100123456, language_code="ru", language_source=None)),
             ),
             patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
             patch.object(handlers.core, "set_group_language_manual", new=AsyncMock()) as set_language,
@@ -202,7 +202,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
                 "get_group_by_chat_id",
                 new=AsyncMock(
                     return_value=SimpleNamespace(
-                        id=1,
+                        chat_id=-100123456,
                         language_code="uk",
                         language_source=handlers.i18n.LANGUAGE_SOURCE_MANUAL,
                     )
@@ -211,7 +211,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ):
             await handlers.start_menu_callback(callback, SimpleNamespace())
 
-        set_language.assert_awaited_once_with(1, "uk")
+        set_language.assert_awaited_once_with(-100123456, "uk")
         self.assertIn("Мова групи", panel.edits[0])
         callback.answer.assert_awaited()
 

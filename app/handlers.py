@@ -35,13 +35,12 @@ def _html(value: object) -> str:
     return escape(str(value))
 
 
-def _private_message_language(message: types.Message, db_user=None) -> str:
+async def _private_language_state(message: types.Message) -> tuple[str, str | None]:
+    """Resolve (language, source) for a private chat from the core user hub."""
     user = getattr(message, "from_user", None)
-    return core.effective_user_language(db_user, getattr(user, "language_code", None))
-
-
-def _private_language_source(db_user) -> str | None:
-    return getattr(db_user, "language_source", None)
+    return await core.user_language_state(
+        getattr(user, "id", None), getattr(user, "language_code", None)
+    )
 
 
 def _time_label(group=None) -> str:
@@ -266,7 +265,7 @@ def _group_panel_kwargs(owner_id: int, group, language: str, is_admin: bool) -> 
         owner_id=owner_id,
         language=language,
         group_language=language,
-        group_language_source=group.language_source,
+        group_language_source=getattr(group, "language_source", None),
         is_admin=is_admin,
         quote_time=_time_label(group),
         min_messages=core.effective_group_min_messages(group),
@@ -283,18 +282,18 @@ async def _send_start_menu(message: types.Message, bot: Bot | None = None) -> No
         return
 
     if message.chat.type == "private":
-        db_user = await core.user_getOrCreate(message.from_user)
-        language = _private_message_language(message, db_user)
+        await core.user_getOrCreate(message.from_user)
+        language, language_source = await _private_language_state(message)
         text, reply_markup = menu.build_private_panel(
             owner_id=message.from_user.id,
             language=language,
-            language_source=_private_language_source(db_user),
+            language_source=language_source,
             bot_username=settings.BOT_USERNAME,
         )
     else:
         if bot is None:
             return
-        group = await core.group_getOrCreate(message.chat)
+        group = await core.group_getOrCreate(message.chat, message.from_user, hydrate=True)
         language = i18n.group_language(group)
         is_admin = await _is_chat_admin(bot, message.chat.id, message.from_user.id)
         text, reply_markup = menu.build_group_panel(
@@ -319,7 +318,7 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
         and event.new_chat_member.status in ["member", "administrator"]
     ):
         text_log = f"{chat.id} | Бот добавлен в группу {chat.title}"
-        await core.group_getOrCreate(chat)
+        await core.group_getOrCreate(chat, event.from_user)
 
         text = i18n.t(
             language,
@@ -355,13 +354,13 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
 async def privacy_command(message: types.Message, bot: Bot):
     chat = message.chat
     if chat.type == "private":
-        db_user = await core.user_getOrCreate(message.from_user)
-        language = _private_message_language(message, db_user)
+        await core.user_getOrCreate(message.from_user)
+        language, _ = await _private_language_state(message)
         text, markup = agreement.build_document(language, can_accept=False, accepted=False)
         await message.answer(text, reply_markup=markup)
         return
 
-    group = await core.group_getOrCreate(chat)
+    group = await core.group_getOrCreate(chat, message.from_user, hydrate=True)
     language = i18n.group_language(group)
     is_admin = (
         await _is_chat_admin(bot, chat.id, message.from_user.id)
@@ -388,7 +387,7 @@ async def agreement_callback(callback: types.CallbackQuery, bot: Bot):
 
     if action == agreement.ACTION_VIEW:
         if in_group:
-            group = await core.group_getOrCreate(chat)
+            group = await core.group_getOrCreate(chat, callback.from_user)
             is_admin = await _is_chat_admin(bot, chat.id, callback.from_user.id)
             accepted = core.group_agreement_accepted(group)
             text, markup = agreement.build_document(
@@ -407,8 +406,8 @@ async def agreement_callback(callback: types.CallbackQuery, bot: Bot):
         if not await _is_chat_admin(bot, chat.id, callback.from_user.id):
             await callback.answer(i18n.t(language, "agreement.admin_only"), show_alert=True)
             return
-        group = await core.group_getOrCreate(chat)
-        updated = await core.accept_group_agreement(group.id, callback.from_user.id, language) or group
+        group = await core.group_getOrCreate(chat, callback.from_user, hydrate=True)
+        updated = await core.accept_group_agreement(group.chat_id, callback.from_user.id, language) or group
         await _edit_panel(callback, agreement.build_accepted(language), None)
         await callback.answer(i18n.t(language, "agreement.accepted_toast"))
         # If today's cutoff already passed, catch the day up now so a late
@@ -436,8 +435,8 @@ async def _catch_up_after_accept(bot: Bot, group) -> None:
 
 @router.message(or_f(and_f(F.chat.type == "private", CommandStart()), F.chat.type == "private"))
 async def private_handler(message: types.Message, command: CommandObject = None):
-    db_user = await core.user_getOrCreate(message.from_user)
-    language = _private_message_language(message, db_user)
+    await core.user_getOrCreate(message.from_user)
+    language, _ = await _private_language_state(message)
 
     if command and command.args:
         args = command.args
@@ -534,7 +533,7 @@ async def _group_menu_context(callback: types.CallbackQuery, bot: Bot):
     panel = callback.message
     if not panel or not getattr(panel, "chat", None) or panel.chat.type not in {"group", "supergroup"}:
         return None
-    group = await core.group_getOrCreate(panel.chat)
+    group = await core.group_getOrCreate(panel.chat, callback.from_user, hydrate=True)
     language = i18n.group_language(group)
     is_admin = await _is_chat_admin(bot, panel.chat.id, callback.from_user.id)
     return panel, group, language, is_admin
@@ -562,9 +561,10 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         return
 
     if parsed.scope == menu.SCOPE_PRIVATE:
-        db_user = await core.user_getOrCreate(user)
-        language = core.effective_user_language(db_user, getattr(user, "language_code", None))
-        language_source = _private_language_source(db_user)
+        await core.user_getOrCreate(user)
+        language, language_source = await core.user_language_state(
+            user.id, getattr(user, "language_code", None)
+        )
 
         async def _show_private(section: str, notice: str | None = None) -> None:
             text, reply_markup = menu.build_private_panel(
@@ -660,7 +660,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         if not selected_language:
             await callback.answer(i18n.t(language, "menu.language.invalid"), show_alert=True)
             return
-        await core.set_group_language_manual(group.id, selected_language)
+        await core.set_group_language_manual(group.chat_id, selected_language)
         group = await core.get_group_by_chat_id(panel.chat.id) or group
         language = i18n.group_language(group)
         await _show_group(
@@ -670,7 +670,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         return
 
     if parsed.action == menu.ACTION_AUTO_GROUP_LANGUAGE:
-        await core.clear_group_language(group.id)
+        await core.clear_group_language(group.chat_id)
         group = await core.get_group_by_chat_id(panel.chat.id) or group
         language = i18n.group_language(group)
         await _show_group(
@@ -689,7 +689,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         except ValueError:
             await callback.answer(i18n.t(language, "settings.invalid"), show_alert=True)
             return
-        group = await core.adjust_group_quote_time(group.id, delta_minutes) or group
+        group = await core.adjust_group_quote_time(group.chat_id, delta_minutes) or group
         language = i18n.group_language(group)
         await _show_group(menu.SECTION_SCHEDULE, notice=i18n.t(language, "settings.updated"))
         return
@@ -700,7 +700,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         except ValueError:
             await callback.answer(i18n.t(language, "settings.invalid"), show_alert=True)
             return
-        group = await core.adjust_group_min_messages(group.id, delta) or group
+        group = await core.adjust_group_min_messages(group.chat_id, delta) or group
         language = i18n.group_language(group)
         await _show_group(menu.SECTION_SCHEDULE, notice=i18n.t(language, "settings.updated"))
         return
@@ -710,7 +710,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         return
 
     if parsed.action == menu.ACTION_SET_GROUP_TIMEZONE:
-        updated = await core.set_group_timezone(group.id, parsed.payload or "")
+        updated = await core.set_group_timezone(group.chat_id, parsed.payload or "")
         if not updated:
             await callback.answer(i18n.t(language, "settings.invalid"), show_alert=True)
             return
@@ -724,7 +724,7 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
         return
 
     if parsed.action == menu.ACTION_TOGGLE_GROUP_SETTING:
-        group = await core.toggle_group_setting(group.id, parsed.payload or "") or group
+        group = await core.toggle_group_setting(group.chat_id, parsed.payload or "") or group
         language = i18n.group_language(group)
         await _show_group(menu.SECTION_BEHAVIOR, notice=i18n.t(language, "settings.updated"))
         return
@@ -769,7 +769,7 @@ async def group_message_handler(message: types.Message, bot: Bot):
         return
 
     user = await core.user_getOrCreate(message.from_user)
-    group = await core.group_getOrCreate(message.chat)
+    group = await core.group_getOrCreate(message.chat, message.from_user)
     db_message = await core.save_message(message, user)
     if db_message and core.effective_group_media_analysis_enabled(group):
         await media.process_message_media(bot, message, db_message)

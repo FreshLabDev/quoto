@@ -22,6 +22,7 @@ async def save_evaluation_report(
     reaction_totals: dict[int, int],
     evaluation: Any,
     selected_message: models.Message | None,
+    author_names: dict[int, str] | None = None,
 ) -> None:
     now = utc_now()
     quote_choice = getattr(evaluation, "quote_choice", None)
@@ -74,6 +75,7 @@ async def save_evaluation_report(
                         selected_internal_id=selected_message.id if selected_message else None,
                         context_internal_ids=set(context_internal_ids),
                         created_at=now,
+                        author_names=author_names or {},
                     )
                 )
 
@@ -98,6 +100,7 @@ def _score_rows(
     selected_internal_id: int | None,
     context_internal_ids: set[int],
     created_at,
+    author_names: dict[int, str],
 ) -> list[models.MessageAIScore]:
     included = [
         message
@@ -135,7 +138,7 @@ def _score_rows(
                 telegram_message_id=message.message_id,
                 reply_to_message_id=getattr(message, "reply_to_message_id", None),
                 user_id=getattr(message, "user_id", None),
-                author_name_snapshot=message.author.name if message.author else "Unknown",
+                author_name_snapshot=author_names.get(getattr(message, "user_id", None), "Unknown"),
                 text_snapshot=message.text,
                 content_type=getattr(message, "content_type", None) or "text",
                 caption_snapshot=getattr(message, "caption", None),

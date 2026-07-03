@@ -1,3 +1,8 @@
+# LOCAL DEV stack. In production quoto runs against the shared `core-postgres`
+# (role quoto_core, one DB `core`, search_path=quoto,core) provisioned from the
+# `core` repo -- NOT this bundled `db`. Here the bundled Postgres is seeded with
+# a copy of the core schema (deploy/core-init.sql) so quoto's migrations, which
+# FK into core.person/core.chat and call core.touch/core.set_language, can boot.
 services:
   db:
     image: postgres:16-alpine
@@ -8,6 +13,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-quoto}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Seeds the `core` + `quoto` schemas on first init (empty volume only).
+      - ./deploy/core-init.sql:/docker-entrypoint-initdb.d/00-core-init.sql:ro
     ports:
       - "5432:5432"
     healthcheck:

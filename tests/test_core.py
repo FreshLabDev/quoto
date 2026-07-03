@@ -72,7 +72,7 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             chat=SimpleNamespace(id=-100123456),
             reply_to_message=SimpleNamespace(message_id=76),
         )
-        user = SimpleNamespace(id=5)
+        user = 5  # user_getOrCreate now returns the telegram id (int)
 
         with (
             patch.object(core, "SessionLocal", return_value=session),
@@ -98,7 +98,7 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             chat=SimpleNamespace(id=-100123456),
             reply_to_message=None,
         )
-        user = SimpleNamespace(id=5)
+        user = 5  # user_getOrCreate now returns the telegram id (int)
 
         with (
             patch.object(core, "SessionLocal", return_value=session),
@@ -248,7 +248,16 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_migrate_group_chat_id_rekeys_group(self) -> None:
         group = SimpleNamespace(chat_id=-100)
-        session = _SeqSession([_DummyResult(None), _DummyResult(group), object()])
+        # execute sequence: core.chat exists -> target GroupSettings absent ->
+        # old GroupSettings found -> 6 domain UPDATEs (Message + 3 group_id + 2 chat_id).
+        session = _SeqSession(
+            [
+                _DummyResult(SimpleNamespace(chat_id=-1001999)),
+                _DummyResult(None),
+                _DummyResult(group),
+            ]
+            + [object() for _ in range(6)]
+        )
         with patch.object(core, "SessionLocal", return_value=session):
             ok = await core.migrate_group_chat_id(-100, -1001999)
         self.assertTrue(ok)
@@ -256,7 +265,22 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         session.commit.assert_awaited_once()
 
     async def test_migrate_group_chat_id_skips_when_target_exists(self) -> None:
-        session = _SeqSession([_DummyResult(SimpleNamespace(chat_id=-1001999))])
+        # core.chat exists, but a GroupSettings already occupies the new chat_id.
+        session = _SeqSession(
+            [
+                _DummyResult(SimpleNamespace(chat_id=-1001999)),
+                _DummyResult(SimpleNamespace(chat_id=-1001999)),
+            ]
+        )
+        with patch.object(core, "SessionLocal", return_value=session):
+            ok = await core.migrate_group_chat_id(-100, -1001999)
+        self.assertFalse(ok)
+        session.commit.assert_not_awaited()
+
+    async def test_migrate_group_chat_id_skips_when_new_chat_absent_from_core(self) -> None:
+        # Guard: if the new chat_id isn't in core.chat yet, re-keying the FKs would
+        # violate the core.chat FK, so skip and let the next message recreate it.
+        session = _SeqSession([_DummyResult(None)])
         with patch.object(core, "SessionLocal", return_value=session):
             ok = await core.migrate_group_chat_id(-100, -1001999)
         self.assertFalse(ok)
@@ -280,7 +304,10 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             agreement_language=None,
         )
         session = _UpdateSession(group)
-        with patch.object(core, "SessionLocal", return_value=session):
+        with (
+            patch.object(core, "SessionLocal", return_value=session),
+            patch.object(core, "hydrate_group", new=AsyncMock(side_effect=lambda session, group: group)),
+        ):
             result = await core.accept_group_agreement(1, 42, "ru")
 
         self.assertIsNotNone(result.agreement_accepted_at)
@@ -296,7 +323,10 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             agreement_language="en",
         )
         session = _UpdateSession(group)
-        with patch.object(core, "SessionLocal", return_value=session):
+        with (
+            patch.object(core, "SessionLocal", return_value=session),
+            patch.object(core, "hydrate_group", new=AsyncMock(side_effect=lambda session, group: group)),
+        ):
             result = await core.accept_group_agreement(1, 42, "ru")
 
         self.assertEqual(result.agreement_accepted_at, existing)

@@ -50,13 +50,15 @@ async def init_db():
 
 
 async def _get_current_revision(conn) -> str:
+    # alembic's version table lives in the `quoto` schema (version_table_schema),
+    # not public, now that quoto's tables are namespaced inside core-postgres.
     exists = await conn.execute(
         text(
             """
             SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.tables
-                WHERE table_schema = 'public'
+                WHERE table_schema = 'quoto'
                   AND table_name = 'alembic_version'
             )
             """
@@ -65,7 +67,7 @@ async def _get_current_revision(conn) -> str:
     if not exists.scalar():
         raise RuntimeError("Missing alembic_version table. Run `alembic upgrade head`.")
 
-    result = await conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+    result = await conn.execute(text("SELECT version_num FROM quoto.alembic_version LIMIT 1"))
     revision = result.scalar()
     if not revision:
         raise RuntimeError("Empty alembic_version. Run `alembic upgrade head`.")
