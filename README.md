@@ -59,7 +59,7 @@ A Telegram bot that tracks quote days and only publishes a **quote of the day** 
 ### Prerequisites
 
 - Python 3.10+
-- PostgreSQL
+- PostgreSQL 16+ (in production Quoto runs on a shared `core` database — see [Database](#️-database))
 - Docker (optional)
 
 ### Local Installation
@@ -88,6 +88,9 @@ Create a `.env` file in the root directory (see `.env.example`):
 ```env
 BOT_TOKEN=your_telegram_bot_token
 BOT_USERNAME=your_bot_username
+# Production points DB_URL at the shared core-postgres as the quoto_core role
+# (postgresql+asyncpg://quoto_core:***@core-postgres:5432/core). For local dev
+# docker-compose builds it from the POSTGRES_* vars — see Database below.
 DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 OPENROUTER_EVAL_MODEL=poolside/laguna-xs.2
@@ -140,12 +143,32 @@ You can easily run the bot using Docker Compose:
 docker-compose up -d --build
 ```
 
+## 🗄️ Database
+
+Quoto stores its data in **PostgreSQL** and shares one database with the other
+FreshLabDev bots (`vido`, `branchy`, `searcher`):
+
+- **In production** it connects to the shared **`core`** database as the
+  least-privilege role `quoto_core`. Quoto's own tables live in the **`quoto`**
+  schema; shared identity, chats and language live in the **`core`** schema
+  (`core.person`, `core.chat`, and the `core.set_language` /
+  `core.effective_language` functions). Quoto's tables reference `core.person`
+  and `core.chat` by the Telegram natural keys (user id, chat id) — there is no
+  separate per-bot users/groups identity table.
+- **For local development** `docker-compose up` starts a bundled Postgres seeded
+  with a copy of the `core` schema (`deploy/core-init.sql`) so the foreign keys
+  into `core.person` / `core.chat` resolve; the app's `DB_URL` is built from the
+  `POSTGRES_*` variables in `.env`.
+
+Apply migrations with `alembic upgrade head` (the Alembic version table lives in
+the `quoto` schema).
+
 ## 🛠️ Tech Stack
 
 | Layer           | Technology                      |
 | :-------------- | :------------------------------ |
 | **Framework**   | Aiogram 3                       |
-| **Database**    | PostgreSQL + SQLAlchemy (Async) |
+| **Database**    | Shared PostgreSQL `core` (schema `quoto`) + SQLAlchemy (Async) |
 | **Validation**  | Pydantic                        |
 | **AI**          | OpenRouter API (any LLM)        |
 | **Scheduler**   | APScheduler                     |
@@ -158,11 +181,12 @@ quoto/
 ├── app/
 │   ├── ai.py           # OpenRouter AI integration & message evaluation
 │   ├── config.py       # Settings, logging, environment variables
-│   ├── core.py         # Core business logic (users, groups, messages)
+│   ├── core.py         # Core business logic (people, groups, messages)
+│   ├── core_client.py  # Helpers over the shared core.* functions (touch, language)
 │   ├── db.py           # Database session & initialization
 │   ├── handlers.py     # Telegram bot handlers & commands
 │   ├── menu.py         # /start control panel rendering
-│   ├── models.py       # SQLAlchemy models (User, Group, Message, Quote)
+│   ├── models.py       # SQLAlchemy models (GroupSettings, Message, Quote, …) — FK into core.person/core.chat
 │   ├── scheduler.py    # APScheduler jobs & quote of the day pipeline
 │   ├── scoring.py      # Scoring engine & best quote selection
 │   └── utils.py        # Utility functions
