@@ -59,7 +59,7 @@ A Telegram bot that tracks quote days and only publishes a **quote of the day** 
 ### Prerequisites
 
 - Python 3.10+
-- PostgreSQL 16+ (in production Quoto runs on a shared `core` database — see [Database](#️-database))
+- PostgreSQL 16+ (in production Quoto runs on a shared `core` database — see the Database section below)
 - Docker (optional)
 
 ### Local Installation
