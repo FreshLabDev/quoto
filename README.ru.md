@@ -59,7 +59,7 @@
 ### Требования
 
 * Python 3.10+
-* PostgreSQL
+* PostgreSQL 16+ (в продакшене Quoto работает на общей базе `core` — см. раздел «База данных» ниже)
 * Docker (опционально)
 
 ### Локальная установка
@@ -88,6 +88,9 @@ alembic upgrade head
 ```env
 BOT_TOKEN=your_telegram_bot_token
 BOT_USERNAME=your_bot_username
+# В продакшене DB_URL указывает на общий core-postgres под ролью quoto_core
+# (postgresql+asyncpg://quoto_core:***@core-postgres:5432/core). Для локальной
+# разработки docker-compose собирает его из POSTGRES_* — см. «База данных» ниже.
 DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 OPENROUTER_EVAL_MODEL=poolside/laguna-xs.2
@@ -140,12 +143,32 @@ python main.py
 docker-compose up -d --build
 ```
 
+## 🗄️ База данных
+
+Quoto хранит данные в **PostgreSQL** и использует одну общую базу вместе с
+другими ботами FreshLabDev (`vido`, `branchy`, `searcher`):
+
+- **В продакшене** он подключается к общей базе **`core`** под ролью с
+  минимальными правами `quoto_core`. Собственные таблицы Quoto лежат в схеме
+  **`quoto`**, а общие идентичности, чаты и язык — в схеме **`core`**
+  (`core.person`, `core.chat`, а также функции `core.set_language` /
+  `core.effective_language`). Таблицы Quoto ссылаются на `core.person` и
+  `core.chat` по натуральным Telegram-ключам (id пользователя, id чата) —
+  отдельной таблицы пользователей/групп у бота больше нет.
+- **Для локальной разработки** `docker-compose up` поднимает встроенный Postgres
+  с посеянной копией схемы `core` (`deploy/core-init.sql`), чтобы внешние ключи
+  на `core.person` / `core.chat` разрешались; `DB_URL` приложения собирается из
+  переменных `POSTGRES_*` в `.env`.
+
+Миграции применяются командой `alembic upgrade head` (таблица версий Alembic
+лежит в схеме `quoto`).
+
 ## 🛠️ Технологический стек
 
 | Слой | Технология |
 | :--- | :--- |
 | **Фреймворк** | Aiogram 3 |
-| **База данных** | PostgreSQL + SQLAlchemy (Async) |
+| **База данных** | Общий PostgreSQL `core` (схема `quoto`) + SQLAlchemy (Async) |
 | **Валидация** | Pydantic |
 | **AI** | OpenRouter API (любая LLM) |
 | **Планировщик** | APScheduler |
@@ -158,11 +181,12 @@ quoto/
 ├── app/
 │   ├── ai.py           # Интеграция с OpenRouter AI и оценка сообщений
 │   ├── config.py       # Настройки, логирование, переменные окружения
-│   ├── core.py         # Основная бизнес-логика (пользователи, группы, сообщения)
+│   ├── core.py         # Основная бизнес-логика (люди, группы, сообщения)
+│   ├── core_client.py  # Обёртки над общими функциями core.* (touch, язык)
 │   ├── db.py           # Сессия базы данных и инициализация
 │   ├── handlers.py     # Обработчики Telegram-бота и команды
 │   ├── menu.py         # Рендеринг панели управления /start
-│   ├── models.py       # Модели SQLAlchemy (User, Group, Message, Quote)
+│   ├── models.py       # Модели SQLAlchemy (GroupSettings, Message, Quote, …) — FK на core.person/core.chat
 │   ├── scheduler.py    # Задачи APScheduler и пайплайн цитаты дня
 │   ├── scoring.py      # Движок скоринга и выбор лучшей цитаты
 │   └── utils.py        # Утилиты
