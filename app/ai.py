@@ -288,6 +288,13 @@ def _redact(text: str) -> str:
     return re.sub(r"(?i)bearer\s+[A-Za-z0-9._\-]+", "Bearer ***", text)
 
 
+def _model_candidates(primary: str, fallback: str) -> list[str]:
+    models = [primary]
+    if fallback and fallback not in models:
+        models.append(fallback)
+    return models
+
+
 async def evaluate_messages(
     messages: list[dict[str, Any]],
     include_day_verdict: bool = False,
@@ -342,18 +349,70 @@ async def evaluate_messages(
     if detect_interface_language:
         system_prompt = system_prompt + _LANGUAGE_DETECTION_PROMPT
 
-    body = {
-        "model": settings.OPENROUTER_EVAL_MODEL,
+    response_format = _response_format(
+        include_day_verdict,
+        detect_interface_language=detect_interface_language,
+    )
+    max_tokens = _eval_max_tokens(len(messages), include_day_verdict=include_day_verdict)
+    headers = _openrouter_headers()
+
+    models = _model_candidates(settings.OPENROUTER_EVAL_MODEL, settings.OPENROUTER_EVAL_FALLBACK_MODEL)
+    for model_index, model in enumerate(models):
+        result = await _evaluate_with_model(
+            model=model,
+            requested_model=default_model,
+            messages=messages,
+            neutral_scores=neutral_scores,
+            default_verdict=default_verdict,
+            include_day_verdict=include_day_verdict,
+            detect_interface_language=detect_interface_language,
+            request_id=request_id,
+            system_prompt=system_prompt,
+            user_payload=user_payload,
+            response_format=response_format,
+            max_tokens=max_tokens,
+            headers=headers,
+        )
+        if result.status == "parsed":
+            _breaker_record_success()
+            return result
+
+        is_last_model = model_index == len(models) - 1
+        if not is_last_model:
+            log.warning(
+                f"⚠️ Eval model {model} failed (status={result.status}); "
+                f"falling back to {models[model_index + 1]}"
+            )
+            continue
+
+    _breaker_record_failure()
+    return result
+
+
+async def _evaluate_with_model(
+    *,
+    model: str,
+    requested_model: str,
+    messages: list[dict[str, Any]],
+    neutral_scores: dict[int, float],
+    default_verdict: DayVerdict,
+    include_day_verdict: bool,
+    detect_interface_language: bool,
+    request_id: str,
+    system_prompt: str,
+    user_payload: str,
+    response_format: dict[str, Any],
+    max_tokens: int,
+    headers: dict[str, str],
+) -> EvaluationResult:
+    body: dict[str, Any] = {
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_payload},
         ],
-        "response_format": _response_format(
-            include_day_verdict,
-            detect_interface_language=detect_interface_language,
-        ),
+        "response_format": response_format,
     }
-    max_tokens = _eval_max_tokens(len(messages), include_day_verdict=include_day_verdict)
     if max_tokens > 0:
         body["max_tokens"] = max_tokens
     if settings.OPENROUTER_EVAL_REASONING_EFFORT:
@@ -362,8 +421,6 @@ async def evaluate_messages(
             "effort": settings.OPENROUTER_EVAL_REASONING_EFFORT,
             "exclude": True,
         }
-
-    headers = _openrouter_headers()
 
     max_retries = 3
 
@@ -379,6 +436,7 @@ async def evaluate_messages(
                 "body": body,
             },
         }
+        actual_model = model
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
@@ -393,7 +451,7 @@ async def evaluate_messages(
                 response.raise_for_status()
 
             data = response.json()
-            actual_model = data.get("model", settings.OPENROUTER_EVAL_MODEL)
+            actual_model = data.get("model", model)
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             content = content.strip()
             finish_reason = (data.get("choices") or [{}])[0].get("finish_reason")
@@ -420,11 +478,10 @@ async def evaluate_messages(
                     await asyncio.sleep(delay)
                     continue
                 log.warning(f"⚠️ {actual_model} вернул пустой ответ после всех попыток")
-                _breaker_record_failure()
                 return EvaluationResult(
                     scores=neutral_scores,
                     actual_model=actual_model,
-                    requested_model=default_model,
+                    requested_model=requested_model,
                     status="ai_failed",
                     request_id=request_id,
                     day_verdict=default_verdict if not include_day_verdict else None,
@@ -458,11 +515,10 @@ async def evaluate_messages(
             }
             await asyncio.to_thread(_write_ai_audit_record, audit_record)
             log.debug(f"🤖 {actual_model} оценил {len(scores)} сообщений")
-            _breaker_record_success()
             return EvaluationResult(
                 scores=scores,
                 actual_model=actual_model,
-                requested_model=default_model,
+                requested_model=requested_model,
                 status="parsed",
                 request_id=request_id,
                 day_verdict=verdict,
@@ -487,6 +543,7 @@ async def evaluate_messages(
                 await asyncio.sleep(delay)
                 continue
             log.error(f"OpenRouter HTTP {e.response.status_code}: {_redact(e.response.text[:200])}")
+            break
         except httpx.RequestError as e:
             audit_record["error"] = {
                 "type": type(e).__name__,
@@ -502,6 +559,7 @@ async def evaluate_messages(
                 await asyncio.sleep(delay)
                 continue
             log.error(f"Ошибка сети OpenRouter: {_redact(str(e))}")
+            break
         except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
             audit_record["error"] = {
                 "type": type(e).__name__,
@@ -509,6 +567,19 @@ async def evaluate_messages(
             }
             await asyncio.to_thread(_write_ai_audit_record, audit_record)
             log.error(f"Ошибка парсинга ответа AI: {e}")
+            return EvaluationResult(
+                scores=neutral_scores,
+                actual_model=actual_model,
+                requested_model=requested_model,
+                status="parse_failed",
+                request_id=request_id,
+                day_verdict=default_verdict if not include_day_verdict else None,
+                day_verdict_error=(
+                    "AI evaluation failed before a valid automatic day verdict was produced."
+                    if include_day_verdict
+                    else None
+                ),
+            )
         except Exception as e:
             audit_record["error"] = {
                 "type": type(e).__name__,
@@ -516,23 +587,14 @@ async def evaluate_messages(
             }
             await asyncio.to_thread(_write_ai_audit_record, audit_record)
             log.error(f"Ошибка при запросе к OpenRouter: {e}")
+            break
 
-        break
-
-    failure_status = "parse_failed" if "audit_record" in locals() and audit_record.get("error", {}).get("type") in {
-        "JSONDecodeError",
-        "KeyError",
-        "IndexError",
-        "ValueError",
-    } else "ai_failed"
-
-    _breaker_record_failure()
     return EvaluationResult(
         scores=neutral_scores,
-        actual_model=default_model,
-        requested_model=default_model,
-        status=failure_status,
-        request_id=request_id if "request_id" in locals() else None,
+        actual_model=model,
+        requested_model=requested_model,
+        status="ai_failed",
+        request_id=request_id,
         day_verdict=default_verdict if not include_day_verdict else None,
         day_verdict_error=(
             "AI evaluation failed before a valid automatic day verdict was produced."
@@ -664,14 +726,6 @@ class _MediaModelResponseError(RuntimeError):
     """A specific media model returned a response we can't use (bad shape or empty)."""
 
 
-def _media_model_candidates() -> list[str]:
-    models = [settings.OPENROUTER_MEDIA_MODEL]
-    fallback = settings.OPENROUTER_MEDIA_FALLBACK_MODEL
-    if fallback and fallback not in models:
-        models.append(fallback)
-    return models
-
-
 async def _post_media_request(body: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
     for attempt in range(3):
         try:
@@ -712,7 +766,7 @@ async def describe_media_file(
         media_kind=media_kind,
     )
     headers = _openrouter_headers()
-    models = _media_model_candidates()
+    models = _model_candidates(settings.OPENROUTER_MEDIA_MODEL, settings.OPENROUTER_MEDIA_FALLBACK_MODEL)
     attempt_errors: list[str] = []
 
     for model_index, model in enumerate(models):

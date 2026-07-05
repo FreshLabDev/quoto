@@ -31,8 +31,10 @@ class Settings(BaseSettings):
 
     # -- AI SETTINGS --
     OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "poolside/laguna-xs.2"
+    OPENROUTER_MODEL: str = "poolside/laguna-xs-2.1:free"
     OPENROUTER_EVAL_MODEL: str = ""
+    # Used only if the primary eval model errors out after retries.
+    OPENROUTER_EVAL_FALLBACK_MODEL: str = "poolside/laguna-xs-2.1"
     OPENROUTER_MEDIA_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     # Used only if the primary media model errors out after retries.
     OPENROUTER_MEDIA_FALLBACK_MODEL: str = "google/gemini-2.5-flash-lite"
@@ -238,7 +240,7 @@ def _load_settings() -> Settings:
     if not loaded.BOT_USERNAME:
         _fail("❌ Configuration error: BOT_USERNAME must be set to the bot's public username.")
     if not getattr(loaded, "OPENROUTER_EVAL_MODEL", ""):
-        loaded.OPENROUTER_EVAL_MODEL = getattr(loaded, "OPENROUTER_MODEL", "poolside/laguna-xs.2")
+        loaded.OPENROUTER_EVAL_MODEL = getattr(loaded, "OPENROUTER_MODEL", "poolside/laguna-xs-2.1:free")
     loaded.OPENROUTER_MODEL = loaded.OPENROUTER_EVAL_MODEL
     return loaded
 
