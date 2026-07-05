@@ -288,9 +288,8 @@ def _redact(text: str) -> str:
     return re.sub(r"(?i)bearer\s+[A-Za-z0-9._\-]+", "Bearer ***", text)
 
 
-def _eval_model_candidates() -> list[str]:
-    models = [settings.OPENROUTER_EVAL_MODEL]
-    fallback = settings.OPENROUTER_EVAL_FALLBACK_MODEL
+def _model_candidates(primary: str, fallback: str) -> list[str]:
+    models = [primary]
     if fallback and fallback not in models:
         models.append(fallback)
     return models
@@ -357,8 +356,7 @@ async def evaluate_messages(
     max_tokens = _eval_max_tokens(len(messages), include_day_verdict=include_day_verdict)
     headers = _openrouter_headers()
 
-    models = _eval_model_candidates()
-    result = EvaluationResult(scores=neutral_scores, actual_model=default_model, requested_model=default_model)
+    models = _model_candidates(settings.OPENROUTER_EVAL_MODEL, settings.OPENROUTER_EVAL_FALLBACK_MODEL)
     for model_index, model in enumerate(models):
         result = await _evaluate_with_model(
             model=model,
@@ -438,6 +436,7 @@ async def _evaluate_with_model(
                 "body": body,
             },
         }
+        actual_model = model
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
@@ -570,7 +569,7 @@ async def _evaluate_with_model(
             log.error(f"Ошибка парсинга ответа AI: {e}")
             return EvaluationResult(
                 scores=neutral_scores,
-                actual_model=model,
+                actual_model=actual_model,
                 requested_model=requested_model,
                 status="parse_failed",
                 request_id=request_id,
@@ -727,14 +726,6 @@ class _MediaModelResponseError(RuntimeError):
     """A specific media model returned a response we can't use (bad shape or empty)."""
 
 
-def _media_model_candidates() -> list[str]:
-    models = [settings.OPENROUTER_MEDIA_MODEL]
-    fallback = settings.OPENROUTER_MEDIA_FALLBACK_MODEL
-    if fallback and fallback not in models:
-        models.append(fallback)
-    return models
-
-
 async def _post_media_request(body: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
     for attempt in range(3):
         try:
@@ -775,7 +766,7 @@ async def describe_media_file(
         media_kind=media_kind,
     )
     headers = _openrouter_headers()
-    models = _media_model_candidates()
+    models = _model_candidates(settings.OPENROUTER_MEDIA_MODEL, settings.OPENROUTER_MEDIA_FALLBACK_MODEL)
     attempt_errors: list[str] = []
 
     for model_index, model in enumerate(models):
