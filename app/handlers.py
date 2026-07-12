@@ -342,6 +342,11 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
         text = i18n.t(language, "chat_member.need_admin")
         text_log = f"{chat.id} | Бот снят с администратора"
 
+    elif event.new_chat_member.status in {"left", "kicked"}:
+        await core.set_group_active(chat.id, False)
+        log.info(f"{chat.id} | Группа приостановлена: бот удалён из чата")
+        return
+
     if text:
         try:
             await event.answer(text, reply_markup=reply_markup)

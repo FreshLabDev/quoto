@@ -13,6 +13,11 @@ GitHub Releases.
   processing results. Existing group acceptances must be reset after deployment
   so admins review the revised terms.
 
+### Fixed
+- Suspend groups when the bot is removed (or Telegram reports `chat not found`),
+  and stop reprocessing agreement-gated groups on every minute of the catch-up
+  window.
+
 ## v0.9.1 - 2026-07-05
 
 ### Added

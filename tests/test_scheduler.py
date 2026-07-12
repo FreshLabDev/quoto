@@ -90,6 +90,28 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         recover.assert_not_awaited()
         pick_best_quote.assert_not_awaited()
         bot.send_message.assert_awaited_once()
+        self.assertEqual(
+            scheduler._completed_days[self.group.chat_id],
+            self.window.quote_day,
+        )
+
+    async def test_agreement_reminder_deactivates_missing_chat(self) -> None:
+        from aiogram.exceptions import TelegramBadRequest
+
+        self.group.agreement_accepted_at = None
+        bot = SimpleNamespace(
+            send_message=AsyncMock(
+                side_effect=TelegramBadRequest(
+                    method=object(),
+                    message="Bad Request: chat not found",
+                )
+            )
+        )
+        with patch.object(
+            scheduler.core, "set_group_active", new=AsyncMock(return_value=True)
+        ) as set_active:
+            await scheduler._process_group(bot, self.group, self.window)
+        set_active.assert_awaited_once_with(self.group.chat_id, False)
 
     async def test_process_group_recovers_stale_quotes_before_day_lookup(self) -> None:
         calls: list[str] = []

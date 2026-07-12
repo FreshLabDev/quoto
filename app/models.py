@@ -64,6 +64,7 @@ class GroupSettings(Base):
     __tablename__ = "group_settings"
 
     chat_id = Column(BigInteger, ForeignKey("core.chat.chat_id"), primary_key=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
     quote_hour = Column(Integer, nullable=True)
     quote_minute = Column(Integer, nullable=True)
     min_messages = Column(Integer, nullable=True)
