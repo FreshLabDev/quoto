@@ -8,6 +8,10 @@ GitHub Releases.
 
 ## Unreleased
 
+Use this section for changes that are merged but not released yet.
+
+## v0.10.0 - 2026-07-12
+
 ### Changed
 - Clarified the agreement's storage language for operational records and AI
   processing results. Existing group acceptances must be reset after deployment
@@ -20,6 +24,10 @@ GitHub Releases.
 - Keep transient media-analysis failures pending with bounded exponential retry,
   and apply an account-wide cooldown when every configured media model returns
   HTTP 402 instead of permanently losing the description immediately.
+
+### Operations
+- Adds Alembic revisions `20260712_01` and `20260712_02` for active-group
+  lifecycle state and bounded media retry state.
 
 ## v0.9.1 - 2026-07-05
 
