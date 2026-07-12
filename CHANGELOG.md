@@ -18,6 +18,8 @@ Use this section for changes that are merged but not released yet.
   so admins review the revised terms.
 
 ### Fixed
+- Commit the outer SQLAlchemy transaction used by Alembic so PostgreSQL keeps
+  successful schema upgrades instead of rolling them back on connection close.
 - Suspend groups when the bot is removed (or Telegram reports `chat not found`),
   and stop reprocessing agreement-gated groups on every minute of the catch-up
   window.

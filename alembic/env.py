@@ -91,7 +91,11 @@ async def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
+    # Alembic's transaction is nested inside the SQLAlchemy connection scope.
+    # Using connect() here leaves the implicit outer transaction uncommitted,
+    # so PostgreSQL rolls the migration back when the connection closes even
+    # though `alembic upgrade head` exits successfully.
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
