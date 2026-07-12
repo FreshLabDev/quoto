@@ -342,6 +342,219 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(records), 2)
 
 
+class AIEvalFallbackTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        ai._breaker_record_success()
+
+    def tearDown(self) -> None:
+        ai._breaker_record_success()
+
+    async def test_evaluate_messages_falls_back_to_secondary_model_after_primary_failure(self) -> None:
+        primary_attempts = 0
+
+        class FakeResponse:
+            status_code = 200
+            text = '{"model":"fallback/model","choices":[{"message":{"content":"[{\\"id\\":1,\\"score\\":7}]"}}]}'
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal primary_attempts
+                if kwargs["json"]["model"] == "primary/model":
+                    primary_attempts += 1
+                    raise ai.httpx.ReadTimeout("primary model unavailable")
+                return FakeResponse()
+
+        sleep = AsyncMock()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "primary/model"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_FALLBACK_MODEL", "fallback/model"),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            patch.object(ai.asyncio, "sleep", new=sleep),
+        ):
+            result = await ai.evaluate_messages(
+                [{"id": 1, "author": "Alice", "text": "hello"}],
+                include_day_verdict=False,
+            )
+
+        # 3 retries against the primary model before giving up and falling back.
+        self.assertEqual(primary_attempts, 3)
+        self.assertEqual(result.status, "parsed")
+        self.assertEqual(result.actual_model, "fallback/model")
+        self.assertEqual(result.requested_model, "primary/model")
+        self.assertEqual(result.scores, {1: 0.7})
+        self.assertFalse(ai._breaker_is_open())
+
+    async def test_evaluate_messages_falls_back_after_primary_parse_failure(self) -> None:
+        primary_attempts = 0
+
+        class FakeGarbageResponse:
+            status_code = 200
+            text = '{"model":"primary/model","choices":[{"message":{"content":"not json at all"}}]}'
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeSuccessResponse:
+            status_code = 200
+            text = '{"model":"fallback/model","choices":[{"message":{"content":"[{\\"id\\":1,\\"score\\":7}]"}}]}'
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal primary_attempts
+                if kwargs["json"]["model"] == "primary/model":
+                    primary_attempts += 1
+                    return FakeGarbageResponse()
+                return FakeSuccessResponse()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "primary/model"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_FALLBACK_MODEL", "fallback/model"),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+        ):
+            result = await ai.evaluate_messages(
+                [{"id": 1, "author": "Alice", "text": "hello"}],
+                include_day_verdict=False,
+            )
+
+        # Parse failures are not retried on the same model; fallback kicks in immediately.
+        self.assertEqual(primary_attempts, 1)
+        self.assertEqual(result.status, "parsed")
+        self.assertEqual(result.actual_model, "fallback/model")
+        self.assertEqual(result.scores, {1: 0.7})
+
+    async def test_evaluate_messages_parse_failure_reports_actual_served_model(self) -> None:
+        class FakeGarbageResponse:
+            status_code = 200
+            # OpenRouter routed "primary/model" to a different backend, which then
+            # returned an unparsable body.
+            text = '{"model":"actual/served-model","choices":[{"message":{"content":"not json at all"}}]}'
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                return FakeGarbageResponse()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "primary/model"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_FALLBACK_MODEL", ""),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+        ):
+            result = await ai.evaluate_messages(
+                [{"id": 1, "author": "Alice", "text": "hello"}],
+                include_day_verdict=False,
+            )
+
+        self.assertEqual(result.status, "parse_failed")
+        self.assertEqual(result.actual_model, "actual/served-model")
+        self.assertEqual(result.requested_model, "primary/model")
+
+    async def test_evaluate_messages_returns_neutral_scores_when_all_models_fail(self) -> None:
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                model = kwargs["json"]["model"]
+                raise ai.httpx.ReadTimeout(f"{model} unavailable")
+
+        sleep = AsyncMock()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "primary/model"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_FALLBACK_MODEL", "fallback/model"),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            patch.object(ai.asyncio, "sleep", new=sleep),
+        ):
+            result = await ai.evaluate_messages(
+                [{"id": 1, "author": "Alice", "text": "hello"}],
+                include_day_verdict=False,
+            )
+
+        self.assertEqual(result.status, "ai_failed")
+        self.assertEqual(result.actual_model, "fallback/model")
+        self.assertEqual(result.requested_model, "primary/model")
+        self.assertEqual(result.scores, {1: 0.5})
+
+    async def test_evaluate_messages_no_fallback_configured_only_tries_primary(self) -> None:
+        attempts = 0
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                nonlocal attempts
+                attempts += 1
+                raise ai.httpx.ReadTimeout("primary model unavailable")
+
+        sleep = AsyncMock()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "primary/model"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_FALLBACK_MODEL", ""),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            patch.object(ai.asyncio, "sleep", new=sleep),
+        ):
+            result = await ai.evaluate_messages(
+                [{"id": 1, "author": "Alice", "text": "hello"}],
+                include_day_verdict=False,
+            )
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(result.status, "ai_failed")
+        self.assertEqual(result.actual_model, "primary/model")
+
+
 class AIResilienceTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         ai._breaker_record_success()

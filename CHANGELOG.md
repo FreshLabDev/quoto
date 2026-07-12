@@ -10,6 +10,18 @@ GitHub Releases.
 
 Use this section for changes that are merged but not released yet.
 
+## v0.9.1 - 2026-07-05
+
+### Added
+- Automatic fallback for the quote-of-the-day eval model: if `OPENROUTER_EVAL_MODEL`
+  errors out after its retries (or returns an empty/unparsable response),
+  evaluation now retries against `OPENROUTER_EVAL_FALLBACK_MODEL` before giving up
+  and returning neutral scores. Mirrors the existing media-model fallback.
+
+### Changed
+- Default eval models: `OPENROUTER_EVAL_MODEL` is now `poolside/laguna-xs-2.1:free`
+  with `OPENROUTER_EVAL_FALLBACK_MODEL` defaulting to `poolside/laguna-xs-2.1`.
+
 ## v0.9.0 - 2026-07-03
 
 First release under Semantic Versioning and this changelog. Earlier builds used
