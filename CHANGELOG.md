@@ -8,7 +8,10 @@ GitHub Releases.
 
 ## Unreleased
 
-Use this section for changes that are merged but not released yet.
+### Changed
+- Clarified the agreement's storage language for operational records and AI
+  processing results. Existing group acceptances must be reset after deployment
+  so admins review the revised terms.
 
 ## v0.9.1 - 2026-07-05
 
