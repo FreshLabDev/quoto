@@ -38,6 +38,11 @@ class AgreementTests(unittest.TestCase):
         _text, keyboard = agreement.build_document("en", can_accept=False, accepted=False)
         self.assertNotIn(agreement.callback_data(agreement.ACTION_ACCEPT, "en"), _flat(keyboard))
 
+    def test_document_discloses_extended_service_records(self) -> None:
+        text, _keyboard = agreement.build_document("en", can_accept=False, accepted=False)
+        self.assertIn("service records", text)
+        self.assertIn("quality checks", text)
+
     def test_welcome_keyboard_opens_view(self) -> None:
         keyboard = agreement.build_welcome_keyboard("de")
         self.assertEqual(

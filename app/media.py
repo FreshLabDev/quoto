@@ -14,7 +14,7 @@ from typing import Any
 
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from . import ai, models
@@ -235,7 +235,11 @@ async def process_pending_media(bot: Bot, *, limit: int = 10) -> int:
             log.warning(
                 f"Media analysis timed out for db message {item.message_db_id}; will retry next cycle"
             )
-            continue
+            await _schedule_media_retry(
+                db_message_id=item.message_db_id,
+                source=source,
+                exc=ai.MediaRetryableError("Media analysis item timed out."),
+            )
         processed += 1
 
     remaining = max(0, limit - processed)
@@ -304,6 +308,13 @@ async def _process_media_source(bot: Bot, *, db_message_id: int, source: MediaSo
         # network/DNS hiccups are expected and out of our control — log them at
         # DEBUG so they don't drown the WARNING stream. Everything else stays a
         # WARNING because it likely points at a real bug.
+        if ai.is_retryable_media_error(exc):
+            await _schedule_media_retry(
+                db_message_id=db_message_id,
+                source=source,
+                exc=exc,
+            )
+            return
         if _is_expected_media_failure(exc):
             log.debug(f"Media analysis skipped for db message {db_message_id}: {exc}")
         else:
@@ -333,12 +344,24 @@ async def _ensure_message_media_item(db_message_id: int, source: MediaSource) ->
 
 async def _load_pending_media_items(*, limit: int) -> list[models.MessageMedia]:
     cutoff = _pending_retry_cutoff()
+    now = datetime.now(timezone.utc)
     async with SessionLocal() as session:
         result = await session.execute(
             select(models.MessageMedia)
             .where(models.MessageMedia.analysis_status == "pending")
-            .where(models.MessageMedia.created_at <= cutoff)
-            .order_by(models.MessageMedia.created_at.asc())
+            .where(
+                or_(
+                    and_(
+                        models.MessageMedia.next_retry_at.is_(None),
+                        models.MessageMedia.created_at <= cutoff,
+                    ),
+                    models.MessageMedia.next_retry_at <= now,
+                )
+            )
+            .order_by(
+                models.MessageMedia.next_retry_at.asc().nullsfirst(),
+                models.MessageMedia.created_at.asc(),
+            )
             .limit(limit)
         )
         return list(result.scalars().all())
@@ -407,6 +430,70 @@ def _is_expected_media_failure(exc: Exception) -> bool:
     if isinstance(exc, TelegramBadRequest) and "too big" in str(exc).lower():
         return True
     return False
+
+
+async def _current_media_retry_count(db_message_id: int) -> int:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.MessageMedia)
+            .where(models.MessageMedia.message_db_id == db_message_id)
+            .order_by(models.MessageMedia.id.asc())
+            .limit(1)
+        )
+        item = result.scalars().first()
+        return int(getattr(item, "retry_count", 0) or 0)
+
+
+def _media_retry_delay(retry_count: int) -> int:
+    base = max(1, settings.MEDIA_RETRY_BASE_DELAY_SECONDS)
+    maximum = max(base, settings.MEDIA_RETRY_MAX_DELAY_SECONDS)
+    return min(maximum, base * (2 ** max(0, retry_count - 1)))
+
+
+async def _schedule_media_retry(
+    *,
+    db_message_id: int,
+    source: MediaSource,
+    exc: Exception,
+) -> bool:
+    current_count = await _current_media_retry_count(db_message_id)
+    counts_as_attempt = bool(getattr(exc, "counts_as_attempt", True))
+    retry_count = current_count + (1 if counts_as_attempt else 0)
+    max_attempts = max(1, settings.MEDIA_RETRY_MAX_ATTEMPTS)
+    error = str(exc)[:500]
+
+    if counts_as_attempt and retry_count >= max_attempts:
+        await _store_media_result(
+            db_message_id=db_message_id,
+            source=source,
+            status="failed",
+            description=_metadata_description(source),
+            error=error,
+            retry_count=retry_count,
+        )
+        log.warning(
+            f"Media analysis permanently failed for db message {db_message_id} "
+            f"after {retry_count} attempts: {exc}"
+        )
+        return False
+
+    requested_delay = float(getattr(exc, "retry_after_seconds", 0) or 0)
+    delay = max(float(_media_retry_delay(max(1, retry_count))), requested_delay)
+    next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+    await _store_media_result(
+        db_message_id=db_message_id,
+        source=source,
+        status="pending",
+        description=_metadata_description(source),
+        error=error,
+        retry_count=retry_count,
+        next_retry_at=next_retry_at,
+    )
+    log.warning(
+        f"Media analysis deferred for db message {db_message_id}; "
+        f"retry {retry_count}/{max_attempts} in {delay:.0f}s"
+    )
+    return True
 
 
 def _pending_retry_cutoff() -> datetime:
@@ -668,6 +755,8 @@ async def _store_media_result(
     sha256: str | None = None,
     phash: str | None = None,
     error: str | None = None,
+    retry_count: int | None = None,
+    next_retry_at: datetime | None = None,
 ) -> None:
     async with SessionLocal() as session:
         result = await session.execute(
@@ -704,6 +793,9 @@ async def _store_media_result(
         media_item.phash = phash or (cache.phash if cache else None)
         media_item.analysis_status = status
         media_item.analysis_error = error
+        if retry_count is not None:
+            media_item.retry_count = retry_count
+        media_item.next_retry_at = next_retry_at
         media_item.description_snapshot = description
         await session.commit()
 

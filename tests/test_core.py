@@ -289,6 +289,29 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_migrate_group_chat_id_noop_for_same_id(self) -> None:
         self.assertFalse(await core.migrate_group_chat_id(-100, -100))
 
+    async def test_set_group_active_suspends_without_deleting_settings(self) -> None:
+        group = SimpleNamespace(is_active=True)
+        session = _UpdateSession(group)
+        with patch.object(core, "SessionLocal", return_value=session):
+            ok = await core.set_group_active(-100, False)
+        self.assertTrue(ok)
+        self.assertFalse(group.is_active)
+        session.commit.assert_awaited_once()
+
+    async def test_group_get_or_create_reactivates_existing_group(self) -> None:
+        group = SimpleNamespace(is_active=False)
+        session = _UpdateSession(group)
+        chat = SimpleNamespace(id=-100)
+        actor = SimpleNamespace(id=42)
+        with (
+            patch.object(core, "SessionLocal", return_value=session),
+            patch.object(core.core_client, "touch_group", new=AsyncMock()),
+        ):
+            result = await core.group_getOrCreate(chat, actor)
+        self.assertIs(result, group)
+        self.assertTrue(group.is_active)
+        session.commit.assert_awaited_once()
+
     def test_group_agreement_accepted_flag(self) -> None:
         self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))
         self.assertTrue(

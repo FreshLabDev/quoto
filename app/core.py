@@ -133,6 +133,7 @@ async def group_getOrCreate(
             try:
                 group = models.GroupSettings(
                     chat_id=chat.id,
+                    is_active=True,
                     quote_minute=_jittered_quote_minute(),
                 )
                 session.add(group)
@@ -147,8 +148,26 @@ async def group_getOrCreate(
                     )
                 )).scalars().first()
         else:
+            group.is_active = True
             await session.commit()
         return await hydrate_group(session, group) if hydrate else group
+
+
+async def set_group_active(chat_id: int, active: bool) -> bool:
+    """Enable or suspend scheduler work without discarding group history/settings."""
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(models.GroupSettings).where(models.GroupSettings.chat_id == chat_id)
+        )
+        group = result.scalars().first()
+        if not group:
+            return False
+        active = bool(active)
+        if bool(getattr(group, "is_active", True)) == active:
+            return True
+        group.is_active = active
+        await session.commit()
+        return True
 
 
 async def migrate_group_chat_id(old_chat_id: int, new_chat_id: int) -> bool:

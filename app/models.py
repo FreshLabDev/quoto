@@ -64,6 +64,7 @@ class GroupSettings(Base):
     __tablename__ = "group_settings"
 
     chat_id = Column(BigInteger, ForeignKey("core.chat.chat_id"), primary_key=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
     quote_hour = Column(Integer, nullable=True)
     quote_minute = Column(Integer, nullable=True)
     min_messages = Column(Integer, nullable=True)
@@ -164,6 +165,8 @@ class MessageMedia(Base):
     phash = Column(String, nullable=True)
     analysis_status = Column(String, nullable=False, default="pending")
     analysis_error = Column(Text, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0, server_default="0")
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
     description_snapshot = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
@@ -174,6 +177,7 @@ class MessageMedia(Base):
         Index("ix_message_media_message_db_id", "message_db_id"),
         Index("ix_message_media_file_unique_id", "telegram_file_unique_id"),
         Index("ix_message_media_sha256", "sha256"),
+        Index("ix_message_media_pending_retry", "analysis_status", "next_retry_at"),
     )
 
 

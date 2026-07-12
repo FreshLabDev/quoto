@@ -641,3 +641,20 @@ class CatchUpAfterAcceptTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(scheduler, "_process_group", new=AsyncMock(side_effect=RuntimeError("boom"))):
             # must not raise
             await handlers._catch_up_after_accept(SimpleNamespace(), group)
+
+
+class GroupLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bot_removal_suspends_group(self) -> None:
+        event = SimpleNamespace(
+            chat=SimpleNamespace(id=-100123456, title="Old chat"),
+            from_user=SimpleNamespace(id=42, language_code="en"),
+            old_chat_member=SimpleNamespace(status="administrator"),
+            new_chat_member=SimpleNamespace(status="kicked"),
+            answer=AsyncMock(),
+        )
+        with patch.object(
+            handlers.core, "set_group_active", new=AsyncMock(return_value=True)
+        ) as set_active:
+            await handlers.bot_added_to_chat_event(event)
+        set_active.assert_awaited_once_with(-100123456, False)
+        event.answer.assert_not_awaited()

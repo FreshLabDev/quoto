@@ -8,7 +8,7 @@ from html import escape
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
-from aiogram.exceptions import TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from sqlalchemy import select
 
 from . import agreement, core, i18n, media, scoring
@@ -67,7 +67,7 @@ async def _send_with_retry(method, *, attempts: int = 3, **kwargs):
 async def quote_of_the_day_job(bot: Bot) -> None:
     now = utc_now()
     async with SessionLocal() as session:
-        result = await session.execute(select(Group))
+        result = await session.execute(select(Group).where(Group.is_active.is_(True)))
         groups = list(result.scalars().all())
 
     if not groups:
@@ -179,6 +179,12 @@ async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, languag
             reply_markup=agreement.build_welcome_keyboard(language),
         )
         log.info(f"{group.chat_id} | 📄 Отправлено напоминание о пользовательском соглашении")
+    except TelegramBadRequest as exc:
+        if "chat not found" in str(exc).lower():
+            await core.set_group_active(group.chat_id, False)
+            log.warning(f"{group.chat_id} | Группа приостановлена: Telegram chat not found")
+            return
+        log.warning(f"{group.chat_id} | ⚠️ Не удалось отправить напоминание о соглашении: {exc}")
     except Exception as exc:
         log.warning(f"{group.chat_id} | ⚠️ Не удалось отправить напоминание о соглашении: {exc}")
 
@@ -212,6 +218,9 @@ async def _process_group(bot: Bot, group: Group, window: QuoteWindow | None = No
     if not core.group_agreement_accepted(group):
         log.info(f"{group.chat_id} | 📄 День {window.quote_day} пропущен: соглашение не принято")
         await _remind_agreement(bot, group, window, language)
+        # The acceptance callback invokes _process_group directly, so suppressing
+        # further minute ticks does not prevent a same-day catch-up after accept.
+        _mark_day_completed(group, window)
         return
 
     await _recover_stale_quotes_for_chat(group.chat_id)

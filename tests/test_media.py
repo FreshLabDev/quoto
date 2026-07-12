@@ -219,13 +219,76 @@ class MediaPendingTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(media, "_load_pending_media_items", new=AsyncMock(return_value=[item])),
             patch.object(media, "_process_media_source", new=_hang),
+            patch.object(media, "_schedule_media_retry", new=AsyncMock(return_value=True)) as schedule_retry,
             patch.object(media, "_mark_orphan_pending_messages_failed", new=AsyncMock(return_value=0)),
             patch.object(media.settings, "MEDIA_PENDING_ITEM_TIMEOUT_SECONDS", 0.01),
         ):
             processed = await media.process_pending_media(bot, limit=10)
 
-        # A stuck item is skipped (not counted as processed) instead of blocking the whole batch.
-        self.assertEqual(processed, 0)
+        self.assertEqual(processed, 1)
+        schedule_retry.assert_awaited_once()
+
+    async def test_transient_media_failure_is_scheduled_with_backoff(self) -> None:
+        source = media.MediaSource(kind="photo", file_id="file", supports_analysis=True)
+        store_result = AsyncMock()
+        exc = ai.MediaRetryableError("temporary provider error")
+        with (
+            patch.object(media, "_current_media_retry_count", new=AsyncMock(return_value=1)),
+            patch.object(media, "_store_media_result", new=store_result),
+            patch.object(media.settings, "MEDIA_RETRY_MAX_ATTEMPTS", 5),
+            patch.object(media.settings, "MEDIA_RETRY_BASE_DELAY_SECONDS", 300),
+            patch.object(media.settings, "MEDIA_RETRY_MAX_DELAY_SECONDS", 3600),
+        ):
+            pending = await media._schedule_media_retry(
+                db_message_id=55,
+                source=source,
+                exc=exc,
+            )
+
+        self.assertTrue(pending)
+        kwargs = store_result.await_args.kwargs
+        self.assertEqual(kwargs["status"], "pending")
+        self.assertEqual(kwargs["retry_count"], 2)
+        self.assertGreater(kwargs["next_retry_at"], media.datetime.now(media.timezone.utc))
+
+    async def test_transient_media_failure_stops_after_max_attempts(self) -> None:
+        source = media.MediaSource(kind="photo", file_id="file", supports_analysis=True)
+        store_result = AsyncMock()
+        with (
+            patch.object(media, "_current_media_retry_count", new=AsyncMock(return_value=4)),
+            patch.object(media, "_store_media_result", new=store_result),
+            patch.object(media.settings, "MEDIA_RETRY_MAX_ATTEMPTS", 5),
+        ):
+            pending = await media._schedule_media_retry(
+                db_message_id=55,
+                source=source,
+                exc=ai.MediaRetryableError("still unavailable"),
+            )
+
+        self.assertFalse(pending)
+        kwargs = store_result.await_args.kwargs
+        self.assertEqual(kwargs["status"], "failed")
+        self.assertEqual(kwargs["retry_count"], 5)
+        self.assertNotIn("next_retry_at", kwargs)
+
+    async def test_provider_cooldown_does_not_consume_retry_attempt(self) -> None:
+        source = media.MediaSource(kind="photo", file_id="file", supports_analysis=True)
+        store_result = AsyncMock()
+        with (
+            patch.object(media, "_current_media_retry_count", new=AsyncMock(return_value=2)),
+            patch.object(media, "_store_media_result", new=store_result),
+            patch.object(media.settings, "MEDIA_RETRY_MAX_ATTEMPTS", 5),
+        ):
+            pending = await media._schedule_media_retry(
+                db_message_id=55,
+                source=source,
+                exc=ai.MediaProviderCooldownError(900),
+            )
+
+        self.assertTrue(pending)
+        kwargs = store_result.await_args.kwargs
+        self.assertEqual(kwargs["status"], "pending")
+        self.assertEqual(kwargs["retry_count"], 2)
 
     async def test_store_media_result_updates_existing_pending_item(self) -> None:
         message = SimpleNamespace(id=55, caption=None, text="old", media_status="pending")
@@ -414,6 +477,12 @@ class AIMediaPayloadTests(unittest.TestCase):
 
 
 class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        ai._media_breaker_reset()
+
+    def tearDown(self) -> None:
+        ai._media_breaker_reset()
+
     async def test_describe_media_file_uses_media_model_and_medium_reasoning(self) -> None:
         captured_body: dict | None = None
         captured_headers: dict | None = None
@@ -606,12 +675,14 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
                 patch.object(ai.asyncio, "sleep", new=sleep),
             ):
-                with self.assertRaises(ai.httpx.ReadTimeout):
+                with self.assertRaises(ai.MediaModelsExhaustedError) as ctx:
                     await ai.describe_media_file(
                         path=image_path,
                         mime_type="image/jpeg",
                         media_kind="photo",
                     )
+
+        self.assertTrue(ai.is_retryable_media_error(ctx.exception))
 
     async def test_describe_media_file_falls_back_when_primary_returns_non_json_body(self) -> None:
         class FakeResponse:
@@ -704,3 +775,48 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         # Both models' failure reasons must survive into the error persisted as analysis_error.
         self.assertIn("primary/model", str(ctx.exception))
         self.assertIn("fallback/model", str(ctx.exception))
+        self.assertTrue(ai.is_retryable_media_error(ctx.exception))
+
+    async def test_all_402_opens_media_cooldown(self) -> None:
+        calls = 0
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **_kwargs):
+                nonlocal calls
+                calls += 1
+                request = ai.httpx.Request("POST", "https://openrouter.test/chat")
+                return ai.httpx.Response(402, request=request, text="payment required")
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            image_path = Path(tempdir) / "image.jpg"
+            image_path.write_bytes(b"image")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "primary/model"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", "fallback/model"),
+                patch.object(ai.settings, "MEDIA_PROVIDER_COOLDOWN_SECONDS", 900),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+            ):
+                with self.assertRaises(ai.MediaModelsExhaustedError) as first:
+                    await ai.describe_media_file(
+                        path=image_path,
+                        mime_type="image/jpeg",
+                        media_kind="photo",
+                    )
+                with self.assertRaises(ai.MediaProviderCooldownError) as second:
+                    await ai.describe_media_file(
+                        path=image_path,
+                        mime_type="image/jpeg",
+                        media_kind="photo",
+                    )
+
+        self.assertEqual(calls, 2)
+        self.assertTrue(ai.is_retryable_media_error(first.exception))
+        self.assertEqual(first.exception.retry_after_seconds, 900)
+        self.assertFalse(second.exception.counts_as_attempt)
