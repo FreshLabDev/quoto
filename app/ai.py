@@ -237,8 +237,93 @@ class MediaDescriptionResult:
     total_tokens: int | None = None
 
 
+class MediaRetryableError(RuntimeError):
+    """Media analysis should remain pending and be retried later."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        retry_after_seconds: float | None = None,
+        counts_as_attempt: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+        self.counts_as_attempt = counts_as_attempt
+
+
+class MediaProviderCooldownError(MediaRetryableError):
+    """Account-wide media requests are paused; this item did not consume an attempt."""
+
+    def __init__(self, retry_after_seconds: float) -> None:
+        super().__init__(
+            f"Media provider cooldown is active for {retry_after_seconds:.0f}s.",
+            retry_after_seconds=retry_after_seconds,
+            counts_as_attempt=False,
+        )
+
+
+class MediaModelsExhaustedError(RuntimeError):
+    """Every configured media model failed during one analysis attempt."""
+
+    def __init__(
+        self,
+        errors: list[tuple[str, Exception]],
+        *,
+        retryable: bool,
+        retry_after_seconds: float | None = None,
+    ) -> None:
+        self.errors = errors
+        self.retryable = retryable
+        self.retry_after_seconds = retry_after_seconds
+        self.counts_as_attempt = True
+        details = "; ".join(
+            f"{model}: {type(exc).__name__}: {exc}" for model, exc in errors
+        )
+        super().__init__("All media models failed — " + details)
+
+
 def _is_retryable_http_status(status_code: int) -> bool:
     return status_code == 429 or 500 <= status_code < 600
+
+
+def _media_http_status(exc: Exception) -> int | None:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code
+    return None
+
+
+def is_retryable_media_error(exc: Exception) -> bool:
+    if isinstance(exc, MediaModelsExhaustedError):
+        return exc.retryable
+    if isinstance(exc, MediaRetryableError):
+        return True
+    if isinstance(exc, httpx.RequestError):
+        return True
+    status = _media_http_status(exc)
+    if status is not None:
+        return status in {402, 408, 409, 425, 429} or status >= 500
+    return isinstance(exc, _MediaModelResponseError)
+
+
+_media_breaker_open_until = 0.0
+
+
+def _media_breaker_remaining() -> float:
+    return max(0.0, _media_breaker_open_until - time.monotonic())
+
+
+def _media_breaker_open() -> float:
+    global _media_breaker_open_until
+    cooldown = max(1, settings.MEDIA_PROVIDER_COOLDOWN_SECONDS)
+    _media_breaker_open_until = time.monotonic() + cooldown
+    log.warning(f"⚡ Media OpenRouter cooldown открыт на {cooldown}с после HTTP 402")
+    return float(cooldown)
+
+
+def _media_breaker_reset() -> None:
+    global _media_breaker_open_until
+    _media_breaker_open_until = 0.0
 
 
 # Simple circuit breaker: after repeated failures, skip OpenRouter for a cooldown
@@ -759,6 +844,10 @@ async def describe_media_file(
     if not settings.OPENROUTER_API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not configured for media analysis.")
 
+    cooldown_remaining = _media_breaker_remaining()
+    if cooldown_remaining > 0:
+        raise MediaProviderCooldownError(cooldown_remaining)
+
     media_part = await asyncio.to_thread(
         _media_content_part,
         path=path,
@@ -767,7 +856,7 @@ async def describe_media_file(
     )
     headers = _openrouter_headers()
     models = _model_candidates(settings.OPENROUTER_MEDIA_MODEL, settings.OPENROUTER_MEDIA_FALLBACK_MODEL)
-    attempt_errors: list[str] = []
+    attempt_errors: list[tuple[str, Exception]] = []
 
     for model_index, model in enumerate(models):
         body: dict[str, Any] = {
@@ -803,6 +892,7 @@ async def describe_media_file(
             description = str(content).strip()
             if not description:
                 raise _MediaModelResponseError(f"Media model {model} returned an empty description.")
+            _media_breaker_reset()
             return MediaDescriptionResult(
                 description=description,
                 actual_model=data.get("model", model),
@@ -811,11 +901,19 @@ async def describe_media_file(
                 total_tokens=_optional_int(usage.get("total_tokens")),
             )
         except (httpx.HTTPStatusError, httpx.RequestError, _MediaModelResponseError) as exc:
-            attempt_errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            attempt_errors.append((model, exc))
             if is_last_model:
-                if len(attempt_errors) > 1:
-                    raise RuntimeError("All media models failed — " + "; ".join(attempt_errors)) from exc
-                raise
+                all_payment_required = bool(attempt_errors) and all(
+                    _media_http_status(error) == 402 for _name, error in attempt_errors
+                )
+                retry_after = _media_breaker_open() if all_payment_required else None
+                raise MediaModelsExhaustedError(
+                    attempt_errors,
+                    retryable=any(
+                        is_retryable_media_error(error) for _name, error in attempt_errors
+                    ),
+                    retry_after_seconds=retry_after,
+                ) from exc
             log.warning(
                 f"⚠️ Media model {model} failed ({type(exc).__name__}: {exc}); "
                 f"falling back to {models[model_index + 1]}"

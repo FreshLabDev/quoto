@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     MEDIA_COMMAND_TIMEOUT_SECONDS: int = 300
     MEDIA_PENDING_RETRY_INTERVAL_SECONDS: int = 300
     MEDIA_PENDING_RETRY_BATCH_SIZE: int = 10
+    MEDIA_RETRY_MAX_ATTEMPTS: int = 5
+    MEDIA_RETRY_BASE_DELAY_SECONDS: int = 300
+    MEDIA_RETRY_MAX_DELAY_SECONDS: int = 3600
+    MEDIA_PROVIDER_COOLDOWN_SECONDS: int = 900
     # Bounds one item's worst-case retry chain (primary + fallback model) so a
     # struggling provider can't stall the whole recovery batch for hours.
     MEDIA_PENDING_ITEM_TIMEOUT_SECONDS: int = 600

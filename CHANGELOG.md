@@ -17,6 +17,9 @@ GitHub Releases.
 - Suspend groups when the bot is removed (or Telegram reports `chat not found`),
   and stop reprocessing agreement-gated groups on every minute of the catch-up
   window.
+- Keep transient media-analysis failures pending with bounded exponential retry,
+  and apply an account-wide cooldown when every configured media model returns
+  HTTP 402 instead of permanently losing the description immediately.
 
 ## v0.9.1 - 2026-07-05
 
