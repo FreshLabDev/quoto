@@ -10,6 +10,13 @@ GitHub Releases.
 
 Use this section for changes that are merged but not released yet.
 
+## v0.10.1 - 2026-07-21
+
+### Changed
+- Default quote evaluation models: `OPENROUTER_EVAL_MODEL` now uses
+  `poolside/laguna-s-2.1:free`, with `OPENROUTER_EVAL_FALLBACK_MODEL` set to
+  `poolside/laguna-s-2.1`.
+
 ## v0.10.0 - 2026-07-12
 
 ### Changed

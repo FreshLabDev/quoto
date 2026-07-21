@@ -93,9 +93,9 @@ BOT_USERNAME=your_bot_username
 # docker-compose builds it from the POSTGRES_* vars — see Database below.
 DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
-OPENROUTER_EVAL_MODEL=poolside/laguna-xs-2.1:free
+OPENROUTER_EVAL_MODEL=poolside/laguna-s-2.1:free
 # Used only if the primary eval model errors out after retries.
-OPENROUTER_EVAL_FALLBACK_MODEL=poolside/laguna-xs-2.1
+OPENROUTER_EVAL_FALLBACK_MODEL=poolside/laguna-s-2.1
 OPENROUTER_EVAL_REASONING_EFFORT=medium
 OPENROUTER_EVAL_MAX_TOKENS=32000
 OPENROUTER_MEDIA_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
