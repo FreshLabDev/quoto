@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import re
 import time
@@ -23,6 +25,36 @@ _last_notified: dict[str, float] = {}
 
 _BEARER_RE = re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+")
 _OPENROUTER_KEY_RE = re.compile(r"sk-or-[A-Za-z0-9._\-]+")
+_DB_URL_PASSWORD_RE = re.compile(r"(?i)(://[^:/\s]+:)([^@\s]+)(@)")
+
+
+def quote_start_payload(quote_id: int) -> str:
+    """Create a short tamper-resistant Telegram deep-link payload."""
+    body = str(int(quote_id))
+    signature = hmac.new(
+        settings.BOT_TOKEN.encode("utf-8"),
+        f"quote:{body}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:16]
+    return f"quote_{body}_{signature}"
+
+
+def parse_quote_start_payload(payload: str) -> int | None:
+    parts = payload.split("_")
+    if len(parts) != 3 or parts[0] != "quote" or not parts[1].isdigit():
+        return None
+    expected = quote_start_payload(int(parts[1])).split("_")[-1]
+    if not hmac.compare_digest(parts[2], expected):
+        return None
+    return int(parts[1])
+
+
+def parse_legacy_quote_start_payload(payload: str) -> int | None:
+    """Parse pre-0.10.2 links so they can be checked with chat membership."""
+    parts = payload.split("_")
+    if len(parts) != 2 or parts[0] != "quote" or not parts[1].isdigit():
+        return None
+    return int(parts[1])
 
 
 def _scrub_secrets(text: str) -> str:
@@ -32,6 +64,7 @@ def _scrub_secrets(text: str) -> str:
             cleaned = cleaned.replace(secret, "***")
     cleaned = _BEARER_RE.sub("Bearer ***", cleaned)
     cleaned = _OPENROUTER_KEY_RE.sub("sk-or-***", cleaned)
+    cleaned = _DB_URL_PASSWORD_RE.sub(r"\1***\3", cleaned)
     return cleaned
 
 

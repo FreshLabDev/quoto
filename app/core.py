@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 import random
@@ -9,7 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from . import core_client, i18n, media, models
+from . import core_client, i18n, media, models, utils
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .quote_status import (
@@ -170,14 +171,23 @@ async def set_group_active(chat_id: int, active: bool) -> bool:
         return True
 
 
-async def migrate_group_chat_id(old_chat_id: int, new_chat_id: int) -> bool:
+async def migrate_group_chat_id(
+    old_chat_id: int,
+    new_chat_id: int,
+    *,
+    new_chat: types.Chat | None = None,
+    actor: types.User | None = None,
+) -> bool:
     """Re-key a group when Telegram migrates it to a supergroup (chat_id changes)."""
     if old_chat_id == new_chat_id:
         return False
     async with SessionLocal() as session:
+        if new_chat is not None and actor is not None:
+            await core_client.touch_group(session, new_chat, actor)
+            await session.flush()
         # The new chat identity must already be in core.chat (touched) so the
-        # repointed FKs hold; if not, skip -- the next message under the new id
-        # recreates the group fresh.
+        # repointed FKs hold. This is also handled above for Telegram migration
+        # updates, before any FK-bearing row is re-keyed.
         if (await session.execute(
             select(models.core_chat.c.chat_id).where(models.core_chat.c.chat_id == new_chat_id)
         )).first() is None:
@@ -553,31 +563,45 @@ async def save_message(message: types.Message, user_id: int) -> models.Message |
     source = media.extract_media_source(message)
 
     async with SessionLocal() as session:
-        try:
-            db_msg = models.Message(
-                message_id=message.message_id,
-                chat_id=message.chat.id,
-                user_id=user_id,
-                text=media.initial_message_text(message),
-                content_type=media.message_content_type(message),
-                caption=media.message_caption(message),
-                media_status="pending" if source else None,
-                reply_to_message_id=reply_to_message_id,
-                created_at=message_created_at,
-            )
-            session.add(db_msg)
-            if source:
-                await session.flush()
-                session.add(media.message_media_from_source(db_msg.id, source, status="pending"))
-            await session.commit()
-            await session.refresh(db_msg)
-            return db_msg
-        except IntegrityError:
-            await session.rollback()
-            return None
-        except Exception as e:
-            log.error(f"❌ Ошибка сохранения сообщения {message.message_id}: {e}")
-            return None
+        for attempt in range(3):
+            try:
+                db_msg = models.Message(
+                    message_id=message.message_id,
+                    chat_id=message.chat.id,
+                    user_id=user_id,
+                    text=media.initial_message_text(message),
+                    content_type=media.message_content_type(message),
+                    caption=media.message_caption(message),
+                    media_status="pending" if source else None,
+                    reply_to_message_id=reply_to_message_id,
+                    created_at=message_created_at,
+                )
+                session.add(db_msg)
+                if source:
+                    await session.flush()
+                    session.add(media.message_media_from_source(db_msg.id, source, status="pending"))
+                await session.commit()
+                await session.refresh(db_msg)
+                return db_msg
+            except IntegrityError:
+                await session.rollback()
+                return None
+            except Exception as exc:
+                await session.rollback()
+                if attempt < 2:
+                    delay = 0.5 * (2**attempt)
+                    log.warning(
+                        f"⚠️ Ошибка сохранения сообщения {message.message_id}, "
+                        f"повтор через {delay:g}s: {exc}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                log.error(f"❌ Сообщение {message.message_id} не сохранено после 3 попыток: {exc}")
+                await utils.notify_developers(
+                    f"Message save failed for chat {message.chat.id}, message {message.message_id}: {exc}",
+                    dedupe_key=f"message-save:{message.chat.id}:{message.message_id}",
+                )
+                raise
 
 
 async def update_message(message: types.Message) -> models.Message | None:
@@ -614,7 +638,7 @@ async def sync_reactions(chat_id: int, message_id: int, emoji_counts: dict[str, 
             select(models.Message).where(
                 models.Message.message_id == message_id,
                 models.Message.chat_id == chat_id,
-            )
+            ).with_for_update()
         )
         db_msg = result.scalars().first()
 
@@ -622,7 +646,7 @@ async def sync_reactions(chat_id: int, message_id: int, emoji_counts: dict[str, 
             return
 
         result = await session.execute(
-            select(models.Reaction).where(models.Reaction.message_db_id == db_msg.id)
+            select(models.Reaction).where(models.Reaction.message_db_id == db_msg.id).with_for_update()
         )
         existing = {reaction.emoji: reaction for reaction in result.scalars().all()}
 
@@ -658,7 +682,7 @@ async def apply_reaction_delta(chat_id: int, message_id: int, emoji_deltas: dict
             select(models.Message).where(
                 models.Message.message_id == message_id,
                 models.Message.chat_id == chat_id,
-            )
+            ).with_for_update()
         )
         db_msg = result.scalars().first()
 
@@ -666,7 +690,7 @@ async def apply_reaction_delta(chat_id: int, message_id: int, emoji_deltas: dict
             return
 
         result = await session.execute(
-            select(models.Reaction).where(models.Reaction.message_db_id == db_msg.id)
+            select(models.Reaction).where(models.Reaction.message_db_id == db_msg.id).with_for_update()
         )
         existing = {reaction.emoji: reaction for reaction in result.scalars().all()}
 
@@ -706,11 +730,12 @@ def _extract_emoji(reaction_type: types.ReactionType) -> str | None:
     return None
 
 
-async def get_quote_detail(quote_id: int) -> dict | None:
+async def get_quote_detail(quote_id: int, *, public_only: bool = False) -> dict | None:
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(models.Quote).where(models.Quote.id == quote_id)
-        )
+        statement = select(models.Quote).where(models.Quote.id == quote_id)
+        if public_only:
+            statement = statement.where(models.Quote.decision_status == STATUS_PUBLISHED)
+        result = await session.execute(statement)
         quote = result.scalars().first()
         if not quote:
             return None
@@ -739,7 +764,7 @@ async def get_quote_detail(quote_id: int) -> dict | None:
             "chat_id": quote.group_id,
             "decision_status": quote.decision_status,
             "decision_reason": quote.decision_reason,
-            "operation_error": quote.operation_error,
+            "operation_error": None if public_only else quote.operation_error,
             "quote_day": quote.quote_day,
         }
 

@@ -9,6 +9,8 @@ os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
 
 from app import scheduler, scoring
+from aiogram.exceptions import TelegramNetworkError
+
 from app.quote_status import (
     STATUS_BORING_NOTICE_FAILED,
     STATUS_BORING_NOTICE_UNKNOWN,
@@ -213,6 +215,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             patch.object(scheduler, "SessionLocal", return_value=_GroupsSession(groups)),
             patch.object(scheduler, "utc_now", return_value=now),
             patch.object(scheduler, "_process_group", new=AsyncMock(side_effect=proc)) as process_group,
+            patch.object(scheduler.utils, "notify_developers", new=AsyncMock()),
         ):
             await scheduler.quote_of_the_day_job(SimpleNamespace())
 
@@ -712,6 +715,43 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
         )
         mark_status.assert_not_awaited()
         append_error.assert_any_await(quote.id, "Media copy failed, text fallback used: copy failed")
+
+    async def test_publish_quote_message_does_not_fallback_on_unknown_media_delivery(self) -> None:
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=205)),
+            copy_message=AsyncMock(
+                side_effect=TelegramNetworkError(SimpleNamespace(), "network down")
+            ),
+            pin_chat_message=AsyncMock(),
+        )
+        quote = SimpleNamespace(
+            id=12,
+            quote_day=self.window.quote_day,
+            text="photo: неизвестный исход",
+            message_id=59,
+            content_type="photo",
+            decision_reason=None,
+        )
+        breakdown = scoring.ScoreBreakdown(reaction=0.2, ai=0.7, length=0.1, reaction_count=1)
+
+        with (
+            patch.object(scheduler.core, "update_quote_publication", new=AsyncMock()) as update_publication,
+            patch.object(scheduler.core, "mark_quote_status", new=AsyncMock()) as mark_status,
+        ):
+            result = await scheduler._publish_quote_message(
+                bot=bot,
+                group=self.group,
+                quote=quote,
+                author_name="Alice",
+                breakdown=breakdown,
+                clear_window_after=False,
+            )
+
+        self.assertFalse(result)
+        bot.send_message.assert_not_awaited()
+        update_publication.assert_not_awaited()
+        mark_status.assert_awaited_once()
+        self.assertEqual(mark_status.await_args.kwargs["decision_status"], STATUS_PUBLISH_UNKNOWN)
 
     async def test_publish_quote_message_renders_context_dialog(self) -> None:
         bot = SimpleNamespace(

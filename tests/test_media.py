@@ -187,6 +187,7 @@ class MediaPendingTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(media, "_load_pending_media_items", new=AsyncMock(return_value=[item])),
+            patch.object(media, "_claim_media_item", new=AsyncMock(return_value=True)),
             patch.object(media, "_process_media_source", new=AsyncMock()) as process_media_source,
             patch.object(media, "_mark_orphan_pending_messages_failed", new=AsyncMock(return_value=0)),
         ):
@@ -218,6 +219,7 @@ class MediaPendingTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(media, "_load_pending_media_items", new=AsyncMock(return_value=[item])),
+            patch.object(media, "_claim_media_item", new=AsyncMock(return_value=True)),
             patch.object(media, "_process_media_source", new=_hang),
             patch.object(media, "_schedule_media_retry", new=AsyncMock(return_value=True)) as schedule_retry,
             patch.object(media, "_mark_orphan_pending_messages_failed", new=AsyncMock(return_value=0)),
@@ -227,6 +229,19 @@ class MediaPendingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(processed, 1)
         schedule_retry.assert_awaited_once()
+
+    async def test_process_media_source_skips_external_ai_when_group_disabled(self) -> None:
+        source = media.MediaSource(kind="photo", file_id="file", supports_analysis=True)
+        with (
+            patch.object(media, "_group_media_analysis_enabled", new=AsyncMock(return_value=False)),
+            patch.object(media, "_store_media_result", new=AsyncMock()) as store,
+            patch.object(media.ai, "describe_media_file", new=AsyncMock()) as describe,
+        ):
+            await media._process_media_source(SimpleNamespace(), db_message_id=55, source=source)
+
+        describe.assert_not_awaited()
+        store.assert_awaited_once()
+        self.assertEqual(store.await_args.kwargs["status"], "disabled")
 
     async def test_transient_media_failure_is_scheduled_with_backoff(self) -> None:
         source = media.MediaSource(kind="photo", file_id="file", supports_analysis=True)

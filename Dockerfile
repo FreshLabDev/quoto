@@ -1,5 +1,14 @@
 FROM python:3.12-slim-bookworm
 
+ARG QUOTO_VERSION=0.10.2
+ARG QUOTO_REVISION=unknown
+
+LABEL org.opencontainers.image.title="Quoto" \
+      org.opencontainers.image.version="${QUOTO_VERSION}" \
+      org.opencontainers.image.revision="${QUOTO_REVISION}"
+
+ENV QUOTO_VERSION=${QUOTO_VERSION}
+
 WORKDIR /app
 
 RUN apt-get update \

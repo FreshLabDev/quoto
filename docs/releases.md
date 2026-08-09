@@ -35,7 +35,7 @@ Development happens on `dev`; releases are published from `main`
    a fresh empty `## Unreleased` above it:
 
    ```text
-   ## v0.9.0 - 2026-07-03
+   ## v0.10.2 - 2026-08-09
    ```
 
 5. Merge `dev` into `main`: `git checkout main && git merge --no-ff dev`.
@@ -98,11 +98,11 @@ gh release create v0.10.0-rc.1 \
 Create a stable release:
 
 ```sh
-git tag -a v0.10.0 -m "v0.10.0"
+git tag -a v0.10.2 -m "v0.10.2"
 git push origin main
-git push origin v0.10.0
-gh release create v0.10.0 \
-  --title "Quoto v0.10.0" \
+git push origin v0.10.2
+gh release create v0.10.2 \
+  --title "Quoto v0.10.2" \
   --notes-file /tmp/quoto-release-notes.md
 ```
 

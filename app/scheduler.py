@@ -8,10 +8,10 @@ from html import escape
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError, TelegramRetryAfter, TelegramServerError
 from sqlalchemy import select
 
-from . import agreement, core, i18n, media, scoring
+from . import agreement, core, i18n, media, scoring, utils
 from .config import settings, setup_logging
 from .db import SessionLocal
 # GroupSettings is the group's persistent row (natural chat_id PK); identity and
@@ -64,6 +64,10 @@ async def _send_with_retry(method, *, attempts: int = 3, **kwargs):
             raise
 
 
+def _delivery_outcome_unknown(exc: BaseException) -> bool:
+    return isinstance(exc, (asyncio.TimeoutError, TelegramNetworkError, TelegramServerError))
+
+
 async def quote_of_the_day_job(bot: Bot) -> None:
     now = utc_now()
     async with SessionLocal() as session:
@@ -103,6 +107,10 @@ async def quote_of_the_day_job(bot: Bot) -> None:
                 await _process_group(bot, group, window)
             except Exception as e:
                 log.error(f"❌ Ошибка при обработке группы {group.chat_id}: {e}")
+                await utils.notify_developers(
+                    f"Scheduler group run failed for chat {group.chat_id}: {e}",
+                    dedupe_key=f"scheduler:{group.chat_id}:{window.quote_day}",
+                )
 
     await asyncio.gather(*(_run(group, window) for group, window in due))
 
@@ -171,13 +179,13 @@ async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, languag
     """Once per quote day, nudge the group to accept the user agreement."""
     if _agreement_reminded.get(group.chat_id) == window.quote_day:
         return
-    _agreement_reminded[group.chat_id] = window.quote_day
     try:
         await bot.send_message(
             group.chat_id,
             i18n.t(language, "agreement.reminder"),
             reply_markup=agreement.build_welcome_keyboard(language),
         )
+        _agreement_reminded[group.chat_id] = window.quote_day
         log.info(f"{group.chat_id} | 📄 Отправлено напоминание о пользовательском соглашении")
     except TelegramBadRequest as exc:
         if "chat not found" in str(exc).lower():
@@ -479,7 +487,7 @@ async def _publish_quote_message(
     info_line = " · ".join(info_parts)
 
     msg_link = _message_link(group.chat_id, quote.message_id)
-    details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
+    details_link = f"https://t.me/{settings.BOT_USERNAME}?start={utils.quote_start_payload(quote.id)}"
     text = _build_quote_post_text(
         language=language,
         quote=quote,
@@ -510,6 +518,16 @@ async def _publish_quote_message(
                     ),
                 )
             except Exception as exc:
+                if _delivery_outcome_unknown(exc):
+                    await core.mark_quote_status(
+                        quote_id=quote.id,
+                        decision_status=STATUS_PUBLISH_UNKNOWN,
+                        operation_error=f"Telegram media delivery outcome unknown: {str(exc)[:200]}",
+                    )
+                    log.error(
+                        f"❌ Неизвестен результат отправки медиа цитаты в {group.chat_id}: {exc}"
+                    )
+                    return False
                 media_copy_error = str(exc)[:200]
                 log.warning(f"⚠️ Не удалось скопировать медиа цитаты в {group.chat_id}: {exc}")
                 sent = await _send_with_retry(bot.send_message, chat_id=group.chat_id, text=text)
@@ -518,7 +536,9 @@ async def _publish_quote_message(
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,
-            decision_status=STATUS_PUBLISH_FAILED,
+            decision_status=(
+                STATUS_PUBLISH_UNKNOWN if _delivery_outcome_unknown(e) else STATUS_PUBLISH_FAILED
+            ),
             operation_error=str(e)[:250],
         )
         log.error(f"❌ Ошибка при отправке цитаты в {group.chat_id}: {e}")
@@ -575,7 +595,7 @@ async def _send_boring_notice(
     clear_window_after: bool,
 ) -> bool:
     language = i18n.group_language(group)
-    details_link = f"https://t.me/{settings.BOT_USERNAME}?start=quote_{quote.id}"
+    details_link = f"https://t.me/{settings.BOT_USERNAME}?start={utils.quote_start_payload(quote.id)}"
     reason_block = (
         f"\n\n<blockquote><i>{escape(quote.decision_reason)}</i></blockquote>"
         if quote.decision_reason
@@ -589,11 +609,15 @@ async def _send_boring_notice(
     )
 
     try:
-        sent = await bot.send_message(chat_id=group.chat_id, text=text)
+        sent = await _send_with_retry(bot.send_message, chat_id=group.chat_id, text=text)
     except Exception as e:
         await core.mark_quote_status(
             quote_id=quote.id,
-            decision_status=STATUS_BORING_NOTICE_FAILED,
+            decision_status=(
+                STATUS_BORING_NOTICE_UNKNOWN
+                if _delivery_outcome_unknown(e)
+                else STATUS_BORING_NOTICE_FAILED
+            ),
             operation_error=str(e)[:250],
         )
         log.error(f"❌ Ошибка при отправке boring-day уведомления в {group.chat_id}: {e}")

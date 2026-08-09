@@ -9,7 +9,7 @@ from aiogram import Bot, F, Router, types
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 
-from . import agreement, core, i18n, media, menu, scoring
+from . import agreement, core, i18n, media, menu, scoring, utils
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
@@ -436,29 +436,53 @@ async def _catch_up_after_accept(bot: Bot, group) -> None:
         await scheduler._process_group(bot, group, window)
     except Exception as exc:
         log.error(f"{getattr(group, 'chat_id', '?')} | catch-up after accept failed: {exc}")
+        await utils.notify_developers(
+            f"Catch-up after agreement failed for chat {getattr(group, 'chat_id', '?')}: {exc}",
+            dedupe_key=f"catch-up:{getattr(group, 'chat_id', '?')}",
+        )
+
+
+async def _can_view_legacy_quote(bot: Bot | None, detail: dict, user_id: int | None) -> bool:
+    if bot is None or not detail.get("chat_id") or not user_id:
+        return False
+    try:
+        member = await bot.get_chat_member(chat_id=detail["chat_id"], user_id=user_id)
+    except TelegramAPIError:
+        return False
+    status = getattr(member, "status", None)
+    if status in {"creator", "administrator", "member"}:
+        return True
+    return status == "restricted" and bool(getattr(member, "is_member", False))
 
 
 @router.message(or_f(and_f(F.chat.type == "private", CommandStart()), F.chat.type == "private"))
-async def private_handler(message: types.Message, command: CommandObject = None):
+async def private_handler(
+    message: types.Message,
+    command: CommandObject = None,
+    bot: Bot | None = None,
+):
     await core.user_getOrCreate(message.from_user)
     language, _ = await _private_language_state(message)
 
     if command and command.args:
         args = command.args
-        args_list = args.split("_")
-
         if args.lower() == "settings":
             await _send_start_menu(message)
             return
 
         if args.startswith("quote_"):
-            try:
-                quote_id = int(args_list[1])
-            except (IndexError, ValueError):
+            quote_id = utils.parse_quote_start_payload(args)
+            legacy = utils.parse_legacy_quote_start_payload(args) if quote_id is None else None
+            if quote_id is None and legacy is None:
                 await message.answer(i18n.t(language, "private.invalid_quote_link"))
                 return
+            quote_id = quote_id if quote_id is not None else legacy
 
-            detail = await core.get_quote_detail(quote_id)
+            detail = await core.get_quote_detail(quote_id, public_only=True)
+            if legacy is not None and detail and not await _can_view_legacy_quote(
+                bot, detail, getattr(message.from_user, "id", None)
+            ):
+                detail = None
             if not detail:
                 await message.answer(i18n.t(language, "private.quote_not_found"))
                 return
@@ -756,10 +780,23 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
 
 
 @router.message(F.migrate_to_chat_id)
-async def chat_migrated_handler(message: types.Message):
+async def chat_migrated_handler(message: types.Message, bot: Bot):
     new_chat_id = message.migrate_to_chat_id
     if new_chat_id is not None:
-        await core.migrate_group_chat_id(message.chat.id, new_chat_id)
+        try:
+            new_chat = await bot.get_chat(new_chat_id)
+            await core.migrate_group_chat_id(
+                message.chat.id,
+                new_chat_id,
+                new_chat=new_chat,
+                actor=message.from_user,
+            )
+        except Exception as exc:
+            log.error(f"❌ Не удалось мигрировать группу {message.chat.id} -> {new_chat_id}: {exc}")
+            await utils.notify_developers(
+                f"Chat migration failed: {message.chat.id} -> {new_chat_id}: {exc}",
+                dedupe_key=f"chat-migration:{message.chat.id}:{new_chat_id}",
+            )
 
 
 @router.message(F.chat.type.in_({"group", "supergroup"}))

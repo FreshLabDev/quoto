@@ -5,6 +5,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from app import config, utils, db, handlers, scheduler
+from app.version import VERSION
 
 bot = Bot(
     token=config.settings.BOT_TOKEN,
@@ -27,6 +28,7 @@ async def on_update_error(event: types.ErrorEvent) -> bool:
 
 async def main():
     config.validate_runtime()
+    log.info(f"📦 Версия Quoto: {VERSION}")
 
     dp = Dispatcher()
     dp.include_router(handlers.router)

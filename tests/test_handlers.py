@@ -9,7 +9,7 @@ os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
 
 from app import handlers
-from app.quote_status import STATUS_PUBLISH_FAILED
+from app.quote_status import STATUS_PUBLISHED, STATUS_PUBLISH_FAILED
 
 
 class DummyResponse:
@@ -72,7 +72,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "ai_best_text": None,
             "message_id": 10,
             "chat_id": -100123456,
-            "decision_status": STATUS_PUBLISH_FAILED,
+            "decision_status": STATUS_PUBLISHED,
             "decision_reason": "LLM rejected <auto> publication",
             "operation_error": "Telegram timeout & retry",
             "quote_day": None,
@@ -83,7 +83,10 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
             patch.object(handlers.core, "get_quote_detail", new=AsyncMock(return_value=detail)),
         ):
-            await handlers.private_handler(message, SimpleNamespace(args="quote_7"))
+            await handlers.private_handler(
+                message,
+                SimpleNamespace(args=handlers.utils.quote_start_payload(7)),
+            )
 
         self.assertIn("Причина решения", message.answers[0])
         self.assertIn("LLM rejected &lt;auto&gt; publication", message.answers[0])
@@ -110,7 +113,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "ai_best_text": None,
             "message_id": 10,
             "chat_id": -100123456,
-            "decision_status": STATUS_PUBLISH_FAILED,
+            "decision_status": STATUS_PUBLISHED,
             "decision_reason": "LLM rejected",
             "operation_error": None,
             "quote_day": None,
@@ -121,7 +124,10 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
             patch.object(handlers.core, "get_quote_detail", new=AsyncMock(return_value=detail)),
         ):
-            await handlers.private_handler(message, SimpleNamespace(args="quote_7"))
+            await handlers.private_handler(
+                message,
+                SimpleNamespace(args=handlers.utils.quote_start_payload(7)),
+            )
 
         self.assertIn("Decision reason", message.answers[0])
         self.assertNotIn("Причина решения", message.answers[0])
@@ -430,7 +436,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             "ai_best_text": None,
             "message_id": 10,
             "chat_id": -100123456,
-            "decision_status": STATUS_PUBLISH_FAILED,
+            "decision_status": STATUS_PUBLISHED,
             "decision_reason": None,
             "operation_error": None,
             "quote_day": None,
@@ -444,7 +450,10 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
             patch.object(handlers.core, "get_quote_detail", new=AsyncMock(return_value=detail)),
         ):
-            await handlers.private_handler(message, SimpleNamespace(args="quote_8"))
+            await handlers.private_handler(
+                message,
+                SimpleNamespace(args=handlers.utils.quote_start_payload(8)),
+            )
 
         self.assertIn("<b>Alice &lt;A&gt;:</b> setup &amp; context", message.answers[0])
         self.assertIn("<b>Bob:</b> <i>«punch &lt;line&gt;»</i>", message.answers[0])
@@ -638,7 +647,10 @@ class CatchUpAfterAcceptTests(unittest.IsolatedAsyncioTestCase):
         from app import scheduler
 
         group = SimpleNamespace(chat_id=-100, timezone="Europe/Kyiv")
-        with patch.object(scheduler, "_process_group", new=AsyncMock(side_effect=RuntimeError("boom"))):
+        with (
+            patch.object(scheduler, "_process_group", new=AsyncMock(side_effect=RuntimeError("boom"))),
+            patch.object(handlers.utils, "notify_developers", new=AsyncMock()),
+        ):
             # must not raise
             await handlers._catch_up_after_accept(SimpleNamespace(), group)
 

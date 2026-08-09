@@ -1,6 +1,7 @@
 import logging
 import os
 from zoneinfo import ZoneInfo
+from logging.handlers import RotatingFileHandler
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -204,8 +205,10 @@ def setup_logging(logger):
     )
     
     # Обработчик для файла
-    file_handler = logging.FileHandler(
-        path + f"{logger.name}.log", 
+    file_handler = RotatingFileHandler(
+        os.path.join(path, f"{logger.name}.log"),
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
         encoding='utf-8'
     )
     file_handler.setFormatter(file_formatter)

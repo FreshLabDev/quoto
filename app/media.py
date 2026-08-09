@@ -14,7 +14,7 @@ from typing import Any
 
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from . import ai, models
@@ -217,7 +217,7 @@ async def process_message_media(bot: Bot, message: types.Message, db_message: mo
         return
 
     await _ensure_message_media_item(db_message.id, source)
-    await _process_media_source(bot, db_message_id=db_message.id, source=source)
+    await _process_media_source(bot, db_message_id=db_message.id, source=source, claim=True)
 
 
 async def process_pending_media(bot: Bot, *, limit: int = 10) -> int:
@@ -226,6 +226,11 @@ async def process_pending_media(bot: Bot, *, limit: int = 10) -> int:
 
     for item in pending_items:
         source = _source_from_media_item(item)
+        if not await _claim_media_item(
+            db_message_id=item.message_db_id,
+            media_item_id=getattr(item, "id", None),
+        ):
+            continue
         try:
             await asyncio.wait_for(
                 _process_media_source(bot, db_message_id=item.message_db_id, source=source),
@@ -249,7 +254,25 @@ async def process_pending_media(bot: Bot, *, limit: int = 10) -> int:
     return processed
 
 
-async def _process_media_source(bot: Bot, *, db_message_id: int, source: MediaSource) -> None:
+async def _process_media_source(
+    bot: Bot,
+    *,
+    db_message_id: int,
+    source: MediaSource,
+    claim: bool = False,
+) -> None:
+    if claim and not await _claim_media_item(db_message_id=db_message_id):
+        return
+
+    if not await _group_media_analysis_enabled(db_message_id):
+        await _store_media_result(
+            db_message_id=db_message_id,
+            source=source,
+            status="disabled",
+            description=_metadata_description(source),
+        )
+        return
+
     if not settings.MEDIA_ANALYSIS_ENABLED or not source.supports_analysis:
         description = _metadata_description(source)
         await _store_media_result(
@@ -288,6 +311,16 @@ async def _process_media_source(bot: Bot, *, db_message_id: int, source: MediaSo
                 )
                 return
 
+            # The setting can change while a file is being downloaded. Recheck
+            # immediately before the external AI call to honor a disable race.
+            if not await _group_media_analysis_enabled(db_message_id):
+                await _store_media_result(
+                    db_message_id=db_message_id,
+                    source=source,
+                    status="disabled",
+                    description=_metadata_description(source),
+                )
+                return
             description_result = await ai.describe_media_file(
                 path=normalized.path,
                 mime_type=normalized.mime_type,
@@ -342,20 +375,87 @@ async def _ensure_message_media_item(db_message_id: int, source: MediaSource) ->
         await session.commit()
 
 
+async def _group_media_analysis_enabled(db_message_id: int) -> bool:
+    async with SessionLocal() as session:
+        try:
+            result = await session.execute(
+                select(models.GroupSettings.media_analysis_enabled)
+                .join(models.Message, models.GroupSettings.chat_id == models.Message.chat_id)
+                .where(models.Message.id == db_message_id)
+            )
+            value = result.scalar_one_or_none()
+            return True if value is None else bool(value)
+        except Exception as exc:
+            log.error(f"Cannot verify media setting for db message {db_message_id}: {exc}")
+            return False
+
+
+async def _claim_media_item(
+    *,
+    db_message_id: int,
+    media_item_id: int | None = None,
+) -> bool:
+    """Take a short lease so handler and recovery jobs cannot analyze twice."""
+    now = datetime.now(timezone.utc)
+    lease_until = now + timedelta(seconds=settings.MEDIA_PENDING_ITEM_TIMEOUT_SECONDS)
+    async with SessionLocal() as session:
+        try:
+            statement = update(models.MessageMedia).where(
+                models.MessageMedia.message_db_id == db_message_id,
+                or_(
+                    and_(
+                        models.MessageMedia.analysis_status == "pending",
+                        or_(
+                            models.MessageMedia.next_retry_at.is_(None),
+                            models.MessageMedia.next_retry_at <= now,
+                        ),
+                    ),
+                    and_(
+                        models.MessageMedia.analysis_status == "processing",
+                        or_(
+                            models.MessageMedia.next_retry_at.is_(None),
+                            models.MessageMedia.next_retry_at <= now,
+                        ),
+                    ),
+                ),
+            )
+            if media_item_id is not None:
+                statement = statement.where(models.MessageMedia.id == media_item_id)
+            result = await session.execute(
+                statement.values(analysis_status="processing", next_retry_at=lease_until)
+            )
+            await session.commit()
+            return bool(getattr(result, "rowcount", 0))
+        except Exception:
+            await session.rollback()
+            return False
+
+
 async def _load_pending_media_items(*, limit: int) -> list[models.MessageMedia]:
     cutoff = _pending_retry_cutoff()
     now = datetime.now(timezone.utc)
     async with SessionLocal() as session:
         result = await session.execute(
             select(models.MessageMedia)
-            .where(models.MessageMedia.analysis_status == "pending")
             .where(
                 or_(
                     and_(
-                        models.MessageMedia.next_retry_at.is_(None),
-                        models.MessageMedia.created_at <= cutoff,
+                        models.MessageMedia.analysis_status == "pending",
+                        or_(
+                            and_(
+                                models.MessageMedia.next_retry_at.is_(None),
+                                models.MessageMedia.created_at <= cutoff,
+                            ),
+                            models.MessageMedia.next_retry_at <= now,
+                        ),
                     ),
-                    models.MessageMedia.next_retry_at <= now,
+                    and_(
+                        models.MessageMedia.analysis_status == "processing",
+                        or_(
+                            models.MessageMedia.next_retry_at.is_(None),
+                            models.MessageMedia.next_retry_at <= now,
+                        ),
+                    ),
                 )
             )
             .order_by(
