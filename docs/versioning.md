@@ -22,10 +22,10 @@ tags the version on `main`. See [`releases.md`](releases.md).
 Quoto is still before `v1.0.0`. The line moves through these versions:
 
 ```text
-v0.9.0     current pre-1.0 release: SemVer and this changelog adopted, running on
-           the shared core Postgres
-v0.9.x     bug fixes without new behavior
-v0.10.0    notable UX, operations, or compatible feature improvements
+v0.10.2    current patch release: runtime reliability, privacy-safe deep links,
+           and idempotent Telegram delivery
+v0.10.1    previous release: evaluation model defaults
+v0.10.0    shared-core migration and operational hardening
 v1.0.0     stable production contract after real production usage
 ```
 

@@ -6,6 +6,27 @@ Quoto uses SemVer-style versions with pre-release tags before `v1.0.0`. Release
 notes should be copied from the relevant changelog section and lightly edited for
 GitHub Releases.
 
+## v0.10.2 - 2026-08-09
+
+### Fixed
+- Sign quote deep links and expose only published quote details. Legacy links are
+  accepted only after Telegram membership verification.
+- Respect per-group media-analysis settings during both immediate processing and
+  pending recovery, with a database lease preventing duplicate AI work.
+- Retry transient message-save failures and alert after the final attempt instead
+  of silently dropping updates.
+- Make Telegram delivery failures with an unknown outcome terminal, preventing a
+  timeout from causing a duplicate publication or fallback message.
+- Complete Telegram group migration by touching the new chat identity before
+  re-keying Quoto history and settings.
+- Retry agreement reminders after failed delivery, serialize reaction updates,
+  redact database URL passwords in alerts, and rotate regular log files.
+
+### Operations
+- Runtime logs now include the `0.10.2` application version.
+- AI audit retention is intentionally unchanged and remains available for debug
+  and quality verification.
+
 ## Unreleased
 
 Use this section for changes that are merged but not released yet.

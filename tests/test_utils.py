@@ -45,3 +45,23 @@ class NotifyDevelopersTests(unittest.IsolatedAsyncioTestCase):
             await utils.notify_developers("anything")
 
         send.assert_not_awaited()
+
+    def test_quote_payload_is_signed_and_tamper_resistant(self) -> None:
+        payload = utils.quote_start_payload(42)
+        self.assertEqual(utils.parse_quote_start_payload(payload), 42)
+        self.assertIsNone(utils.parse_quote_start_payload(payload.replace("42", "43", 1)))
+        self.assertEqual(utils.parse_legacy_quote_start_payload("quote_42"), 42)
+
+    async def test_scrubs_database_url_password(self) -> None:
+        with (
+            patch.object(utils.settings, "ENABLE_DEVELOPERS_NOTIFY", True),
+            patch.object(utils.settings, "DEVELOPER_IDS", [1]),
+            patch.object(utils.bot, "send_message", new=AsyncMock()) as send,
+        ):
+            await utils.notify_developers(
+                "db=postgresql+asyncpg://quoto:password123@core-postgres:5432/core"
+            )
+
+        sent_text = send.await_args.args[1]
+        self.assertNotIn("password123", sent_text)
+        self.assertIn("***", sent_text)
