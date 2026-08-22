@@ -99,6 +99,12 @@ OPENROUTER_EVAL_FALLBACK_MODEL=poolside/laguna-s-2.1
 OPENROUTER_EVAL_REASONING_EFFORT=medium
 OPENROUTER_EVAL_MAX_TOKENS=32000
 OPENROUTER_MEDIA_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+# Отдельные основные медиа-модели по типу контента. Пусто = использовать
+# OPENROUTER_MEDIA_MODEL. Цепочка: своя модель -> общая -> фолбэк ниже.
+OPENROUTER_MEDIA_IMAGE_MODEL=
+OPENROUTER_MEDIA_VIDEO_MODEL=
+OPENROUTER_MEDIA_AUDIO_MODEL=
+# Используется, только если основная медиа-модель ошибается после всех повторов.
 OPENROUTER_MEDIA_FALLBACK_MODEL=google/gemini-2.5-flash-lite
 OPENROUTER_MEDIA_REASONING_EFFORT=medium
 OPENROUTER_HTTP_REFERER=https://t.me/quototbot

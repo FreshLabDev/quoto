@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # Used only if the primary eval model errors out after retries.
     OPENROUTER_EVAL_FALLBACK_MODEL: str = "poolside/laguna-s-2.1"
     OPENROUTER_MEDIA_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    # Per-kind primary media models. Empty value means "use OPENROUTER_MEDIA_MODEL".
+    # Chain per kind: specific model (if set) -> OPENROUTER_MEDIA_MODEL ->
+    # OPENROUTER_MEDIA_FALLBACK_MODEL.
+    OPENROUTER_MEDIA_IMAGE_MODEL: str = ""
+    OPENROUTER_MEDIA_VIDEO_MODEL: str = ""
+    OPENROUTER_MEDIA_AUDIO_MODEL: str = ""
     # Used only if the primary media model errors out after retries.
     OPENROUTER_MEDIA_FALLBACK_MODEL: str = "google/gemini-2.5-flash-lite"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"

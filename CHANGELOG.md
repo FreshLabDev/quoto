@@ -6,6 +6,21 @@ Quoto uses SemVer-style versions with pre-release tags before `v1.0.0`. Release
 notes should be copied from the relevant changelog section and lightly edited for
 GitHub Releases.
 
+## Unreleased
+
+Use this section for changes that are merged but not released yet.
+
+## v0.10.3 - 2026-08-22
+
+### Added
+- Per-kind media models: `OPENROUTER_MEDIA_IMAGE_MODEL`, `OPENROUTER_MEDIA_VIDEO_MODEL`,
+  and `OPENROUTER_MEDIA_AUDIO_MODEL` select dedicated primary models for image,
+  video, and audio analysis. Chain per kind: specific model (if set) ->
+  `OPENROUTER_MEDIA_MODEL` -> `OPENROUTER_MEDIA_FALLBACK_MODEL`. An empty value
+  keeps previous behavior (common model first).
+- Dev tool `scripts/try_media_model.py`: test any OpenRouter model against a
+  local media file through the production normalization pipeline.
+
 ## v0.10.2 - 2026-08-09
 
 ### Fixed

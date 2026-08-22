@@ -835,6 +835,24 @@ async def _post_media_request(body: dict[str, Any], headers: dict[str, str]) -> 
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+def _media_model_candidates(media_kind: str) -> list[str]:
+    if media_kind in {"voice", "audio"}:
+        specific = settings.OPENROUTER_MEDIA_AUDIO_MODEL
+    elif media_kind in {"video", "animation", "video_note"}:
+        specific = settings.OPENROUTER_MEDIA_VIDEO_MODEL
+    else:
+        specific = settings.OPENROUTER_MEDIA_IMAGE_MODEL
+    models: list[str] = []
+    candidates = ([specific] if specific else []) + _model_candidates(
+        settings.OPENROUTER_MEDIA_MODEL,
+        settings.OPENROUTER_MEDIA_FALLBACK_MODEL,
+    )
+    for candidate in candidates:
+        if candidate not in models:
+            models.append(candidate)
+    return models
+
+
 async def describe_media_file(
     *,
     path: Path,
@@ -855,7 +873,7 @@ async def describe_media_file(
         media_kind=media_kind,
     )
     headers = _openrouter_headers()
-    models = _model_candidates(settings.OPENROUTER_MEDIA_MODEL, settings.OPENROUTER_MEDIA_FALLBACK_MODEL)
+    models = _media_model_candidates(media_kind)
     attempt_errors: list[tuple[str, Exception]] = []
 
     for model_index, model in enumerate(models):

@@ -494,6 +494,14 @@ class AIMediaPayloadTests(unittest.TestCase):
 class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         ai._media_breaker_reset()
+        for name in (
+            "OPENROUTER_MEDIA_IMAGE_MODEL",
+            "OPENROUTER_MEDIA_VIDEO_MODEL",
+            "OPENROUTER_MEDIA_AUDIO_MODEL",
+        ):
+            patcher = patch.object(ai.settings, name, "")
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def tearDown(self) -> None:
         ai._media_breaker_reset()
@@ -666,6 +674,100 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(primary_attempts, 3)
         self.assertEqual(result.description, "запасное описание")
         self.assertEqual(result.actual_model, "google/gemini-2.5-flash-lite")
+
+    def test_media_model_candidates_build_per_kind_chain(self) -> None:
+        with (
+            patch.object(ai.settings, "OPENROUTER_MEDIA_IMAGE_MODEL", "image/model"),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_VIDEO_MODEL", ""),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_AUDIO_MODEL", "audio/model"),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "common/model"),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", "common/fallback"),
+        ):
+            self.assertEqual(
+                ai._media_model_candidates("photo"),
+                ["image/model", "common/model", "common/fallback"],
+            )
+            self.assertEqual(
+                ai._media_model_candidates("sticker"),
+                ["image/model", "common/model", "common/fallback"],
+            )
+            self.assertEqual(
+                ai._media_model_candidates("video_note"),
+                ["common/model", "common/fallback"],
+            )
+            self.assertEqual(
+                ai._media_model_candidates("voice"),
+                ["audio/model", "common/model", "common/fallback"],
+            )
+
+    def test_media_model_candidates_deduplicate_common_models(self) -> None:
+        with (
+            patch.object(ai.settings, "OPENROUTER_MEDIA_IMAGE_MODEL", "common/model"),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_VIDEO_MODEL", ""),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_AUDIO_MODEL", ""),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "common/model"),
+            patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", ""),
+        ):
+            self.assertEqual(ai._media_model_candidates("photo"), ["common/model"])
+            self.assertEqual(ai._media_model_candidates("video"), ["common/model"])
+
+    async def test_describe_media_file_uses_kind_model_and_falls_back_to_common(self) -> None:
+        image_model_attempts = 0
+
+        class FakeResponse:
+            status_code = 200
+            text = json.dumps(
+                {
+                    "model": "common/model",
+                    "choices": [{"message": {"content": "описание от общей модели"}}],
+                    "usage": {},
+                }
+            )
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return json.loads(self.text)
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal image_model_attempts
+                if kwargs["json"]["model"] == "primary/image-model":
+                    image_model_attempts += 1
+                    raise ai.httpx.ReadTimeout("image model unavailable")
+                return FakeResponse()
+
+        sleep = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            image_path = Path(tempdir) / "image.jpg"
+            image_path.write_bytes(b"image")
+            with (
+                patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_IMAGE_MODEL", "primary/image-model"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_MODEL", "common/model"),
+                patch.object(ai.settings, "OPENROUTER_MEDIA_FALLBACK_MODEL", "common/fallback"),
+                patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+                patch.object(ai.asyncio, "sleep", new=sleep),
+            ):
+                result = await ai.describe_media_file(
+                    path=image_path,
+                    mime_type="image/jpeg",
+                    media_kind="photo",
+                )
+
+        # 3 retries against the kind-specific model before falling back to the
+        # common multimodal model; the final fallback must stay untouched.
+        self.assertEqual(image_model_attempts, 3)
+        self.assertEqual(result.description, "описание от общей модели")
+        self.assertEqual(result.actual_model, "common/model")
 
     async def test_describe_media_file_raises_when_no_fallback_configured(self) -> None:
         class FakeClient:
