@@ -22,13 +22,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Require the tag commit on main
-        # docs/versioning.md: every release is published from main. A tag on a
-        # branch that was never merged would publish an image nobody reviewed.
+      - name: Require the tag on the branch its channel is published from
+        # docs/versioning.md: pre-releases are tagged on dev, stable releases on
+        # main. A stable tag that never went through main would publish
+        # something the production branch has not seen.
         run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
-            echo "tag ${GITHUB_REF_NAME} is not an ancestor of origin/main"
+          if printf '%s' "${GITHUB_REF_NAME}" | grep -Eq -- '-(alpha|beta|rc)\.'; then
+            branch=dev
+          else
+            branch=main
+          fi
+          git fetch --no-tags origin "${branch}:refs/remotes/origin/${branch}"
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/${branch}"; then
+            echo "tag ${GITHUB_REF_NAME} is not an ancestor of origin/${branch}"
             exit 1
           fi
 
@@ -87,8 +93,11 @@ jobs:
             capture && /^## / { exit }
             capture { print }
           ' CHANGELOG.md >"${notes_file}"
+          # The verify job already refused a tag with no section, so an empty
+          # file here means the awk above stopped matching, not a missing entry.
           if [ ! -s "${notes_file}" ]; then
-            printf 'Release %s\n' "${version}" >"${notes_file}"
+            echo "changelog section for ${version} extracted empty"
+            exit 1
           fi
           echo "file=${notes_file}" >>"$GITHUB_OUTPUT"
 
