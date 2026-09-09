@@ -6,7 +6,10 @@ from typing import Any
 
 
 DEFAULT_LANGUAGE = "en"
-SUPPORTED_LANGUAGES = ("ru", "uk", "en", "de")
+SUPPORTED_LANGUAGES = (
+    "ru", "uk", "en", "de", "es", "fr", "it", "pl",
+    "cs", "tr", "sv", "be", "ca", "zh", "ja", "ar",
+)
 LANGUAGE_SOURCE_AUTO = "auto"
 LANGUAGE_SOURCE_MANUAL = "manual"
 

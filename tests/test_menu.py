@@ -233,19 +233,33 @@ class LanguageGridTests(unittest.TestCase):
         self.assertEqual(i18n.LANGUAGE_LABELS["uk"], "🇺🇦 Українська")
 
     def test_quoto_shows_the_languages_it_has_in_that_order(self) -> None:
-        self.assertEqual(i18n.language_options(), ("en", "ru", "uk", "de"))
+        # Quoto has a locale for every language the family speaks, so its grid
+        # is the family list itself, in the family order.
+        self.assertEqual(i18n.language_options(), tuple(i18n.LANGUAGE_LABELS))
         self.assertEqual(set(i18n.language_options()), set(i18n.SUPPORTED_LANGUAGES))
 
     def test_every_language_button_is_a_flag_a_native_name_and_a_mark(self) -> None:
         rows = menu.language_rows("uk", lambda code: f"x:{code}")
-        self.assertEqual([len(row) for row in rows], [2, 2])
+        self.assertEqual([len(row) for row in rows], [2] * 8)
         self.assertEqual(
             [button.text for row in rows for button in row],
             [
                 "◎ 🇬🇧 English",
                 "◎ 🇷🇺 Русский",
                 "◉ 🇺🇦 Українська",
+                "◎ 🇪🇸 Español",
+                "◎ 🇫🇷 Français",
                 "◎ 🇩🇪 Deutsch",
+                "◎ 🇮🇹 Italiano",
+                "◎ 🇵🇱 Polski",
+                "◎ 🇨🇿 Čeština",
+                "◎ 🇹🇷 Türkçe",
+                "◎ 🇸🇪 Svenska",
+                "◎ 🇧🇾 Беларуская",
+                "◎ 🇦🇩 Català",
+                "◎ 🇨🇳 中文",
+                "◎ 🇯🇵 日本語",
+                "◎ 🇦🇪 العربية",
             ],
         )
 

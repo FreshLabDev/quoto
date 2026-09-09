@@ -134,7 +134,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Причина рішення", message.answers[0])
 
     async def test_private_falls_back_to_english_for_unknown_telegram_language(self) -> None:
-        message = DummyMessage(chat_type="private", language_code="es")
+        message = DummyMessage(chat_type="private", language_code="ko")
 
         with patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()):
             await handlers.private_handler(message, SimpleNamespace(args=None))

@@ -105,13 +105,13 @@ class AgreementDocumentTests(unittest.TestCase):
 
     def test_the_language_switcher_is_the_family_grid(self) -> None:
         document = agreement.build_document("de", can_accept=False, accepted=False)
+        codes = i18n.language_options()
+        grid = document.keyboard.inline_keyboard[: (len(codes) + 1) // 2]
         self.assertEqual(
-            [button.text for row in document.keyboard.inline_keyboard[:2] for button in row],
+            [button.text for row in grid for button in row],
             [
-                f"{menu.TOGGLE_OFF} {i18n.language_label('en')}",
-                f"{menu.TOGGLE_OFF} {i18n.language_label('ru')}",
-                f"{menu.TOGGLE_OFF} {i18n.language_label('uk')}",
-                f"{menu.TOGGLE_ON} {i18n.language_label('de')}",
+                f"{menu.TOGGLE_ON if code == 'de' else menu.TOGGLE_OFF} {i18n.language_label(code)}"
+                for code in codes
             ],
         )
 
