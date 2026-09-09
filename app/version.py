@@ -18,7 +18,11 @@ VERSION = os.environ.get("QUOTO_VERSION", "").strip().lstrip("v") or "dev"
 
 REPOSITORY = "FreshLabDev/quoto"
 REPOSITORY_URL = f"https://github.com/{REPOSITORY}"
-LICENSE = "Apache-2.0"
+# GPL-3.0, not the Apache-2.0 the rest of the family uses. Read it off LICENSE
+# rather than assuming: this line is shown in the About card and printed under
+# the user agreement, so a wrong value is a false statement about licensing in
+# two places people are meant to rely on.
+LICENSE = "GPL-3.0"
 OPERATOR = "Asterfield"
 CONTACT = "@amtiyo"
 CONTACT_URL = f"https://t.me/{CONTACT.lstrip('@')}"
