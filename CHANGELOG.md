@@ -41,6 +41,8 @@ Use this section for changes that are merged but not released yet.
   units on the English and German ones included. They now read `−1:00` and
   `+0:15`, which is the same in every language and needs no translation.
 
+## v0.10.6 - 2026-09-09
+
 Quoto is GPL-3.0. The About card and the agreement signature said Apache-2.0.
 
 ### Fixed
@@ -51,8 +53,6 @@ Quoto is GPL-3.0. The About card and the agreement signature said Apache-2.0.
   into two places a reader is meant to be able to rely on, one of them a
   document people accept.
 
-
-Use this section for changes that are merged but not released yet.
 
 ## v0.10.5 - 2026-09-09
 
@@ -67,8 +67,6 @@ A one-line fix for something v0.10.4 shipped: it reported the wrong version.
   told every group the same thing. An unstamped build now says `dev` instead of
   naming a release it is not.
 
-
-Use this section for changes that are merged but not released yet.
 
 ## v0.10.4 - 2026-09-09
 
