@@ -1,0 +1,262 @@
+{
+  "language_name": "中文",
+  "months": ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+  "common": {
+    "anonymous": "匿名",
+    "original": "原消息",
+    "details": "详情",
+    "context": "上下文",
+    "ai": "AI"
+  },
+  "command": {
+    "start_private": "打开 Quoto",
+    "start_group": "打开 Quoto 面板"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "我的统计",
+      "chat_stats": "群统计",
+      "stats": "统计",
+      "group_language": "群语言",
+      "settings": "设置",
+      "back": "返回",
+      "about": "关于",
+      "agreement": "协议",
+      "close": "关闭"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "我在群聊里挑选每日金句。把我加进群，然后在那里发送 /start。",
+      "language": "界面语言：<b>{language_name}</b>",
+      "language_note": "私聊里我跟随你的 Telegram 语言。"
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "我盯着群聊，每天结束时发布最精彩的一句。统计和设置在下面。",
+      "user_body": "我盯着群聊，每天结束时发布最精彩的一句。",
+      "language_line": "语言：<b>{language_name}</b>",
+      "schedule_line": "每日总结 <b>{time}</b> · 满 <b>{min_messages}</b> 条消息起"
+    },
+    "language": {
+      "title": "群语言",
+      "hint": "选择我在这个群里说的语言。",
+      "source_auto": "自动识别",
+      "source_manual": "手动设置",
+      "source_default": "默认 · English",
+      "updated": "语言已改为 {language_name}。",
+      "invalid": "我不认识这门语言。"
+    },
+    "other_user": "用 /start 打开你自己的菜单。",
+    "group_context_required": "请在群聊里打开。"
+  },
+  "settings": {
+    "updated": "好了。",
+    "invalid": "这样不行。",
+    "block": {
+      "interface": "界面",
+      "quote_day": "每日金句",
+      "behavior": "行为"
+    },
+    "button": {
+      "language": "语言",
+      "interface": "界面",
+      "quote_day": "每日金句",
+      "publication": "发布",
+      "time": "时间",
+      "min_messages": "最少",
+      "context": "上下文",
+      "boring_notice": "无聊的一天",
+      "pin": "置顶",
+      "timezone": "时区",
+      "media": "媒体"
+    },
+    "private": {
+      "title": "<b>设置</b>",
+      "hint": "<i>只对这个私聊生效。</i>",
+      "language_title": "界面语言",
+      "language_hint": "保持 Telegram 语言，或者手动选一个。",
+      "telegram_language": "Telegram 语言",
+      "language_source_manual": "手动设置",
+      "language_source_telegram": "Telegram 语言"
+    },
+    "group": {
+      "title": "<b>群设置</b>",
+      "hint": "<i>只有管理员能配置我。</i>",
+      "language_auto": "自动识别",
+      "language_auto_updated": "下次评选时我自己识别语言。",
+      "context": {
+        "short": "上下文",
+        "title": "什么是上下文",
+        "explain": "上下文就是 AI 在获胜那句话周围挑出的消息。超过五条时，我会把这一段收紧到金句本身附近。"
+      },
+      "boring_notice": {
+        "short": "无聊的一天"
+      },
+      "pin": {
+        "short": "置顶"
+      },
+      "media": {
+        "short": "媒体"
+      },
+      "quote_day": {
+        "title": "每日金句",
+        "hint": "什么时候结算这一天，以及评选需要多少条消息。"
+      },
+      "publication": {
+        "title": "发布",
+        "hint": "我在群里如何呈现结果。"
+      },
+      "time": {
+        "title": "<b>金句时间</b>",
+        "hint": "<i>到点我就结算这一天并挑出金句。</i>",
+        "line": "每日总结：<b>{time}</b>",
+        "timezone": "时区：<b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>最少消息数</b>",
+        "hint": "<i>少于这个数，这一天就跳过，不做评选。</i>",
+        "line": "最少：<b>{count}</b>"
+      },
+      "tz": {
+        "title": "时区",
+        "hint": "我按这个时区计算一天的区间和结算时刻。"
+      }
+    }
+  },
+  "status": {
+    "published": "✅ 已发布",
+    "skipped_boring": "😴 无聊的一天",
+    "publish_failed": "⚠️ 发布失败",
+    "boring_notice_failed": "⚠️ 通知未发送",
+    "publish_unknown": "⚠️ 发布未确认",
+    "boring_notice_unknown": "⚠️ 通知未确认"
+  },
+  "admin": {
+    "admin_only": "这个只有管理员能改。"
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\n很高兴来到 <b>{chat_title}</b>。每天 <b>{time}</b> 我会挑出最精彩的一句，发布每日金句。\n\n发送 /start — 统计和设置都在那里。",
+    "need_admin": "⚠️ 请把我设为有 <i>置顶</i> 消息权限的<b>管理员</b>，这样我才能发布结果。",
+    "admin_granted": "谢谢！现在我可以发布每日金句了。"
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ 金句链接无效。",
+    "quote_not_found": "⚠️ 没找到这条金句。",
+    "add_to_group": "添加到群",
+    "hello": "<b>Quoto</b>\n\n我在群聊里挑选每日金句：收集一整天的消息，到点发布最精彩的一句。\n\n把我加进群，然后在那里发送 /start。"
+  },
+  "details": {
+    "title": "<b>第 {id} 天</b>",
+    "total": "总分",
+    "reactions": "回应",
+    "length": "长度",
+    "decision_reason": "判定理由",
+    "operation_error": "技术错误",
+    "ai_choice": "AI 的选择"
+  },
+  "start": {
+    "group": "<b>Quoto — 每日金句</b>\n\n我收集一整天的消息，到晚上挑出最精彩的一句。\n\n发送 /start 打开控制面板。"
+  },
+  "stats": {
+    "missing": "还没有统计：这个群还没有注册。",
+    "empty": "这个群还没有发布过金句。",
+    "title": "群统计",
+    "hint": "整个群到目前为止攒下的。",
+    "total_quotes": "金句总数：<b>{count}</b>",
+    "unique_authors": "作者：<b>{count}</b>",
+    "avg_score": "平均分：<b>{score:.1f}/10</b>",
+    "top_authors": "<b>作者榜</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>最佳金句</b>"
+  },
+  "user_stats": {
+    "missing": "还没有统计。",
+    "empty": "<b>{user}</b>，你在这个群还没有上榜的金句。\n继续写，你的时刻会来的。",
+    "title": "你的统计",
+    "hint": "你在这个群的每日金句。",
+    "user": "<b>{user}</b>",
+    "wins": "获胜：<b>{count}</b>",
+    "avg_score": "平均分：<b>{score:.1f}/10</b>",
+    "rank": "排名：<b>{rank}</b> / {total}",
+    "best_quote": "<b>最佳金句</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>今日金句</b>",
+      "photo": "🏆 <b>今日最佳照片</b>",
+      "video": "🏆 <b>今日最佳视频</b>",
+      "voice": "🏆 <b>今日最佳语音</b>",
+      "audio": "🏆 <b>今日最佳音频</b>"
+    },
+    "context_truncated": "ℹ️ 只统计了 {total} 条消息中的最后 {shown} 条 — 上下文因体量被裁剪。"
+  },
+  "boring": {
+    "title": "😴 <b>今天没有每日金句</b>",
+    "body": "我没找到配得上今天的一句话。明天见！"
+  },
+  "about": {
+    "tagline": "从群里聊出来的每日金句。",
+    "eval": "评分",
+    "sources": "源码",
+    "admin": "管理员"
+  },
+  "agreement": {
+    "title": "Quoto — 用户协议与隐私",
+    "summary": "在这个群里使用 Quoto，即表示你接受以下条款。",
+    "sections": [
+      {
+        "heading": "Quoto 做什么",
+        "text": "白天我读取这个群里发送的消息，并在设定的时间发布一条“每日金句”。"
+      },
+      {
+        "heading": "处理哪些内容",
+        "text": "为了挑出每日金句，我会处理：",
+        "items": [
+          "消息文本和图片说明",
+          "消息的表情回应",
+          "媒体：照片、视频、语音和音频",
+          "作者的名字和 Telegram ID",
+          "群的 ID 和名称"
+        ]
+      },
+      {
+        "heading": "AI 处理",
+        "text": "为了挑出金句，消息文本和媒体会发送给我们的 AI 服务商 OpenRouter 及其模型提供方进行分析。",
+        "note": "在有 Quoto 的群里，不要发送密码或敏感信息。"
+      },
+      {
+        "heading": "存储",
+        "text": "当天的原始数据在处理后清除。为了稳定运行、质量检查和统计，部分服务记录和处理结果可能保留更久；已发布的金句和基本标识会留在服务历史中。"
+      },
+      {
+        "heading": "你的数据",
+        "text": "我不会出售你的数据。想删除数据，请联系 {contact}。"
+      },
+      {
+        "heading": "管理员的责任",
+        "text": "接受协议即表示群管理员确认：他有权添加这个机器人，并且群成员知道聊天内容由 Quoto 处理。"
+      },
+      {
+        "heading": "按现状提供",
+        "text": "本服务按“现状”提供，不作任何担保；条款可能变更，继续使用即表示同意。"
+      }
+    ],
+    "signature": {
+      "title": "文件签名",
+      "version_label": "协议版本",
+      "effective_label": "生效日期",
+      "operator_label": "运营者",
+      "contact_label": "联系方式"
+    },
+    "accept_hint": "群管理员点击“接受”，每日金句就会启用。",
+    "welcome_note": "<i>在我发布任何内容之前，需要群管理员接受用户协议。</i>",
+    "view_button": "用户协议",
+    "accept_button": "接受",
+    "accepted": "✅ <b>用户协议已接受。</b>谢谢！",
+    "accepted_admin_hint": "<i>现在请把我设为有置顶消息权限的管理员，我才能发布每日金句。</i>",
+    "accepted_toast": "已接受，谢谢！",
+    "already": "✅ 这个群已经接受过协议了。",
+    "admin_only": "只有群管理员才能接受协议。",
+    "reminder": "要发布每日金句，需要群管理员接受 Quoto 用户协议。"
+  }
+}
