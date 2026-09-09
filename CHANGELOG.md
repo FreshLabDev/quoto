@@ -13,6 +13,22 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+## v0.10.5 - 2026-09-09
+
+A one-line fix for something v0.10.4 shipped: it reported the wrong version.
+
+### Fixed
+
+- The version is read from the image rather than written in the source.
+  `Dockerfile` already exported `QUOTO_VERSION` from the release workflow's tag,
+  but `app/version.py` held a literal that nobody bumps — so v0.10.4 started up
+  announcing 0.10.3, and the About card added in that same release would have
+  told every group the same thing. An unstamped build now says `dev` instead of
+  naming a release it is not.
+
+
+Use this section for changes that are merged but not released yet.
+
 ## v0.10.4 - 2026-09-09
 
 The user agreement is a real document now, rendered natively rather than
