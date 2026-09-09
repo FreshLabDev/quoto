@@ -107,6 +107,14 @@ Use this section for changes that are merged but not released yet.
 
 ### Changed
 
+- The production manifest expects one `.env` rather than the stack's current
+  `.env` plus `.app.env` split, matching every other stack in the family. The
+  keys do not collide, so the two merge at the first deploy from GHCR.
+- Corrected why quoto joins the Bot API network: it is `getFile`, not rich text.
+  Telegram's own endpoint carries the newest Bot API — makeitMD renders rich
+  messages against it today — but caps a download at 20 MB, and quoto analyses
+  video far longer than that.
+
 - The production stack joins `telegram_bot_api_net` as well as `core_net`.
   Quoto never had a `TELEGRAM_BOT_API_BASE_URL` setting at all, so it has always
   talked to api.telegram.org and Bot API 10.3 was unreachable. Adding the

@@ -149,10 +149,18 @@ a patch that fixes what went wrong; never retag or delete the bad release.
 | Env file | `.app.env` on the host, never in git |
 | Networks | `core_net` (core-postgres), `telegram_bot_api_net` (the self-hosted Bot API server) |
 
-Note the env file is `.app.env`, not `.env` — `.env` in this stack directory
-holds only the Compose variables. `TELEGRAM_BOT_API_BASE_URL` belongs in
-`.app.env`; without it Quoto talks to api.telegram.org and the rich-markdown
-agreement falls back to HTML on every send.
+Quoto reads the self-hosted Bot API server for **downloads**, not for rich text:
+Telegram's own endpoint always carries the newest Bot API, but caps `getFile` at
+20 MB, and quoto analyses video up to `MEDIA_VIDEO_MAX_SECONDS`. Without
+`TELEGRAM_BOT_API_BASE_URL` anything larger is unreadable and the day's media is
+skipped with nobody told.
+
+The stack directory on the host still splits its configuration in two: `.env`
+for the Compose variables and `.app.env` for the application. This manifest
+expects one `.env` holding both, the way every other stack in the family does.
+Merge them at the first deploy from GHCR — the keys do not collide — and retire
+`.app.env` in the same step, since a manifest naming a file that is gone stops
+the stack.
 
 The retired local `db` service still exists in the stack directory as a rollback
 anchor for the 0.9.0 core consolidation. It is not part of the deployment and

@@ -23,10 +23,10 @@ services:
     container_name: quoto-bot
     restart: unless-stopped
     env_file:
-      - path: .app.env
+      - path: .env
         required: true
     environment:
-      # Overrides the DB_URL carried in .app.env, which still points at the
+      # Overrides the DB_URL carried in .env, which still points at the
       # retired local database.
       DB_URL: postgresql+asyncpg://quoto_core:${QUOTO_CORE_PASSWORD:?QUOTO_CORE_PASSWORD must be set}@core-postgres:5432/core
       LOGS_PATH: /app/logs/
@@ -39,10 +39,11 @@ services:
       LC_ALL: C.UTF-8
     volumes:
       - ./logs:/app/logs
-    # telegram_bot_api_net reaches the self-hosted Bot API 10.3 server. Without
-    # it TELEGRAM_BOT_API_BASE_URL resolves to nothing and the rich-markdown
-    # agreement silently falls back to HTML, which is exactly the failure the
-    # startup preflight exists to make loud.
+    # telegram_bot_api_net reaches the self-hosted Bot API server. Quoto needs it
+    # for getFile, not for rich text: Telegram's own endpoint always has the
+    # newest Bot API, but caps a download at 20 MB, and quoto analyses video up
+    # to MEDIA_VIDEO_MAX_SECONDS. Anything larger is simply unreadable there, and
+    # the day's media is skipped without anybody being told.
     networks: [core_net, telegram_bot_api_net]
     logging:
       driver: json-file
