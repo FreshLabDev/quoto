@@ -8,6 +8,10 @@
     "context": "context",
     "ai": "AI"
   },
+  "command": {
+    "start_private": "Open Quoto",
+    "start_group": "Open the Quoto panel"
+  },
   "menu": {
     "button": {
       "user_stats": "My stats",
@@ -15,17 +19,19 @@
       "stats": "Stats",
       "group_language": "Group language",
       "settings": "Settings",
-      "back": "‹ Back",
+      "back": "Back",
+      "about": "About",
+      "agreement": "Agreement",
       "close": "Close"
     },
     "private": {
-      "title": "🏆 <b>Quoto</b>",
+      "title": "<b>Quoto</b>",
       "body": "I pick a quote of the day in group chats. Add me to a group and open /start there.",
       "language": "Interface language: <b>{language_name}</b>",
       "language_note": "In private chat I follow your Telegram language."
     },
     "group": {
-      "title": "🏆 <b>Quoto</b>",
+      "title": "<b>Quoto</b>",
       "admin_body": "I watch the chat and publish the best line at the end of the day. Stats and settings below.",
       "user_body": "I watch the chat and publish the best line at the end of the day.",
       "language_line": "Language: <b>{language_name}</b>",
@@ -133,7 +139,7 @@
     "admin_only": "Only admins can change this."
   },
   "chat_member": {
-    "added": "🏆 <b>Quoto</b>\n\nGlad to be in <b>{chat_title}</b>. Every day at <b>{time}</b> I pick the brightest line and publish the quote of the day.\n\nOpen /start — stats and settings are there.",
+    "added": "<b>Quoto</b>\n\nGlad to be in <b>{chat_title}</b>. Every day at <b>{time}</b> I pick the brightest line and publish the quote of the day.\n\nOpen /start — stats and settings are there.",
     "need_admin": "⚠️ Make me an <b>administrator</b> with permission to <i>pin</i> messages — then I can publish the result.",
     "admin_granted": "Thanks! Now I can publish the quote of the day."
   },
@@ -141,7 +147,7 @@
     "invalid_quote_link": "⚠️ Invalid quote link.",
     "quote_not_found": "⚠️ Quote not found.",
     "add_to_group": "Add to group",
-    "hello": "🏆 <b>Quoto</b>\n\nI pick a quote of the day in group chats: I collect the day's messages and publish the best line at the scheduled time.\n\nAdd me to a group and open /start there."
+    "hello": "<b>Quoto</b>\n\nI pick a quote of the day in group chats: I collect the day's messages and publish the best line at the scheduled time.\n\nAdd me to a group and open /start there."
   },
   "details": {
     "title": "<b>Day #{id}</b>",
@@ -153,7 +159,7 @@
     "ai_choice": "AI choice"
   },
   "start": {
-    "group": "🏆 <b>Quoto — Quote of the Day</b>\n\nI collect the day's messages and choose the best line at the end of the day.\n\nOpen /start to open the control panel."
+    "group": "<b>Quoto — Quote of the Day</b>\n\nI collect the day's messages and choose the best line at the end of the day.\n\nOpen /start to open the control panel."
   },
   "stats": {
     "missing": "Stats are not available yet — this group is not registered.",
@@ -190,19 +196,69 @@
     "title": "😴 <b>No quote of the day today</b>",
     "body": "I didn't find a line worth the day. See you tomorrow!"
   },
+  "about": {
+    "tagline": "The quote of the day, out of whatever the chat wrote.",
+    "eval": "Scoring",
+    "sources": "Source",
+    "admin": "Admin"
+  },
   "agreement": {
-    "title": "📄 <b>Quoto — User Agreement &amp; Privacy</b>",
-    "summary": "<i>By using Quoto in this group you accept the terms below. Tap to expand.</i>",
-    "body": "<b>1. What Quoto does.</b> During the day I read messages sent in this group and, at the set time, publish one “quote of the day”.\n\n<b>2. What is processed.</b> Message text and captions, reactions, media (photos, videos, voice, audio), the author's name and Telegram ID, and the group's ID and title.\n\n<b>3. AI processing.</b> To choose a quote, message text and media are sent to our AI provider <b>OpenRouter</b> and its model providers for analysis. Don't share passwords or sensitive data in chats where Quoto is active.\n\n<b>4. Storage.</b> The day's primary data is cleared after processing. Limited service records and processing results may be kept longer for reliability, quality checks, and statistics; published quotes and basic identifiers remain in the service history.\n\n<b>5. Your data.</b> I don't sell your data. To request deletion, contact @amti_yo.\n\n<b>6. Admin responsibility.</b> By accepting, a group admin confirms they may add this bot and that members know the chat is processed by Quoto.\n\n<b>7. As-is.</b> The service is provided “as is”, without warranties, and the terms may change; continued use means acceptance.",
-    "doc_footer": "<i>To enable the quote of the day, a group admin taps “Accept”. Questions: @amti_yo.</i>",
+    "title": "Quoto — User Agreement & Privacy",
+    "summary": "By using Quoto in this group you accept the terms below.",
+    "sections": [
+      {
+        "heading": "What Quoto does",
+        "text": "During the day I read messages sent in this group and, at the set time, publish one “quote of the day”."
+      },
+      {
+        "heading": "What is processed",
+        "text": "To choose the quote of the day I process:",
+        "items": [
+          "message text and captions",
+          "reactions to messages",
+          "media: photos, videos, voice and audio",
+          "the author's name and Telegram ID",
+          "the group's ID and title"
+        ]
+      },
+      {
+        "heading": "AI processing",
+        "text": "To choose a quote, message text and media are sent to our AI provider OpenRouter and its model providers for analysis.",
+        "note": "Don't share passwords or sensitive data in chats where Quoto is active."
+      },
+      {
+        "heading": "Storage",
+        "text": "The day's primary data is cleared after processing. Limited service records and processing results may be kept longer for reliability, quality checks, and statistics; published quotes and basic identifiers remain in the service history."
+      },
+      {
+        "heading": "Your data",
+        "text": "I don't sell your data. To request deletion, contact {contact}."
+      },
+      {
+        "heading": "Admin responsibility",
+        "text": "By accepting, a group admin confirms they may add this bot and that members know the chat is processed by Quoto."
+      },
+      {
+        "heading": "As-is",
+        "text": "The service is provided “as is”, without warranties, and the terms may change; continued use means acceptance."
+      }
+    ],
+    "signature": {
+      "title": "Document signature",
+      "version_label": "Agreement version",
+      "effective_label": "In effect since",
+      "operator_label": "Operator",
+      "contact_label": "Contact"
+    },
+    "accept_hint": "To enable the quote of the day, a group admin taps “Accept”.",
     "welcome_note": "<i>Before I publish anything, a group admin needs to accept the user agreement.</i>",
-    "view_button": "📄 User agreement",
-    "accept_button": "✅ Accept",
+    "view_button": "User agreement",
+    "accept_button": "Accept",
     "accepted": "✅ <b>User agreement accepted.</b> Thank you!",
     "accepted_admin_hint": "<i>Now make me an administrator with the right to pin messages, so I can publish the quote of the day.</i>",
     "accepted_toast": "Accepted — thank you!",
-    "already": "✅ <i>This group has already accepted the agreement.</i>",
+    "already": "✅ This group has already accepted the agreement.",
     "admin_only": "Only a group admin can accept the agreement.",
-    "reminder": "📄 To publish the quote of the day, a group admin needs to accept the Quoto user agreement."
+    "reminder": "To publish the quote of the day, a group admin needs to accept the Quoto user agreement."
   }
 }

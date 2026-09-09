@@ -6,10 +6,15 @@ from html import escape
 from time import monotonic
 
 from aiogram import Bot, F, Router, types
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramNotFound,
+    TelegramRetryAfter,
+)
 from aiogram.filters import Command, CommandObject, CommandStart, and_f, or_f
 
-from . import agreement, core, i18n, media, menu, scoring, utils
+from . import agreement, core, i18n, media, menu, richmd, scoring, utils
 from .config import settings, setup_logging
 from .quote_status import (
     STATUS_BORING_NOTICE_FAILED,
@@ -109,13 +114,38 @@ async def _edit_panel(
     callback: types.CallbackQuery,
     text: str,
     reply_markup: types.InlineKeyboardMarkup | None,
+    *,
+    markdown: str | None = None,
+    bot: Bot | None = None,
 ) -> bool:
+    """Replace the open panel. `markdown` offers a rich-Markdown rendering of
+    the same screen; `text` is the HTML the fallback path sends instead."""
     panel = callback.message
     if not panel or not getattr(panel, "chat", None) or not getattr(panel, "edit_text", None):
         await callback.answer()
         return False
     try:
-        await panel.edit_text(text, reply_markup=reply_markup)
+        if markdown is not None and bot is not None and richmd.available():
+            try:
+                await richmd.edit_markdown(
+                    bot, panel.chat.id, panel.message_id, markdown, reply_markup
+                )
+            except (TelegramNotFound, TelegramBadRequest) as exc:
+                # The server had the method at startup and cannot serve this
+                # call now. A 404 means the method went away; a 400 is the more
+                # likely one -- a server that does not understand `rich_message`
+                # ignores the field and complains the text is empty. Either way
+                # the agreement must still appear, so fall through to the HTML
+                # rendering this document is authored twice for.
+                #
+                # "message is not modified" is not a failure: the panel already
+                # shows this screen.
+                if "message is not modified" in str(exc).lower():
+                    return True
+                await richmd.note_method_lost(exc)
+                await panel.edit_text(text, reply_markup=reply_markup)
+        else:
+            await panel.edit_text(text, reply_markup=reply_markup)
         return True
     except TelegramRetryAfter as exc:
         log.warning(
@@ -355,56 +385,51 @@ async def bot_added_to_chat_event(event: types.ChatMemberUpdated):
         log.debug(text_log)
 
 
-@router.message(Command("privacy"))
-async def privacy_command(message: types.Message, bot: Bot):
-    chat = message.chat
-    if chat.type == "private":
-        await core.user_getOrCreate(message.from_user)
-        language, _ = await _private_language_state(message)
-        text, markup = agreement.build_document(language, can_accept=False, accepted=False)
-        await message.answer(text, reply_markup=markup)
-        return
-
-    group = await core.group_getOrCreate(chat, message.from_user, hydrate=True)
-    language = i18n.group_language(group)
-    is_admin = (
-        await _is_chat_admin(bot, chat.id, message.from_user.id)
-        if message.from_user
-        else False
-    )
-    accepted = core.group_agreement_accepted(group)
-    text, markup = agreement.build_document(
-        language, can_accept=is_admin and not accepted, accepted=accepted
-    )
-    await message.answer(text, reply_markup=markup)
-
-
 @router.callback_query(F.data.startswith(f"{agreement.CALLBACK_PREFIX}:"))
 async def agreement_callback(callback: types.CallbackQuery, bot: Bot):
     parsed = agreement.parse_callback(callback.data)
     if not parsed:
         await callback.answer()
         return
-    action, raw_language = parsed
-    language = i18n.language_or_default(raw_language)
+    language = i18n.language_or_default(parsed.language)
     chat = getattr(callback.message, "chat", None)
     in_group = bool(chat and chat.type in {"group", "supergroup"})
 
-    if action == agreement.ACTION_VIEW:
+    # Opened as a panel tab, the document belongs to whoever opened the panel,
+    # exactly like every other tab in it.
+    if parsed.owner_id is not None and callback.from_user.id != parsed.owner_id:
+        await callback.answer(i18n.t(language, "menu.other_user"), show_alert=True)
+        return
+    nav = (
+        menu.nav_row(parsed.owner_id, parsed.scope, language)
+        if parsed.scope and parsed.owner_id is not None
+        else None
+    )
+
+    if parsed.action == agreement.ACTION_VIEW:
         if in_group:
             group = await core.group_getOrCreate(chat, callback.from_user)
             is_admin = await _is_chat_admin(bot, chat.id, callback.from_user.id)
             accepted = core.group_agreement_accepted(group)
-            text, markup = agreement.build_document(
-                language, can_accept=is_admin and not accepted, accepted=accepted
-            )
+            can_accept = is_admin and not accepted
         else:
-            text, markup = agreement.build_document(language, can_accept=False, accepted=False)
-        await _edit_panel(callback, text, markup)
+            accepted = False
+            can_accept = False
+        document = agreement.build_document(
+            language,
+            can_accept=can_accept,
+            accepted=accepted,
+            scope=parsed.scope,
+            owner_id=parsed.owner_id,
+            nav_row=nav,
+        )
+        await _edit_panel(
+            callback, document.html, document.keyboard, markdown=document.markdown, bot=bot
+        )
         await callback.answer()
         return
 
-    if action == agreement.ACTION_ACCEPT:
+    if parsed.action == agreement.ACTION_ACCEPT:
         if not in_group:
             await callback.answer()
             return
@@ -413,7 +438,8 @@ async def agreement_callback(callback: types.CallbackQuery, bot: Bot):
             return
         group = await core.group_getOrCreate(chat, callback.from_user, hydrate=True)
         updated = await core.accept_group_agreement(group.chat_id, callback.from_user.id, language) or group
-        await _edit_panel(callback, agreement.build_accepted(language), None)
+        confirmation = types.InlineKeyboardMarkup(inline_keyboard=[nav]) if nav else None
+        await _edit_panel(callback, agreement.build_accepted(language), confirmation)
         await callback.answer(i18n.t(language, "agreement.accepted_toast"))
         # If today's cutoff already passed, catch the day up now so a late
         # acceptance doesn't lose the quote of the day.
@@ -614,6 +640,26 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
             await _show_private(menu.SECTION_LANGUAGE)
             return
 
+        if parsed.action == menu.ACTION_ABOUT:
+            await _show_private(menu.SECTION_ABOUT)
+            return
+
+        if parsed.action == menu.ACTION_AGREEMENT:
+            document = agreement.build_document(
+                language,
+                can_accept=False,
+                accepted=False,
+                scope=menu.SCOPE_PRIVATE,
+                owner_id=parsed.owner_id,
+                nav_row=menu.nav_row(parsed.owner_id, menu.SCOPE_PRIVATE, language),
+            )
+            await _edit_panel(
+                callback, document.html, document.keyboard,
+                markdown=document.markdown, bot=bot,
+            )
+            await callback.answer()
+            return
+
         if parsed.action == menu.ACTION_SET_PRIVATE_LANGUAGE:
             selected_language = i18n.normalize_language_code(parsed.payload)
             if not selected_language:
@@ -662,6 +708,27 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
 
     if parsed.action == menu.ACTION_HOME:
         await _show_group(menu.SECTION_HOME)
+        return
+
+    if parsed.action == menu.ACTION_ABOUT:
+        await _show_group(menu.SECTION_ABOUT)
+        return
+
+    if parsed.action == menu.ACTION_AGREEMENT:
+        accepted = core.group_agreement_accepted(group)
+        document = agreement.build_document(
+            language,
+            can_accept=is_admin and not accepted,
+            accepted=accepted,
+            scope=menu.SCOPE_GROUP,
+            owner_id=parsed.owner_id,
+            nav_row=menu.nav_row(parsed.owner_id, menu.SCOPE_GROUP, language),
+        )
+        await _edit_panel(
+            callback, document.html, document.keyboard,
+            markdown=document.markdown, bot=bot,
+        )
+        await callback.answer()
         return
 
     admin_only_actions = {

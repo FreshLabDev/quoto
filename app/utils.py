@@ -7,13 +7,36 @@ from html import escape
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 
 from .config import settings, setup_logging
 
 
+def build_session() -> AiohttpSession | None:
+    """Point a bot at the self-hosted Bot API server when one is configured.
+
+    None means aiogram's default, api.telegram.org. The base URL is what
+    decides whether Bot API 10.3 methods exist at all, so every Bot instance
+    in the process has to be built through here.
+    """
+    base = settings.TELEGRAM_BOT_API_BASE_URL
+    if not base:
+        return None
+    # is_local matters and is not the default. Our server runs with --local, so
+    # getFile answers with an absolute path on the server's own disk and the
+    # /file/bot<token>/... route returns 404 by design. Left at aiogram's
+    # default, download_file would treat that path as a URL suffix and fetch a
+    # 404 for every photo, video, circle and voice note -- which is not an
+    # error quoto retries or skips, it is a failed analysis stored as such, and
+    # the only sign would be a duller quote a day later.
+    return AiohttpSession(api=TelegramAPIServer.from_base(base, is_local=True))
+
+
 bot = Bot(
     token=settings.BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    session=build_session(),
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 
 log = setup_logging(logging.getLogger(__name__))
@@ -57,7 +80,13 @@ def parse_legacy_quote_start_payload(payload: str) -> int | None:
     return int(parts[1])
 
 
-def _scrub_secrets(text: str) -> str:
+def scrub_secrets(text: str) -> str:
+    """Remove the bot token, API keys and database passwords from a string.
+
+    Used wherever an exception's text reaches a log line or the database: a
+    transport error carries the request URL, and a Bot API URL carries the
+    token.
+    """
     cleaned = text
     for secret in (settings.BOT_TOKEN, settings.OPENROUTER_API_KEY):
         if secret:
@@ -83,7 +112,7 @@ async def notify_developers(message: str, *, dedupe_key: str | None = None) -> N
             if now - seen_at > _NOTIFY_COOLDOWN_SECONDS:
                 _last_notified.pop(stale_key, None)
 
-    safe = escape(_scrub_secrets(message))
+    safe = escape(scrub_secrets(message))
     for dev_id in settings.DEVELOPER_IDS:
         try:
             await bot.send_message(dev_id, safe)

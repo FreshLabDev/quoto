@@ -115,6 +115,13 @@ class AIReportTests(unittest.IsolatedAsyncioTestCase):
                 reason_code="worthy",
                 reason_text="short reason",
             ),
+            usage=ai.TokenUsage(
+                prompt_tokens=1200,
+                completion_tokens=450,
+                reasoning_tokens=300,
+                total_tokens=1650,
+                cost_usd=0.00042,
+            ),
         )
 
         with patch.object(ai_reports, "SessionLocal", return_value=session):
@@ -137,6 +144,11 @@ class AIReportTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(run.context_needed)
         self.assertTrue(run.should_publish)
         self.assertEqual(run.request_id, "req-1")
+        self.assertEqual(run.prompt_tokens, 1200)
+        self.assertEqual(run.completion_tokens, 450)
+        self.assertEqual(run.reasoning_tokens, 300)
+        self.assertEqual(run.total_tokens, 1650)
+        self.assertAlmostEqual(run.cost_usd, 0.00042)
 
         rows = session.added_all
         self.assertEqual(len(rows), 2)

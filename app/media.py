@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from . import ai, models
 from .config import settings, setup_logging
 from .db import SessionLocal
+from .utils import scrub_secrets
 
 log = setup_logging(logging.getLogger(__name__))
 
@@ -348,16 +349,20 @@ async def _process_media_source(
                 exc=exc,
             )
             return
+        # A transport error carries the request URL, and a Bot API URL carries
+        # the token. This string is both logged and stored, so it is scrubbed
+        # once here rather than trusted at either destination.
+        detail = scrub_secrets(str(exc))
         if _is_expected_media_failure(exc):
-            log.debug(f"Media analysis skipped for db message {db_message_id}: {exc}")
+            log.debug(f"Media analysis skipped for db message {db_message_id}: {detail}")
         else:
-            log.warning(f"Media analysis failed for db message {db_message_id}: {exc}")
+            log.warning(f"Media analysis failed for db message {db_message_id}: {detail}")
         await _store_media_result(
             db_message_id=db_message_id,
             source=source,
             status="failed",
             description=_metadata_description(source),
-            error=str(exc)[:500],
+            error=detail[:500],
         )
 
 

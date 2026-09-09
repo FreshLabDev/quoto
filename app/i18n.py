@@ -74,6 +74,17 @@ def t(language: object | None, key: str, **kwargs: object) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
+def value(language: object | None, key: str) -> Any:
+    """Read a non-string locale entry — a list or a dict — with the same
+    fallback to English that `t` gives strings. The agreement is authored as
+    structure so it can be rendered as Markdown or as HTML from one source."""
+    lang = language_or_default(language)
+    found = _lookup(_load(lang), key)
+    if found is None and lang != DEFAULT_LANGUAGE:
+        found = _lookup(_load(DEFAULT_LANGUAGE), key)
+    return found
+
+
 def month_name(language: object | None, month: int) -> str:
     lang = language_or_default(language)
     months = _load(lang).get("months")

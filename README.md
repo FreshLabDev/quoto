@@ -22,7 +22,8 @@ A Telegram bot that tracks quote days and only publishes a **quote of the day** 
 - 🌐 **Localized Interface** — supports Russian, Ukrainian, English, and German UI text
 - 🧭 **One-Time Language Detection** — if a group has no saved language, the next daily AI run chooses the best interface language and stores it
 - 📏 **Text Context** — stores message length signals for transparent details
-- 🧭 **Single `/start` Control Panel** — stats, group language, and close cleanup live behind inline buttons
+- 🧭 **Single `/start` Control Panel** — stats, group language, the user agreement, and About live behind inline buttons
+- 📄 **Rich Markdown Agreement** — on a self-hosted Bot API 10.3 server the user agreement is sent with `sendRichMessage`, so Telegram renders real headings, lists and quotes; it falls back to HTML elsewhere
 - 📌 **Auto-Pin** — pins the winning quote in the chat
 - 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
 - ⏰ **Scheduler** — configurable daily time for quote selection
@@ -88,6 +89,9 @@ Create a `.env` file in the root directory (see `.env.example`):
 ```env
 BOT_TOKEN=your_telegram_bot_token
 BOT_USERNAME=your_bot_username
+# Self-hosted Bot API server. Empty means api.telegram.org, which has no
+# sendRichMessage (Bot API 10.3) and drops the user agreement to plain HTML.
+TELEGRAM_BOT_API_BASE_URL=
 # Production points DB_URL at the shared core-postgres as the quoto_core role
 # (postgresql+asyncpg://quoto_core:***@core-postgres:5432/core). For local dev
 # docker-compose builds it from the POSTGRES_* vars — see Database below.
@@ -158,7 +162,7 @@ docker-compose up -d --build
 ## 🗄️ Database
 
 Quoto stores its data in **PostgreSQL** and shares one database with the other
-FreshLabDev bots (`vido`, `branchy`, `searcher`):
+Asterfield bots (`vido`, `branchy`, `searchy`, `voicy`, `makeitmd`):
 
 - **In production** it connects to the shared **`core`** database as the
   least-privilege role `quoto_core`. Quoto's own tables live in the **`quoto`**
@@ -202,6 +206,10 @@ quoto/
 │   ├── scheduler.py    # APScheduler jobs & quote of the day pipeline
 │   ├── scoring.py      # Scoring engine & best quote selection
 │   └── utils.py        # Utility functions
+├── scripts/
+│   ├── bench_web.py           # Local web hub: replay a day, stream models, compare picks; media tab for own files
+│   ├── compare_eval_models.py  # Replay audited days against several eval models
+│   └── try_media_model.py      # Test one media model against a local file
 ├── docker-compose.yml
 ├── Dockerfile
 ├── main.py             # Entry point

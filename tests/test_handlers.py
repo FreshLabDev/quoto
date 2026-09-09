@@ -163,7 +163,15 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(
             labels,
-            ["Статистика", "Язык", "Цитата дня", "Публикация", "Закрыть"],
+            [
+                "Статистика",
+                "Язык",
+                "Цитата дня",
+                "Публикация",
+                "Соглашение",
+                "О боте",
+                "Закрыть",
+            ],
         )
 
     async def test_close_panel_deletes_panel_and_command_message(self) -> None:
@@ -258,7 +266,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertIn("+1 ч", labels)
         self.assertIn("+5", labels)
-        self.assertEqual(labels[-2:], ["‹ Назад", "Закрыть"])
+        self.assertEqual(labels[-2:], ["Назад", "Закрыть"])
 
     async def test_group_publication_settings_explains_quote_context(self) -> None:
         panel = DummyResponse(
@@ -335,7 +343,134 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             for row in panel.edit_markups[0].inline_keyboard
             for button in row
         ]
-        self.assertEqual(labels, ["◉ Моя статистика", "◎ Статистика чата", "‹ Назад", "Закрыть"])
+        self.assertEqual(labels, ["◉ Моя статистика", "◎ Статистика чата", "Назад", "Закрыть"])
+
+    async def test_agreement_tab_uses_rich_markdown_when_the_server_has_it(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:doc",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+        group = SimpleNamespace(
+            id=1, language_code="ru", language_source=None, agreement_accepted_at=None
+        )
+        bot = AsyncMock()
+
+        with (
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock(return_value=group)),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+            patch.object(handlers.richmd, "available", return_value=True),
+            patch.object(handlers.richmd, "edit_markdown", new=AsyncMock()) as edit_markdown,
+        ):
+            await handlers.start_menu_callback(callback, bot)
+
+        edit_markdown.assert_awaited_once()
+        markdown = edit_markdown.await_args.args[3]
+        self.assertTrue(markdown.startswith("# "), markdown[:40])
+        self.assertIn("@amtiyo", markdown)
+        # The panel itself was never edited with HTML: the rich path replaced it.
+        self.assertEqual(panel.edits, [])
+
+    async def test_agreement_tab_falls_back_to_html_without_the_capability(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data="menu:777:g:doc",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+        group = SimpleNamespace(
+            id=1, language_code="ru", language_source=None, agreement_accepted_at=None
+        )
+
+        with (
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock(return_value=group)),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=True)),
+            patch.object(handlers.richmd, "available", return_value=False),
+        ):
+            await handlers.start_menu_callback(callback, AsyncMock())
+
+        self.assertIn("<blockquote expandable>", panel.edits[0])
+        self.assertIn("@amtiyo", panel.edits[0])
+        labels = [b.text for row in panel.edit_markups[0].inline_keyboard for b in row]
+        self.assertEqual(labels[-2:], ["Назад", "Закрыть"])
+        self.assertIn(handlers.i18n.t("ru", "agreement.accept_button"), labels)
+
+    async def test_about_tab_shows_the_version_card(self) -> None:
+        panel = DummyResponse(chat=SimpleNamespace(id=777, type="private", title=None), message_id=902)
+        callback = SimpleNamespace(
+            data="menu:777:p:about",
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
+            patch.object(
+                handlers.core, "user_language_state", new=AsyncMock(return_value=("ru", None))
+            ),
+        ):
+            await handlers.start_menu_callback(callback, AsyncMock())
+
+        self.assertEqual(panel.edits[0], handlers.menu.about_text("ru"))
+        labels = [b.text for row in panel.edit_markups[0].inline_keyboard for b in row]
+        self.assertEqual(labels, ["Назад"])
+
+    async def test_agreement_language_switch_keeps_the_panel_it_came_from(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data=handlers.agreement.callback_data(
+                handlers.agreement.ACTION_VIEW, "de", scope=handlers.menu.SCOPE_GROUP, owner_id=777
+            ),
+            from_user=SimpleNamespace(id=777, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+        group = SimpleNamespace(
+            id=1, language_code="ru", language_source=None, agreement_accepted_at=None
+        )
+
+        with (
+            patch.object(handlers.core, "group_getOrCreate", new=AsyncMock(return_value=group)),
+            patch.object(handlers, "_is_chat_admin", new=AsyncMock(return_value=False)),
+            patch.object(handlers.richmd, "available", return_value=False),
+        ):
+            await handlers.agreement_callback(callback, AsyncMock())
+
+        self.assertIn(handlers.i18n.t("de", "agreement.signature.title"), panel.edits[0])
+        data = [b.callback_data for row in panel.edit_markups[0].inline_keyboard for b in row]
+        self.assertIn(handlers.menu.callback_data(777, handlers.menu.SCOPE_GROUP, "home"), data)
+
+    async def test_agreement_tab_belongs_to_whoever_opened_the_panel(self) -> None:
+        panel = DummyResponse(
+            chat=SimpleNamespace(id=-100123456, type="supergroup", title="Quoto Test Chat"),
+            message_id=902,
+        )
+        callback = SimpleNamespace(
+            data=handlers.agreement.callback_data(
+                handlers.agreement.ACTION_VIEW, "ru", scope=handlers.menu.SCOPE_GROUP, owner_id=777
+            ),
+            from_user=SimpleNamespace(id=999, language_code="ru"),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+        await handlers.agreement_callback(callback, AsyncMock())
+
+        self.assertEqual(panel.edits, [])
+        callback.answer.assert_awaited_once()
 
     async def test_menu_callback_throttle_drops_fast_repeated_panel_clicks(self) -> None:
         panel = DummyResponse(

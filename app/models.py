@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     BigInteger,
     MetaData,
+    Numeric,
     String,
     Table,
     Text,
@@ -241,6 +242,12 @@ class AIEvaluationRun(Base):
     day_reason_code = Column(String, nullable=True)
     day_reason_text = Column(Text, nullable=True)
     request_id = Column(String, nullable=True)
+    # What the winning call consumed, as reported by OpenRouter (usage.include).
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    reasoning_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    cost_usd = Column(Numeric(12, 8), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     __table_args__ = (

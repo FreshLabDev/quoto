@@ -3,11 +3,15 @@ import os
 from zoneinfo import ZoneInfo
 from logging.handlers import RotatingFileHandler
 
+from dotenv import dotenv_values
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # === НАСТРОЙКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ===
+
+DEFAULT_EVAL_MODEL = "poolside/laguna-s-2.1:free"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -24,6 +28,9 @@ class Settings(BaseSettings):
     # -- BOT SETTINGS --
     BOT_TOKEN: str
     BOT_USERNAME: str
+    # Self-hosted Bot API server. Empty means api.telegram.org, which has no
+    # sendRichMessage (Bot API 10.3) -- the agreement then renders as HTML.
+    TELEGRAM_BOT_API_BASE_URL: str = ""
     DEVELOPER_IDS: list[int] = []
     ENABLE_DEVELOPERS_NOTIFY: bool = False
 
@@ -32,8 +39,7 @@ class Settings(BaseSettings):
 
     # -- AI SETTINGS --
     OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "poolside/laguna-s-2.1:free"
-    OPENROUTER_EVAL_MODEL: str = ""
+    OPENROUTER_EVAL_MODEL: str = DEFAULT_EVAL_MODEL
     # Used only if the primary eval model errors out after retries.
     OPENROUTER_EVAL_FALLBACK_MODEL: str = "poolside/laguna-s-2.1"
     OPENROUTER_MEDIA_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
@@ -252,18 +258,41 @@ def _load_settings() -> Settings:
     loaded.BOT_USERNAME = loaded.BOT_USERNAME.strip().lstrip("@")
     if not loaded.BOT_USERNAME:
         _fail("❌ Configuration error: BOT_USERNAME must be set to the bot's public username.")
-    if not getattr(loaded, "OPENROUTER_EVAL_MODEL", ""):
-        loaded.OPENROUTER_EVAL_MODEL = getattr(loaded, "OPENROUTER_MODEL", "poolside/laguna-s-2.1:free")
-    loaded.OPENROUTER_MODEL = loaded.OPENROUTER_EVAL_MODEL
+    loaded.TELEGRAM_BOT_API_BASE_URL = loaded.TELEGRAM_BOT_API_BASE_URL.strip().rstrip("/")
+    # An explicitly blank model in .env means "use the built-in default", not "".
+    loaded.OPENROUTER_EVAL_MODEL = loaded.OPENROUTER_EVAL_MODEL.strip() or DEFAULT_EVAL_MODEL
     return loaded
 
 
 settings = _load_settings()
 
 
+# Renamed env keys. `extra="ignore"` swallows them silently, so a stale .env
+# would otherwise keep a setting that stopped applying months ago.
+RENAMED_ENV_KEYS = {
+    "OPENROUTER_MODEL": "OPENROUTER_EVAL_MODEL",
+    "OPENROUTER_REASONING_EFFORT": (
+        "OPENROUTER_EVAL_REASONING_EFFORT / OPENROUTER_MEDIA_REASONING_EFFORT"
+    ),
+}
+
+
+def _configured_env_keys() -> set[str]:
+    keys = set(os.environ)
+    try:
+        keys.update(dotenv_values(Settings.model_config["env_file"]))
+    except OSError:
+        pass
+    return keys
+
+
 def validate_runtime() -> None:
     """Non-fatal startup checks for config that pydantic can't catch."""
     log = logging.getLogger(__name__)
+    configured = _configured_env_keys()
+    for stale, replacement in RENAMED_ENV_KEYS.items():
+        if stale in configured:
+            log.warning(f"⚠️ {stale} is no longer read — rename it to {replacement}.")
     if not settings.OPENROUTER_API_KEY:
         log.critical("⚠️ OPENROUTER_API_KEY is empty — AI scoring and media analysis will fail. Set it in .env.")
     try:

@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+# Quoto production stack on WS04. Runs against the shared core-postgres as
+# quoto_core (database `core`, schema `quoto`; the role's default search_path is
+# quoto,core).
+#
+# The image is pulled, never built here. A stack that builds from a working copy
+# on the host runs whatever that copy happened to contain, which is not
+# necessarily what CI tested and published -- and afterwards nothing on the host
+# can say which commit it was. QUOTO_IMAGE must name an immutable GHCR
+# reference, digest for preference:
+#
+#   QUOTO_IMAGE=ghcr.io/freshlabdev/quoto@sha256:<digest>
+#
+# The retired local `db` service is deliberately absent. It still exists in the
+# stack directory on the host as a rollback anchor for the 0.9.0 core
+# consolidation, together with its ./postgres data directory; it is not part of
+# the deployment and must not be started by it.
+name: quoto
+
+services:
+  app:
+    image: ${QUOTO_IMAGE:?QUOTO_IMAGE must be an immutable GHCR reference}
+    container_name: quoto-bot
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      # Overrides the DB_URL carried in .env, which still points at the
+      # retired local database.
+      DB_URL: postgresql+asyncpg://quoto_core:${QUOTO_CORE_PASSWORD:?QUOTO_CORE_PASSWORD must be set}@core-postgres:5432/core
+      LOGS_PATH: /app/logs/
+      COLORS: "False"
+      TZ: ${TZ:-Europe/Kyiv}
+      # Emoji reach the logs intact only if the streams are UTF-8.
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUNBUFFERED: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    volumes:
+      - ./logs:/app/logs
+    # telegram_bot_api_net is joined so the option exists, but the switch --
+    # TELEGRAM_BOT_API_BASE_URL in .env -- must stay empty until the server's
+    # media directory is mounted here. That server runs with --local: getFile
+    # answers with a path on its own disk rather than something downloadable, so
+    # the file has to be readable from inside this container. Mount only quoto's
+    # own token subdirectory, as voicy does, and run as the uid the server
+    # writes with. Turned on without that, every photo, video, circle and voice
+    # note fails analysis and the day's quote quietly gets worse.
+    # See docs/releases.md for the full list, including the one-way logOut.
+    networks: [core_net, telegram_bot_api_net]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  core_net:
+    external: true
+    name: core_net
+  telegram_bot_api_net:
+    external: true
+    name: telegram_bot_api_net
