@@ -689,8 +689,14 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
 
         if parsed.action == menu.ACTION_AUTO_PRIVATE_LANGUAGE:
             await core.clear_user_language(user.id)
-            language = i18n.language_or_default(getattr(user, "language_code", None))
-            language_source = None
+            # Ask core what answers now rather than assuming the Telegram hint.
+            # clear_language withdraws quoto's claim and nobody else's, so a
+            # sibling bot's manual choice survives it and then wins -- and this
+            # screen has to redraw in the language the reader is about to get,
+            # with the source line saying where it came from.
+            language, language_source = await core.user_language_state(
+                user.id, getattr(user, "language_code", None)
+            )
             await _show_private(menu.SECTION_LANGUAGE, i18n.t(language, "settings.updated"))
             return
 

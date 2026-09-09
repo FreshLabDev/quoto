@@ -875,9 +875,12 @@ class StatsPanelShapeTests(unittest.TestCase):
 
 class TelegramLanguageButtonTests(unittest.IsolatedAsyncioTestCase):
     """Quoto is the family's reference for "Telegram language": the button
-    clears this bot's own manual claim in core and lets the Telegram client's
-    hint decide again. The other bots copy these semantics, so they are pinned
-    here rather than left to the handler's shape."""
+    withdraws this bot's own claim and then asks core what answers instead.
+
+    Withdrawing is not the same as choosing the client hint. clear_language
+    removes quoto's observation and nobody else's, so a sibling bot's manual
+    choice survives it and keeps winning. The other bots copy these semantics,
+    so both outcomes are pinned here rather than left to the handler's shape."""
 
     def _callback(self, panel, language_code: str = "de"):
         return SimpleNamespace(
@@ -887,27 +890,39 @@ class TelegramLanguageButtonTests(unittest.IsolatedAsyncioTestCase):
             answer=AsyncMock(),
         )
 
-    async def test_it_clears_this_bot_s_claim_and_falls_back_to_the_client_hint(self) -> None:
-        panel = DummyResponse(chat=SimpleNamespace(id=777, type="private", title=None), message_id=902)
-        callback = self._callback(panel)
+    async def _press(self, before, after, *, message_id: int):
+        """Press the button with core answering `before`, then `after`.
 
+        Each case needs its own message id: the panel registry is keyed by one,
+        and a second press on the same id is treated as a stale panel.
+        """
+        panel = DummyResponse(chat=SimpleNamespace(id=777, type="private", title=None), message_id=message_id)
+        callback = self._callback(panel)
         with (
             patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
             patch.object(
-                handlers.core, "user_language_state", new=AsyncMock(return_value=("ru", "manual"))
+                handlers.core, "user_language_state", new=AsyncMock(side_effect=[before, after])
             ),
             patch.object(
                 handlers.core, "clear_user_language", new=AsyncMock(return_value=True)
             ) as clear,
         ):
             await handlers.start_menu_callback(callback, AsyncMock())
-
         clear.assert_awaited_once_with(777)
-        # The panel comes back in the Telegram language, saying so.
-        self.assertIn(handlers.i18n.t("de", "settings.private.language_title"), panel.edits[0])
-        self.assertIn(
-            handlers.i18n.t("de", "settings.private.language_source_telegram"), panel.edits[0]
-        )
+        return panel.edits[0]
+
+    async def test_with_nothing_left_the_client_hint_decides_again(self) -> None:
+        # Quoto held the only claim, so withdrawing it leaves the German client.
+        edit = await self._press(("ru", "manual"), ("de", None), message_id=902)
+        self.assertIn(handlers.i18n.t("de", "settings.private.language_title"), edit)
+        self.assertIn(handlers.i18n.t("de", "settings.private.language_source_telegram"), edit)
+
+    async def test_a_sibling_s_surviving_choice_wins_over_the_client_hint(self) -> None:
+        # Another bot still holds Russian by hand. The screen must not claim the
+        # German client won: the very next update would replace it.
+        edit = await self._press(("ru", "manual"), ("ru", "manual"), message_id=903)
+        self.assertIn(handlers.i18n.t("ru", "settings.private.language_title"), edit)
+        self.assertIn(handlers.i18n.t("ru", "settings.private.language_source_manual"), edit)
 
     async def test_it_sits_under_the_language_grid_and_over_the_navigation(self) -> None:
         _, keyboard = handlers.menu.build_private_panel(
