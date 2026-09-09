@@ -39,7 +39,11 @@ services:
       LC_ALL: C.UTF-8
     volumes:
       - ./logs:/app/logs
-    networks: [core_net]
+    # telegram_bot_api_net reaches the self-hosted Bot API 10.3 server. Without
+    # it TELEGRAM_BOT_API_BASE_URL resolves to nothing and the rich-markdown
+    # agreement silently falls back to HTML, which is exactly the failure the
+    # startup preflight exists to make loud.
+    networks: [core_net, telegram_bot_api_net]
     logging:
       driver: json-file
       options:
@@ -50,3 +54,6 @@ networks:
   core_net:
     external: true
     name: core_net
+  telegram_bot_api_net:
+    external: true
+    name: telegram_bot_api_net

@@ -13,39 +13,8 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
-### Changed
-
-- **Commands are registered per scope and per language.** One global list with
-  hardcoded English descriptions advertised `/start` and `/privacy` to
-  everybody; `/privacy` led nowhere in a private chat, and `/start` opens a
-  different screen in a group than it does in a DM. `/start` is now published
-  through `BotCommandScopeAllPrivateChats` and `BotCommandScopeAllGroupChats`
-  with a description written for each, localized into all four interface
-  languages via `language_code`. It is the only registered command in either
-  scope: `/privacy` was a document view, so it became a tab and the command was
-  removed.
-- Navigation matches the rest of the family: `Back` lost its `‹`, and `Close`
-  appears only in group panels — a private panel has nothing to close.
-- The trophy is a state marker again, not decoration. `🏆` is gone from the
-  panel headers, the group greeting and the private hello, and stays only on the
-  published quote, where it means the line that won the day. The agreement
-  buttons lost their `✅` and `📄` icons.
-- One versioning and release document for the whole family. `docs/versioning.md`
-  and `docs/releases.md` are now byte-identical across every Asterfield
-  repository apart from two clearly marked sections: this repository's own
-  version line, and the surface where a change here breaks something. They spell
-  out what each of the three numbers means, what the `-alpha.N` suffix counts,
-  when alpha becomes beta and when it is legitimate to skip to rc or run a
-  pre-release in production.
-- **Pre-releases are now tagged on `dev`, not `main`.** Only stable versions are
-  tagged on `main`, on the merge commit from `dev`, so `main` answers exactly one
-  question: what is in production. The test bot runs `dev`, the production bot
-  runs `main`. `release.yml` enforces this and refuses a tag on the wrong branch.
-  Earlier pre-releases in this repository were tagged on `main` under the
-  previous rule; they are left as they are.
-- `AGENTS.md`, which quoto was the only repository in the family to lack.
-
 ### Added
+
 - **The user agreement is sent as rich Markdown.** It is the one document in
   Quoto that was faking structure — seven `<b>1. …</b>` items inside a
   blockquote — and it now goes out through `sendRichMessage`
@@ -91,34 +60,6 @@ Use this section for changes that are merged but not released yet.
   say which commit it came from. `QUOTO_IMAGE` has no default: an unset one
   stops the stack rather than quietly starting something else.
 
-### Fixed
-- The operator contact in the user agreement was `@amti_yo`, which is not a
-  Telegram account. It is `@amtiyo`, corrected in all four locales, and the
-  document now takes it from one constant instead of repeating it.
-- The Dockerfile no longer defaults `QUOTO_VERSION` to `0.10.2`. It stayed at
-  that value through the whole of v0.10.3, so an image built without the
-  argument labelled itself as a release it was not.
-- A second `## Unreleased` section, left behind by the v0.10.2 release, sat
-  between v0.10.2 and v0.10.1. Release preparation renames `## Unreleased` to
-  the new version, and with two of them the wrong one could be renamed.
-
-### Changed
-- Media description prompts now cast the model as the eyes and ears of someone
-  who can't see or hear the file: on-screen text and speech must be quoted
-  verbatim (screenshots of chats keep every line with its sender), unclear
-  audio is marked `[неразборчиво]` instead of guessed, and the length caps grow
-  to 1200 characters when there is a lot of text or speech (the payload still
-  clips descriptions at 1500). `MEDIA_CACHE_PROMPT_VERSION` is deliberately
-  left at `v2`, so already-described files keep their old descriptions.
-
-### Removed
-- Legacy `OPENROUTER_MODEL` setting. The quote evaluation model is now read only
-  from `OPENROUTER_EVAL_MODEL`, whose default is `poolside/laguna-s-2.1:free`;
-  a blank value falls back to that default. Previously the two settings aliased
-  each other at startup and whatever was written into `OPENROUTER_MODEL` was
-  silently overwritten.
-
-### Added
 - `scripts/bench_web.py` + `scripts/bench_web_ui.html`: a local web hub for
   picking an eval model. Lists the days recorded in `logs/ai_audit.jsonl`, shows
   the day's messages and what production picked, runs any set of models against
@@ -155,6 +96,74 @@ Use this section for changes that are merged but not released yet.
 - Startup warning for renamed env keys (`OPENROUTER_MODEL`,
   `OPENROUTER_REASONING_EFFORT`). `extra="ignore"` used to swallow them, so a
   stale `.env` kept settings that had stopped applying.
+
+### Changed
+
+- The production stack joins `telegram_bot_api_net` as well as `core_net`.
+  Quoto never had a `TELEGRAM_BOT_API_BASE_URL` setting at all, so it has always
+  talked to api.telegram.org and Bot API 10.3 was unreachable. Adding the
+  variable is not enough on its own: the container also has to sit on the
+  network the server lives on, or the URL resolves to nothing and the new
+  rich-markdown agreement falls back to HTML on every send. The operator still
+  has to set the variable in `.app.env` on the host.
+
+- **Commands are registered per scope and per language.** One global list with
+  hardcoded English descriptions advertised `/start` and `/privacy` to
+  everybody; `/privacy` led nowhere in a private chat, and `/start` opens a
+  different screen in a group than it does in a DM. `/start` is now published
+  through `BotCommandScopeAllPrivateChats` and `BotCommandScopeAllGroupChats`
+  with a description written for each, localized into all four interface
+  languages via `language_code`. It is the only registered command in either
+  scope: `/privacy` was a document view, so it became a tab and the command was
+  removed.
+- Navigation matches the rest of the family: `Back` lost its `‹`, and `Close`
+  appears only in group panels — a private panel has nothing to close.
+- The trophy is a state marker again, not decoration. `🏆` is gone from the
+  panel headers, the group greeting and the private hello, and stays only on the
+  published quote, where it means the line that won the day. The agreement
+  buttons lost their `✅` and `📄` icons.
+- One versioning and release document for the whole family. `docs/versioning.md`
+  and `docs/releases.md` are now byte-identical across every Asterfield
+  repository apart from two clearly marked sections: this repository's own
+  version line, and the surface where a change here breaks something. They spell
+  out what each of the three numbers means, what the `-alpha.N` suffix counts,
+  when alpha becomes beta and when it is legitimate to skip to rc or run a
+  pre-release in production.
+- **Pre-releases are now tagged on `dev`, not `main`.** Only stable versions are
+  tagged on `main`, on the merge commit from `dev`, so `main` answers exactly one
+  question: what is in production. The test bot runs `dev`, the production bot
+  runs `main`. `release.yml` enforces this and refuses a tag on the wrong branch.
+  Earlier pre-releases in this repository were tagged on `main` under the
+  previous rule; they are left as they are.
+- `AGENTS.md`, which quoto was the only repository in the family to lack.
+
+- Media description prompts now cast the model as the eyes and ears of someone
+  who can't see or hear the file: on-screen text and speech must be quoted
+  verbatim (screenshots of chats keep every line with its sender), unclear
+  audio is marked `[неразборчиво]` instead of guessed, and the length caps grow
+  to 1200 characters when there is a lot of text or speech (the payload still
+  clips descriptions at 1500). `MEDIA_CACHE_PROMPT_VERSION` is deliberately
+  left at `v2`, so already-described files keep their old descriptions.
+
+### Fixed
+
+- The operator contact in the user agreement was `@amti_yo`, which is not a
+  Telegram account. It is `@amtiyo`, corrected in all four locales, and the
+  document now takes it from one constant instead of repeating it.
+- The Dockerfile no longer defaults `QUOTO_VERSION` to `0.10.2`. It stayed at
+  that value through the whole of v0.10.3, so an image built without the
+  argument labelled itself as a release it was not.
+- A second `## Unreleased` section, left behind by the v0.10.2 release, sat
+  between v0.10.2 and v0.10.1. Release preparation renames `## Unreleased` to
+  the new version, and with two of them the wrong one could be renamed.
+
+### Removed
+
+- Legacy `OPENROUTER_MODEL` setting. The quote evaluation model is now read only
+  from `OPENROUTER_EVAL_MODEL`, whose default is `poolside/laguna-s-2.1:free`;
+  a blank value falls back to that default. Previously the two settings aliased
+  each other at startup and whatever was written into `OPENROUTER_MODEL` was
+  silently overwritten.
 
 ## v0.10.3 - 2026-08-22
 
