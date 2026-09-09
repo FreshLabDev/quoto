@@ -4,11 +4,12 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
-from app import config, utils, db, handlers, scheduler
+from app import config, utils, db, handlers, i18n, richmd, scheduler
 from app.version import VERSION
 
 bot = Bot(
     token=config.settings.BOT_TOKEN,
+    session=utils.build_session(),
     default=DefaultBotProperties(parse_mode=ParseMode.HTML, disable_notification=True, link_preview_is_disabled=True)
 )
 
@@ -26,6 +27,45 @@ async def on_update_error(event: types.ErrorEvent) -> bool:
     return True
 
 
+async def register_commands(bot: Bot) -> None:
+    """Publish the command menu per chat type and per interface language.
+
+    `/start` is the only registered command in either scope -- the agreement,
+    stats, settings and About are tabs inside the panel it opens -- but it
+    opens a different screen in a private chat than in a group, so the two
+    scopes describe it differently. Telegram picks the list matching the
+    client's language; the language-less lists are the English fallback for
+    every other client.
+    """
+    languages: list[str | None] = [None, *i18n.SUPPORTED_LANGUAGES]
+    for language in languages:
+        text = language or i18n.DEFAULT_LANGUAGE
+        private = [
+            types.BotCommand(command="start", description=i18n.t(text, "command.start_private"))
+        ]
+        group = [
+            types.BotCommand(command="start", description=i18n.t(text, "command.start_group"))
+        ]
+        try:
+            if language is None:
+                # Also the default scope, so the pre-scope command list (which
+                # still advertises /privacy) is overwritten rather than left
+                # behind for any chat type the scoped lists do not cover.
+                await bot.set_my_commands(private, scope=types.BotCommandScopeDefault())
+            await bot.set_my_commands(
+                private,
+                scope=types.BotCommandScopeAllPrivateChats(),
+                language_code=language,
+            )
+            await bot.set_my_commands(
+                group,
+                scope=types.BotCommandScopeAllGroupChats(),
+                language_code=language,
+            )
+        except Exception as exc:
+            log.warning(f"⚠️ Не удалось зарегистрировать команды ({language or 'default'}): {exc}")
+
+
 async def main():
     config.validate_runtime()
     log.info(f"📦 Версия Quoto: {VERSION}")
@@ -35,12 +75,8 @@ async def main():
     dp.errors.register(on_update_error)
 
     await db.init_db()
-    await bot.set_my_commands(
-        [
-            types.BotCommand(command="start", description="Open Quoto menu"),
-            types.BotCommand(command="privacy", description="User agreement & privacy"),
-        ]
-    )
+    await richmd.preflight(bot)
+    await register_commands(bot)
 
     # Инициализация планировщика
     sched = scheduler.setup_scheduler(bot)

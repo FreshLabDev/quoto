@@ -8,6 +8,10 @@
     "context": "Kontext",
     "ai": "KI"
   },
+  "command": {
+    "start_private": "Quoto öffnen",
+    "start_group": "Quoto-Panel öffnen"
+  },
   "menu": {
     "button": {
       "user_stats": "Meine Statistik",
@@ -15,17 +19,19 @@
       "stats": "Statistik",
       "group_language": "Gruppensprache",
       "settings": "Einstellungen",
-      "back": "‹ Zurück",
+      "back": "Zurück",
+      "about": "Über",
+      "agreement": "Vereinbarung",
       "close": "Schließen"
     },
     "private": {
-      "title": "🏆 <b>Quoto</b>",
+      "title": "<b>Quoto</b>",
       "body": "Ich wähle ein Zitat des Tages in Gruppenchats. Füge mich zu einer Gruppe hinzu und öffne dort /start.",
       "language": "Sprache der Oberfläche: <b>{language_name}</b>",
       "language_note": "Im privaten Chat nutze ich deine Telegram-Sprache."
     },
     "group": {
-      "title": "🏆 <b>Quoto</b>",
+      "title": "<b>Quoto</b>",
       "admin_body": "Ich beobachte den Chat und veröffentliche am Tagesende die beste Zeile. Statistik und Einstellungen unten.",
       "user_body": "Ich beobachte den Chat und veröffentliche am Tagesende die beste Zeile.",
       "language_line": "Sprache: <b>{language_name}</b>",
@@ -133,7 +139,7 @@
     "admin_only": "Das können nur Admins ändern."
   },
   "chat_member": {
-    "added": "🏆 <b>Quoto</b>\n\nSchön, in <b>{chat_title}</b> zu sein. Jeden Tag um <b>{time}</b> wähle ich die beste Zeile und veröffentliche das Zitat des Tages.\n\nÖffne /start — Statistik und Einstellungen sind dort.",
+    "added": "<b>Quoto</b>\n\nSchön, in <b>{chat_title}</b> zu sein. Jeden Tag um <b>{time}</b> wähle ich die beste Zeile und veröffentliche das Zitat des Tages.\n\nÖffne /start — Statistik und Einstellungen sind dort.",
     "need_admin": "⚠️ Mach mich zum <b>Administrator</b> mit der Berechtigung, Nachrichten <i>anzuheften</i> — dann kann ich das Ergebnis veröffentlichen.",
     "admin_granted": "Danke! Jetzt kann ich das Zitat des Tages veröffentlichen."
   },
@@ -141,7 +147,7 @@
     "invalid_quote_link": "⚠️ Ungültiger Zitat-Link.",
     "quote_not_found": "⚠️ Zitat nicht gefunden.",
     "add_to_group": "Zur Gruppe hinzufügen",
-    "hello": "🏆 <b>Quoto</b>\n\nIch wähle ein Zitat des Tages in Gruppenchats: Ich sammle die Nachrichten des Tages und veröffentliche zur festgelegten Zeit die beste Zeile.\n\nFüge mich zu einer Gruppe hinzu und öffne dort /start."
+    "hello": "<b>Quoto</b>\n\nIch wähle ein Zitat des Tages in Gruppenchats: Ich sammle die Nachrichten des Tages und veröffentliche zur festgelegten Zeit die beste Zeile.\n\nFüge mich zu einer Gruppe hinzu und öffne dort /start."
   },
   "details": {
     "title": "<b>Tag #{id}</b>",
@@ -153,7 +159,7 @@
     "ai_choice": "KI-Auswahl"
   },
   "start": {
-    "group": "🏆 <b>Quoto — Zitat des Tages</b>\n\nIch sammle die Nachrichten des Tages und wähle am Tagesende die beste Zeile.\n\nÖffne /start, um die Steuerung zu öffnen."
+    "group": "<b>Quoto — Zitat des Tages</b>\n\nIch sammle die Nachrichten des Tages und wähle am Tagesende die beste Zeile.\n\nÖffne /start, um die Steuerung zu öffnen."
   },
   "stats": {
     "missing": "Statistik ist noch nicht verfügbar — diese Gruppe ist nicht registriert.",
@@ -190,19 +196,69 @@
     "title": "😴 <b>Heute kein Zitat des Tages</b>",
     "body": "Ich habe keine Zeile gefunden, die den Tag wert ist. Bis morgen!"
   },
+  "about": {
+    "tagline": "Das Zitat des Tages aus dem, was im Chat geschrieben wurde.",
+    "eval": "Bewertung",
+    "sources": "Quellcode",
+    "admin": "Admin"
+  },
   "agreement": {
-    "title": "📄 <b>Quoto — Nutzungsvereinbarung &amp; Datenschutz</b>",
-    "summary": "<i>Mit der Nutzung von Quoto in dieser Gruppe akzeptierst du die folgenden Bedingungen. Zum Ausklappen tippen.</i>",
-    "body": "<b>1. Was Quoto tut.</b> Tagsüber lese ich Nachrichten in dieser Gruppe und veröffentliche zur eingestellten Zeit ein „Zitat des Tages“.\n\n<b>2. Was verarbeitet wird.</b> Nachrichtentext und Bildunterschriften, Reaktionen, Medien (Fotos, Videos, Sprachnachrichten, Audio), der Name des Autors und seine Telegram-ID sowie ID und Titel der Gruppe.\n\n<b>3. KI-Verarbeitung.</b> Zur Auswahl eines Zitats werden Nachrichtentext und Medien zur Analyse an unseren KI-Anbieter <b>OpenRouter</b> und dessen Modellanbieter gesendet. Teile keine Passwörter oder sensiblen Daten in Chats, in denen Quoto aktiv ist.\n\n<b>4. Speicherung.</b> Die primären Tagesdaten werden nach der Verarbeitung bereinigt. Einzelne technische Aufzeichnungen und Verarbeitungsergebnisse können für Zuverlässigkeit, Qualitätskontrollen und Statistiken länger aufbewahrt werden; veröffentlichte Zitate und grundlegende Kennungen bleiben im Dienstverlauf erhalten.\n\n<b>5. Deine Daten.</b> Ich verkaufe deine Daten nicht. Für eine Löschung schreibe an @amti_yo.\n\n<b>6. Verantwortung des Admins.</b> Mit der Annahme bestätigt ein Gruppen-Admin, dass er den Bot hinzufügen darf und dass die Mitglieder wissen, dass der Chat von Quoto verarbeitet wird.\n\n<b>7. Ohne Gewähr.</b> Der Dienst wird „wie besehen“ ohne Gewährleistung bereitgestellt; die Bedingungen können sich ändern, die weitere Nutzung gilt als Zustimmung.",
-    "doc_footer": "<i>Um das Zitat des Tages zu aktivieren, tippt ein Admin auf „Akzeptieren“. Fragen: @amti_yo.</i>",
+    "title": "Quoto — Nutzungsvereinbarung & Datenschutz",
+    "summary": "Mit der Nutzung von Quoto in dieser Gruppe akzeptierst du die folgenden Bedingungen.",
+    "sections": [
+      {
+        "heading": "Was Quoto tut",
+        "text": "Tagsüber lese ich Nachrichten in dieser Gruppe und veröffentliche zur eingestellten Zeit ein „Zitat des Tages“."
+      },
+      {
+        "heading": "Was verarbeitet wird",
+        "text": "Um das Zitat des Tages zu wählen, verarbeite ich:",
+        "items": [
+          "Nachrichtentext und Bildunterschriften",
+          "Reaktionen auf Nachrichten",
+          "Medien: Fotos, Videos, Sprachnachrichten und Audio",
+          "den Namen des Autors und seine Telegram-ID",
+          "ID und Titel der Gruppe"
+        ]
+      },
+      {
+        "heading": "KI-Verarbeitung",
+        "text": "Zur Auswahl eines Zitats werden Nachrichtentext und Medien zur Analyse an unseren KI-Anbieter OpenRouter und dessen Modellanbieter gesendet.",
+        "note": "Teile keine Passwörter oder sensiblen Daten in Chats, in denen Quoto aktiv ist."
+      },
+      {
+        "heading": "Speicherung",
+        "text": "Die primären Tagesdaten werden nach der Verarbeitung bereinigt. Einzelne technische Aufzeichnungen und Verarbeitungsergebnisse können für Zuverlässigkeit, Qualitätskontrollen und Statistiken länger aufbewahrt werden; veröffentlichte Zitate und grundlegende Kennungen bleiben im Dienstverlauf erhalten."
+      },
+      {
+        "heading": "Deine Daten",
+        "text": "Ich verkaufe deine Daten nicht. Für eine Löschung schreibe an {contact}."
+      },
+      {
+        "heading": "Verantwortung des Admins",
+        "text": "Mit der Annahme bestätigt ein Gruppen-Admin, dass er den Bot hinzufügen darf und dass die Mitglieder wissen, dass der Chat von Quoto verarbeitet wird."
+      },
+      {
+        "heading": "Ohne Gewähr",
+        "text": "Der Dienst wird „wie besehen“ ohne Gewährleistung bereitgestellt; die Bedingungen können sich ändern, die weitere Nutzung gilt als Zustimmung."
+      }
+    ],
+    "signature": {
+      "title": "Dokumentsignatur",
+      "version_label": "Version der Vereinbarung",
+      "effective_label": "In Kraft seit",
+      "operator_label": "Betreiber",
+      "contact_label": "Kontakt"
+    },
+    "accept_hint": "Um das Zitat des Tages zu aktivieren, tippt ein Gruppen-Admin auf „Akzeptieren“.",
     "welcome_note": "<i>Bevor ich etwas veröffentliche, muss ein Gruppen-Admin die Nutzungsvereinbarung akzeptieren.</i>",
-    "view_button": "📄 Nutzungsvereinbarung",
-    "accept_button": "✅ Akzeptieren",
+    "view_button": "Nutzungsvereinbarung",
+    "accept_button": "Akzeptieren",
     "accepted": "✅ <b>Nutzungsvereinbarung akzeptiert.</b> Danke!",
     "accepted_admin_hint": "<i>Mach mich jetzt zum Administrator mit der Berechtigung, Nachrichten anzuheften, damit ich das Zitat des Tages veröffentlichen kann.</i>",
     "accepted_toast": "Akzeptiert — danke!",
-    "already": "✅ <i>Diese Gruppe hat die Vereinbarung bereits akzeptiert.</i>",
+    "already": "✅ Diese Gruppe hat die Vereinbarung bereits akzeptiert.",
     "admin_only": "Nur ein Gruppen-Admin kann die Vereinbarung akzeptieren.",
-    "reminder": "📄 Um das Zitat des Tages zu veröffentlichen, muss ein Gruppen-Admin die Quoto-Nutzungsvereinbarung akzeptieren."
+    "reminder": "Um das Zitat des Tages zu veröffentlichen, muss ein Gruppen-Admin die Quoto-Nutzungsvereinbarung akzeptieren."
   }
 }

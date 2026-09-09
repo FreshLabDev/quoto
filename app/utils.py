@@ -7,13 +7,29 @@ from html import escape
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 
 from .config import settings, setup_logging
 
 
+def build_session() -> AiohttpSession | None:
+    """Point a bot at the self-hosted Bot API server when one is configured.
+
+    None means aiogram's default, api.telegram.org. The base URL is what
+    decides whether Bot API 10.3 methods exist at all, so every Bot instance
+    in the process has to be built through here.
+    """
+    base = settings.TELEGRAM_BOT_API_BASE_URL
+    if not base:
+        return None
+    return AiohttpSession(api=TelegramAPIServer.from_base(base))
+
+
 bot = Bot(
     token=settings.BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    session=build_session(),
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 
 log = setup_logging(logging.getLogger(__name__))

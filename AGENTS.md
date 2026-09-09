@@ -17,6 +17,10 @@ default, and production-minded.
   apply cleanly on the shared database before the bot boots.
 - AI scoring goes through OpenRouter. Every request body and raw response is
   written to `logs/ai_audit.jsonl` and kept for seven days.
+- `TELEGRAM_BOT_API_BASE_URL` points the bot at our own Bot API server. Empty
+  means api.telegram.org, and then the Bot API 10.3 methods do not exist: the
+  user agreement drops from rich Markdown to HTML. `app/richmd.py` probes
+  `sendRichMessage` at startup and says which one it got.
 
 ## Product Boundaries
 
@@ -73,7 +77,10 @@ history, and checks that every package in `requirements.in` is pinned into
 ## Release Checklist
 
 - `alembic upgrade head` applies cleanly against a copy of the shared database.
-- The `/start` panel opens in DM and in a group.
+- The `/start` panel opens in DM and in a group, and both reach the agreement
+  and About tabs.
+- The user agreement renders as rich Markdown against our Bot API server, and
+  as HTML with `TELEGRAM_BOT_API_BASE_URL` unset.
 - One full daily quote run against a live group, including the boring-day path.
 - Media description works for an image, a video and an audio file, and the
   fallback chain is exercised at least once.

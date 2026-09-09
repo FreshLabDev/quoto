@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # -- BOT SETTINGS --
     BOT_TOKEN: str
     BOT_USERNAME: str
+    # Self-hosted Bot API server. Empty means api.telegram.org, which has no
+    # sendRichMessage (Bot API 10.3) -- the agreement then renders as HTML.
+    TELEGRAM_BOT_API_BASE_URL: str = ""
     DEVELOPER_IDS: list[int] = []
     ENABLE_DEVELOPERS_NOTIFY: bool = False
 
@@ -255,6 +258,7 @@ def _load_settings() -> Settings:
     loaded.BOT_USERNAME = loaded.BOT_USERNAME.strip().lstrip("@")
     if not loaded.BOT_USERNAME:
         _fail("❌ Configuration error: BOT_USERNAME must be set to the bot's public username.")
+    loaded.TELEGRAM_BOT_API_BASE_URL = loaded.TELEGRAM_BOT_API_BASE_URL.strip().rstrip("/")
     # An explicitly blank model in .env means "use the built-in default", not "".
     loaded.OPENROUTER_EVAL_MODEL = loaded.OPENROUTER_EVAL_MODEL.strip() or DEFAULT_EVAL_MODEL
     return loaded

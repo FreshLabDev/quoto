@@ -3,6 +3,7 @@ from __future__ import annotations
 from aiogram import types
 
 from . import i18n
+from .version import CONTACT, CONTACT_URL, LICENSE, REPOSITORY, REPOSITORY_URL, VERSION
 
 
 CALLBACK_PREFIX = "menu"
@@ -26,6 +27,8 @@ ACTION_USER_STATS = "userstats"
 ACTION_PRIVATE_LANGUAGE = "plang"
 ACTION_SET_PRIVATE_LANGUAGE = "setplang"
 ACTION_AUTO_PRIVATE_LANGUAGE = "autoplang"
+ACTION_ABOUT = "about"
+ACTION_AGREEMENT = "doc"
 
 SECTION_HOME = "home"
 SECTION_LANGUAGE = "lang"
@@ -33,6 +36,11 @@ SECTION_SCHEDULE = "sched"
 SECTION_TIMEZONE = "tz"
 SECTION_BEHAVIOR = "behavior"
 SECTION_STATS = "stats"
+SECTION_ABOUT = "about"
+
+# The scoring provider named on the About card. Which model is used is a
+# setting; who evaluates is a fact about the product.
+EVALUATOR = "OpenRouter"
 
 LANGUAGE_BUTTON_ORDER = ("uk", "ru", "en", "de")
 TIMEZONE_CHOICES = (
@@ -122,8 +130,43 @@ def _back_button(owner_id: int, scope: str, language: str) -> types.InlineKeyboa
     )
 
 
-def _nav_row(owner_id: int, scope: str, language: str) -> list[types.InlineKeyboardButton]:
-    return [_back_button(owner_id, scope, language), _close_button(owner_id, scope, language)]
+def nav_row(owner_id: int, scope: str, language: str) -> list[types.InlineKeyboardButton]:
+    """Back, and Close only in a group: a private panel has nothing to close."""
+    row = [_back_button(owner_id, scope, language)]
+    if scope == SCOPE_GROUP:
+        row.append(_close_button(owner_id, scope, language))
+    return row
+
+
+def _document_row(owner_id: int, scope: str, language: str) -> list[types.InlineKeyboardButton]:
+    """The two read-only tabs both panels carry: the agreement and About."""
+    return [
+        types.InlineKeyboardButton(
+            text=i18n.t(language, "menu.button.agreement"),
+            callback_data=callback_data(owner_id, scope, ACTION_AGREEMENT),
+        ),
+        types.InlineKeyboardButton(
+            text=i18n.t(language, "menu.button.about"),
+            callback_data=callback_data(owner_id, scope, ACTION_ABOUT),
+        ),
+    ]
+
+
+def about_text(language: str) -> str:
+    """The family About card: name, version, one line of purpose, then the
+    facts as `key · value` rows. The repository is a link in the text, so no
+    button duplicates it."""
+    return _screen(
+        f"<b>Quoto</b> · <i>v{VERSION}</i>\n{i18n.t(language, 'about.tagline')}",
+        _quote(
+            [
+                f"{i18n.t(language, 'about.eval')} · {EVALUATOR}",
+                f"{i18n.t(language, 'about.sources')} · "
+                f'<a href="{REPOSITORY_URL}">{REPOSITORY}</a> · {LICENSE}',
+                f'{i18n.t(language, "about.admin")} · <a href="{CONTACT_URL}">{CONTACT}</a>',
+            ]
+        ),
+    )
 
 
 def _private_language_source_key(language_source: str | None) -> str:
@@ -194,6 +237,11 @@ def build_private_panel(
     header = i18n.t(language, "menu.private.title")
     source = i18n.t(language, _private_language_source_key(language_source))
 
+    if section == SECTION_ABOUT:
+        return about_text(language), types.InlineKeyboardMarkup(
+            inline_keyboard=[nav_row(owner_id, SCOPE_PRIVATE, language)]
+        )
+
     if section == SECTION_LANGUAGE:
         readout = _quote(
             [
@@ -218,7 +266,7 @@ def build_private_panel(
                 )
             ]
         )
-        rows.append(_nav_row(owner_id, SCOPE_PRIVATE, language))
+        rows.append(nav_row(owner_id, SCOPE_PRIVATE, language))
         return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
 
     readout = _quote(
@@ -242,7 +290,7 @@ def build_private_panel(
                     url=f"https://t.me/{bot_username}?startgroup=new",
                 )
             ],
-            [_close_button(owner_id, SCOPE_PRIVATE, language)],
+            _document_row(owner_id, SCOPE_PRIVATE, language),
         ]
     )
     return text, keyboard
@@ -294,6 +342,11 @@ def build_group_panel(
 ) -> tuple[str, types.InlineKeyboardMarkup]:
     header = i18n.t(language, "menu.group.title")
 
+    if section == SECTION_ABOUT:
+        return about_text(language), types.InlineKeyboardMarkup(
+            inline_keyboard=[nav_row(owner_id, SCOPE_GROUP, language)]
+        )
+
     if section == SECTION_LANGUAGE:
         readout = _quote(
             [
@@ -318,7 +371,7 @@ def build_group_panel(
                 )
             ]
         )
-        rows.append(_nav_row(owner_id, SCOPE_GROUP, language))
+        rows.append(nav_row(owner_id, SCOPE_GROUP, language))
         return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
 
     if section == SECTION_SCHEDULE:
@@ -357,7 +410,7 @@ def build_group_panel(
                         callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_GROUP_TIMEZONE),
                     )
                 ],
-                _nav_row(owner_id, SCOPE_GROUP, language),
+                nav_row(owner_id, SCOPE_GROUP, language),
             ]
         )
         return text, keyboard
@@ -373,7 +426,7 @@ def build_group_panel(
             readout,
         )
         rows = _timezone_buttons(owner_id, timezone_name)
-        rows.append(_nav_row(owner_id, SCOPE_GROUP, language))
+        rows.append(nav_row(owner_id, SCOPE_GROUP, language))
         return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
 
     if section == SECTION_BEHAVIOR:
@@ -416,7 +469,7 @@ def build_group_panel(
                         callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_TOGGLE_GROUP_SETTING, "media"),
                     ),
                 ],
-                _nav_row(owner_id, SCOPE_GROUP, language),
+                nav_row(owner_id, SCOPE_GROUP, language),
             ]
         )
         return text, keyboard
@@ -435,7 +488,7 @@ def build_group_panel(
                         callback_data=callback_data(owner_id, SCOPE_GROUP, ACTION_CHAT_STATS),
                     ),
                 ],
-                _nav_row(owner_id, SCOPE_GROUP, language),
+                nav_row(owner_id, SCOPE_GROUP, language),
             ]
         )
         return text, keyboard
@@ -478,6 +531,7 @@ def build_group_panel(
                 ),
             ]
         )
+    rows.append(_document_row(owner_id, SCOPE_GROUP, language))
     rows.append([_close_button(owner_id, SCOPE_GROUP, language)])
     return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
 

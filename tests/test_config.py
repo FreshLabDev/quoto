@@ -19,6 +19,7 @@ class ConfigTests(unittest.TestCase):
     def test_load_settings_strips_leading_at_from_bot_username(self) -> None:
         fake_settings = SimpleNamespace(
             BOT_USERNAME=" @quoto_test_bot ",
+            TELEGRAM_BOT_API_BASE_URL="",
             OPENROUTER_EVAL_MODEL="vendor/model",
         )
 
@@ -30,6 +31,7 @@ class ConfigTests(unittest.TestCase):
     def test_load_settings_falls_back_to_default_eval_model_when_blank(self) -> None:
         fake_settings = SimpleNamespace(
             BOT_USERNAME="quoto_test_bot",
+            TELEGRAM_BOT_API_BASE_URL="http://telegram-bot-api:8081/",
             OPENROUTER_EVAL_MODEL="   ",
         )
 
@@ -37,6 +39,7 @@ class ConfigTests(unittest.TestCase):
             loaded = config._load_settings()
 
         self.assertEqual(loaded.OPENROUTER_EVAL_MODEL, config.DEFAULT_EVAL_MODEL)
+        self.assertEqual(loaded.TELEGRAM_BOT_API_BASE_URL, "http://telegram-bot-api:8081")
 
     def test_validate_runtime_warns_about_renamed_env_keys(self) -> None:
         with patch.object(config, "_configured_env_keys", return_value={"OPENROUTER_MODEL"}):

@@ -15,6 +15,21 @@ Use this section for changes that are merged but not released yet.
 
 ### Changed
 
+- **Commands are registered per scope and per language.** One global list with
+  hardcoded English descriptions advertised `/start` and `/privacy` to
+  everybody; `/privacy` led nowhere in a private chat, and `/start` opens a
+  different screen in a group than it does in a DM. `/start` is now published
+  through `BotCommandScopeAllPrivateChats` and `BotCommandScopeAllGroupChats`
+  with a description written for each, localized into all four interface
+  languages via `language_code`. It is the only registered command in either
+  scope: `/privacy` was a document view, so it became a tab and the command was
+  removed.
+- Navigation matches the rest of the family: `Back` lost its `‹`, and `Close`
+  appears only in group panels — a private panel has nothing to close.
+- The trophy is a state marker again, not decoration. `🏆` is gone from the
+  panel headers, the group greeting and the private hello, and stays only on the
+  published quote, where it means the line that won the day. The agreement
+  buttons lost their `✅` and `📄` icons.
 - One versioning and release document for the whole family. `docs/versioning.md`
   and `docs/releases.md` are now byte-identical across every Asterfield
   repository apart from two clearly marked sections: this repository's own
@@ -31,6 +46,34 @@ Use this section for changes that are merged but not released yet.
 - `AGENTS.md`, which quoto was the only repository in the family to lack.
 
 ### Added
+- **The user agreement is sent as rich Markdown.** It is the one document in
+  Quoto that was faking structure — seven `<b>1. …</b>` items inside a
+  blockquote — and it now goes out through `sendRichMessage`
+  (`rich_message.markdown`, Bot API 10.3), so Telegram renders real headings, a
+  real list of what gets processed, and the AI-processing caution as a real
+  quote. The document is authored once as structure in the locales and rendered
+  twice, so the HTML fallback says exactly the same things.
+- **The agreement is signed.** The italic `doc_footer` glued to the bottom is
+  replaced by a signature section that is part of the document: agreement
+  version (`1.0`), effective date (`2026-09-09`, ISO 8601 so it reads the same
+  in every locale), operator (`FreshLabDev`) and contact (`@amtiyo`).
+- `TELEGRAM_BOT_API_BASE_URL`, **an operator-facing setting**: the self-hosted
+  Bot API server to run against. Empty keeps api.telegram.org, which has no
+  `sendRichMessage` and drops the agreement to HTML. Quoto had no way to be
+  pointed at our own server at all, so the 10.3 methods were unreachable.
+- A startup preflight for `sendRichMessage`, the family's Preflight pattern.
+  The method is asked for with an empty body — an existing method rejects that
+  on its parameters, a missing one answers `404 method not found` — and the
+  answer decides which rendering the agreement uses. Unlike makeitMD, where the
+  method is the whole product and its absence is fatal, here it is a degraded
+  mode: loud in the log and in a developer notification, never silent. An
+  inconclusive probe counts as "no", because HTML is the answer that always
+  works.
+- An **About** tab in the `/start` panel, in both scopes: name and version, one
+  line of purpose, then scoring provider, repository (a link in the text, with
+  no button duplicating it) and admin contact as `key · value` rows.
+- The user agreement is now a tab of the `/start` panel — in a group it is where
+  an admin accepts it, in a private chat it is read-only — instead of a command.
 - Continuous integration. Quoto was the only bot in the family with no
   `.github/` at all: the suite in `tests/` ran only when somebody remembered,
   and nothing checked that a migration could be applied or undone before it
@@ -49,6 +92,9 @@ Use this section for changes that are merged but not released yet.
   stops the stack rather than quietly starting something else.
 
 ### Fixed
+- The operator contact in the user agreement was `@amti_yo`, which is not a
+  Telegram account. It is `@amtiyo`, corrected in all four locales, and the
+  document now takes it from one constant instead of repeating it.
 - The Dockerfile no longer defaults `QUOTO_VERSION` to `0.10.2`. It stayed at
   that value through the whole of v0.10.3, so an image built without the
   argument labelled itself as a release it was not.
