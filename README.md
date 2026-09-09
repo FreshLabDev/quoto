@@ -158,7 +158,7 @@ docker-compose up -d --build
 ## 🗄️ Database
 
 Quoto stores its data in **PostgreSQL** and shares one database with the other
-FreshLabDev bots (`vido`, `branchy`, `searcher`):
+Asterfield bots (`vido`, `branchy`, `searchy`, `voicy`, `makeitmd`):
 
 - **In production** it connects to the shared **`core`** database as the
   least-privilege role `quoto_core`. Quoto's own tables live in the **`quoto`**

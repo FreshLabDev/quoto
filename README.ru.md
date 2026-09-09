@@ -158,7 +158,7 @@ docker-compose up -d --build
 ## 🗄️ База данных
 
 Quoto хранит данные в **PostgreSQL** и использует одну общую базу вместе с
-другими ботами FreshLabDev (`vido`, `branchy`, `searcher`):
+другими ботами Asterfield (`vido`, `branchy`, `searchy`, `voicy`, `makeitmd`):
 
 - **В продакшене** он подключается к общей базе **`core`** под ролью с
   минимальными правами `quoto_core`. Собственные таблицы Quoto лежат в схеме
