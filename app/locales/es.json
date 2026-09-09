@@ -1,0 +1,262 @@
+{
+  "language_name": "Español",
+  "months": ["de enero", "de febrero", "de marzo", "de abril", "de mayo", "de junio", "de julio", "de agosto", "de septiembre", "de octubre", "de noviembre", "de diciembre"],
+  "common": {
+    "anonymous": "Anónimo",
+    "original": "Original",
+    "details": "Detalles",
+    "context": "contexto",
+    "ai": "IA"
+  },
+  "command": {
+    "start_private": "Abrir Quoto",
+    "start_group": "Abrir el panel de Quoto"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "Mis estadísticas",
+      "chat_stats": "Estadísticas del chat",
+      "stats": "Estadísticas",
+      "group_language": "Idioma del grupo",
+      "settings": "Ajustes",
+      "back": "Atrás",
+      "about": "Acerca de",
+      "agreement": "Acuerdo",
+      "close": "Cerrar"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Elijo la cita del día en los chats de grupo. Añádeme a un grupo y abre /start allí.",
+      "language": "Idioma de la interfaz: <b>{language_name}</b>",
+      "language_note": "En el chat privado sigo tu idioma de Telegram."
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Vigilo el chat y al final del día publico la mejor frase. Abajo tienes estadísticas y ajustes.",
+      "user_body": "Vigilo el chat y al final del día publico la mejor frase.",
+      "language_line": "Idioma: <b>{language_name}</b>",
+      "schedule_line": "Resumen del día a las <b>{time}</b> · desde <b>{min_messages}</b> mensajes"
+    },
+    "language": {
+      "title": "Idioma del grupo",
+      "hint": "Elige el idioma en el que hablo en este grupo.",
+      "source_auto": "Detectado automáticamente",
+      "source_manual": "Elegido a mano",
+      "source_default": "Por defecto · English",
+      "updated": "Idioma cambiado a {language_name}.",
+      "invalid": "No conozco ese idioma."
+    },
+    "other_user": "Abre tu propio menú con /start.",
+    "group_context_required": "Abre esto en un chat de grupo."
+  },
+  "settings": {
+    "updated": "Listo.",
+    "invalid": "Así no funciona.",
+    "block": {
+      "interface": "Interfaz",
+      "quote_day": "Cita del día",
+      "behavior": "Comportamiento"
+    },
+    "button": {
+      "language": "Idioma",
+      "interface": "Interfaz",
+      "quote_day": "Cita del día",
+      "publication": "Publicación",
+      "time": "Hora",
+      "min_messages": "Mínimo",
+      "context": "Contexto",
+      "boring_notice": "Día aburrido",
+      "pin": "Fijar",
+      "timezone": "Zona horaria",
+      "media": "Multimedia"
+    },
+    "private": {
+      "title": "<b>Ajustes</b>",
+      "hint": "<i>Solo afectan a este chat privado.</i>",
+      "language_title": "Idioma de la interfaz",
+      "language_hint": "Mantén tu idioma de Telegram o elige uno a mano.",
+      "telegram_language": "Idioma de Telegram",
+      "language_source_manual": "Elegido a mano",
+      "language_source_telegram": "Idioma de Telegram"
+    },
+    "group": {
+      "title": "<b>Ajustes del grupo</b>",
+      "hint": "<i>Solo los administradores pueden configurarme.</i>",
+      "language_auto": "Detectar automáticamente",
+      "language_auto_updated": "Detectaré el idioma yo mismo en la próxima evaluación.",
+      "context": {
+        "short": "Contexto",
+        "title": "Qué es el contexto",
+        "explain": "El contexto son los mensajes que la IA eligió alrededor de la frase ganadora. Si hay más de cinco, recorto el bloque en torno a la cita."
+      },
+      "boring_notice": {
+        "short": "Día aburrido"
+      },
+      "pin": {
+        "short": "Fijar"
+      },
+      "media": {
+        "short": "Multimedia"
+      },
+      "quote_day": {
+        "title": "Cita del día",
+        "hint": "Cuándo cierro el día y cuántos mensajes hacen falta para evaluarlo."
+      },
+      "publication": {
+        "title": "Publicación",
+        "hint": "Cómo presento el resultado en el grupo."
+      },
+      "time": {
+        "title": "<b>Hora de la cita</b>",
+        "hint": "<i>A esta hora cierro el día y elijo la cita.</i>",
+        "line": "Resumen del día: <b>{time}</b>",
+        "timezone": "Zona horaria: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>Mínimo de mensajes</b>",
+        "hint": "<i>Con menos mensajes el día se salta sin evaluación.</i>",
+        "line": "Mínimo: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Zona horaria",
+        "hint": "En esta zona horaria calculo la ventana del día y su cierre."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Publicada",
+    "skipped_boring": "😴 Día aburrido",
+    "publish_failed": "⚠️ No se pudo publicar",
+    "boring_notice_failed": "⚠️ Aviso no enviado",
+    "publish_unknown": "⚠️ Publicación sin confirmar",
+    "boring_notice_unknown": "⚠️ Aviso sin confirmar"
+  },
+  "admin": {
+    "admin_only": "Esto solo lo pueden cambiar los administradores."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\nMe alegra estar en <b>{chat_title}</b>. Cada día a las <b>{time}</b> elijo la frase más brillante y publico la cita del día.\n\nAbre /start: ahí están las estadísticas y los ajustes.",
+    "need_admin": "⚠️ Hazme <b>administrador</b> con permiso para <i>fijar</i> mensajes y así podré publicar el resultado.",
+    "admin_granted": "¡Gracias! Ahora puedo publicar la cita del día."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ El enlace de la cita no es válido.",
+    "quote_not_found": "⚠️ Cita no encontrada.",
+    "add_to_group": "Añadir a un grupo",
+    "hello": "<b>Quoto</b>\n\nElijo la cita del día en los chats de grupo: recojo los mensajes del día y a la hora fijada publico la mejor frase.\n\nAñádeme a un grupo y abre /start allí."
+  },
+  "details": {
+    "title": "<b>Día #{id}</b>",
+    "total": "Total",
+    "reactions": "Reacciones",
+    "length": "Longitud",
+    "decision_reason": "Motivo de la decisión",
+    "operation_error": "Error técnico",
+    "ai_choice": "Elección de la IA"
+  },
+  "start": {
+    "group": "<b>Quoto — Cita del día</b>\n\nRecojo los mensajes del día y al final elijo la mejor frase.\n\nAbre /start para abrir el panel de control."
+  },
+  "stats": {
+    "missing": "Todavía no hay estadísticas: este grupo no está registrado.",
+    "empty": "Este chat todavía no tiene citas publicadas.",
+    "title": "Estadísticas del chat",
+    "hint": "Lo que ha reunido todo el chat hasta ahora.",
+    "total_quotes": "Citas en total: <b>{count}</b>",
+    "unique_authors": "Autores: <b>{count}</b>",
+    "avg_score": "Nota media: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Mejores autores</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Mejor cita</b>"
+  },
+  "user_stats": {
+    "missing": "Todavía no hay estadísticas.",
+    "empty": "<b>{user}</b>, todavía no tienes ninguna cita publicada en este chat.\nSigue escribiendo, que tu momento llegará.",
+    "title": "Tus estadísticas",
+    "hint": "Tus citas del día en este chat.",
+    "user": "<b>{user}</b>",
+    "wins": "Victorias: <b>{count}</b>",
+    "avg_score": "Nota media: <b>{score:.1f}/10</b>",
+    "rank": "Puesto: <b>{rank}</b> de {total}",
+    "best_quote": "<b>Mejor cita</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Cita del día</b>",
+      "photo": "🏆 <b>Foto del día</b>",
+      "video": "🏆 <b>Vídeo del día</b>",
+      "voice": "🏆 <b>Voz del día</b>",
+      "audio": "🏆 <b>Audio del día</b>"
+    },
+    "context_truncated": "ℹ️ He contado los últimos {shown} de {total} mensajes: contexto recortado por volumen."
+  },
+  "boring": {
+    "title": "😴 <b>Hoy no hay cita del día</b>",
+    "body": "No he encontrado ninguna frase a la altura del día. ¡Hasta mañana!"
+  },
+  "about": {
+    "tagline": "La cita del día, sacada de lo que se escribe en el chat.",
+    "eval": "Evaluación",
+    "sources": "Código",
+    "admin": "Admin"
+  },
+  "agreement": {
+    "title": "Quoto — Acuerdo de uso y privacidad",
+    "summary": "Al usar Quoto en este grupo aceptas las condiciones de abajo.",
+    "sections": [
+      {
+        "heading": "Qué hace Quoto",
+        "text": "Durante el día leo los mensajes enviados en este grupo y, a la hora fijada, publico una «cita del día»."
+      },
+      {
+        "heading": "Qué se procesa",
+        "text": "Para elegir la cita del día proceso:",
+        "items": [
+          "el texto de los mensajes y los pies de foto",
+          "las reacciones a los mensajes",
+          "multimedia: fotos, vídeos, notas de voz y audio",
+          "el nombre del autor y su ID de Telegram",
+          "el ID y el título del grupo"
+        ]
+      },
+      {
+        "heading": "Procesamiento con IA",
+        "text": "Para elegir una cita, el texto de los mensajes y el contenido multimedia se envían para su análisis a nuestro proveedor de IA, OpenRouter, y a sus proveedores de modelos.",
+        "note": "No compartas contraseñas ni datos sensibles en chats donde Quoto esté activo."
+      },
+      {
+        "heading": "Conservación",
+        "text": "Los datos principales del día se borran tras el procesamiento. Algunos registros de servicio y resultados del procesamiento pueden conservarse más tiempo por fiabilidad, control de calidad y estadísticas; las citas publicadas y los identificadores básicos permanecen en el historial del servicio."
+      },
+      {
+        "heading": "Tus datos",
+        "text": "No vendo tus datos. Para pedir que se borren, escribe a {contact}."
+      },
+      {
+        "heading": "Responsabilidad del administrador",
+        "text": "Al aceptar, un administrador del grupo confirma que puede añadir este bot y que los miembros saben que Quoto procesa el chat."
+      },
+      {
+        "heading": "Tal cual",
+        "text": "El servicio se ofrece «tal cual», sin garantías, y las condiciones pueden cambiar; seguir usándolo significa aceptarlas."
+      }
+    ],
+    "signature": {
+      "title": "Firma del documento",
+      "version_label": "Versión del acuerdo",
+      "effective_label": "En vigor desde",
+      "operator_label": "Operador",
+      "contact_label": "Contacto"
+    },
+    "accept_hint": "Para activar la cita del día, un administrador del grupo pulsa «Aceptar».",
+    "welcome_note": "<i>Antes de publicar nada, un administrador del grupo tiene que aceptar el acuerdo de uso.</i>",
+    "view_button": "Acuerdo de uso",
+    "accept_button": "Aceptar",
+    "accepted": "✅ <b>Acuerdo de uso aceptado.</b> ¡Gracias!",
+    "accepted_admin_hint": "<i>Ahora hazme administrador con permiso para fijar mensajes, para que pueda publicar la cita del día.</i>",
+    "accepted_toast": "Aceptado, ¡gracias!",
+    "already": "✅ Este grupo ya ha aceptado el acuerdo.",
+    "admin_only": "Solo un administrador del grupo puede aceptar el acuerdo.",
+    "reminder": "Para publicar la cita del día, un administrador del grupo tiene que aceptar el acuerdo de uso de Quoto."
+  }
+}

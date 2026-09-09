@@ -1,0 +1,262 @@
+{
+  "language_name": "Català",
+  "months": ["de gener", "de febrer", "de març", "d’abril", "de maig", "de juny", "de juliol", "d’agost", "de setembre", "d’octubre", "de novembre", "de desembre"],
+  "common": {
+    "anonymous": "Anònim",
+    "original": "Original",
+    "details": "Detalls",
+    "context": "context",
+    "ai": "IA"
+  },
+  "command": {
+    "start_private": "Obre Quoto",
+    "start_group": "Obre el panell de Quoto"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "Les meves estadístiques",
+      "chat_stats": "Estadístiques del xat",
+      "stats": "Estadístiques",
+      "group_language": "Idioma del grup",
+      "settings": "Configuració",
+      "back": "Enrere",
+      "about": "Quant a",
+      "agreement": "Condicions",
+      "close": "Tanca"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Trio la cita del dia als xats de grup. Afegeix-me a un grup i obre-hi /start.",
+      "language": "Idioma de la interfície: <b>{language_name}</b>",
+      "language_note": "Al xat privat segueixo el teu idioma de Telegram."
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Vigilo el xat i al final del dia publico la millor frase. A sota tens estadístiques i configuració.",
+      "user_body": "Vigilo el xat i al final del dia publico la millor frase.",
+      "language_line": "Idioma: <b>{language_name}</b>",
+      "schedule_line": "Resum del dia a les <b>{time}</b> · a partir de <b>{min_messages}</b> missatges"
+    },
+    "language": {
+      "title": "Idioma del grup",
+      "hint": "Tria l’idioma amb què parlo en aquest grup.",
+      "source_auto": "Detectat automàticament",
+      "source_manual": "Triat a mà",
+      "source_default": "Per defecte · English",
+      "updated": "Idioma canviat a {language_name}.",
+      "invalid": "No conec aquest idioma."
+    },
+    "other_user": "Obre el teu menú amb /start.",
+    "group_context_required": "Obre això en un xat de grup."
+  },
+  "settings": {
+    "updated": "Fet.",
+    "invalid": "Així no funciona.",
+    "block": {
+      "interface": "Interfície",
+      "quote_day": "Cita del dia",
+      "behavior": "Comportament"
+    },
+    "button": {
+      "language": "Idioma",
+      "interface": "Interfície",
+      "quote_day": "Cita del dia",
+      "publication": "Publicació",
+      "time": "Hora",
+      "min_messages": "Mínim",
+      "context": "Context",
+      "boring_notice": "Dia avorrit",
+      "pin": "Fixa",
+      "timezone": "Zona horària",
+      "media": "Multimèdia"
+    },
+    "private": {
+      "title": "<b>Configuració</b>",
+      "hint": "<i>Només afecta aquest xat privat.</i>",
+      "language_title": "Idioma de la interfície",
+      "language_hint": "Mantén el teu idioma de Telegram o tria’n un a mà.",
+      "telegram_language": "Idioma de Telegram",
+      "language_source_manual": "Triat a mà",
+      "language_source_telegram": "Idioma de Telegram"
+    },
+    "group": {
+      "title": "<b>Configuració del grup</b>",
+      "hint": "<i>Només els administradors em poden configurar.</i>",
+      "language_auto": "Detecta automàticament",
+      "language_auto_updated": "Detectaré l’idioma jo mateix en la propera avaluació.",
+      "context": {
+        "short": "Context",
+        "title": "Què és el context",
+        "explain": "El context són els missatges que la IA ha triat al voltant de la frase guanyadora. Si n’hi ha més de cinc, estrenyo el bloc al voltant de la cita mateixa."
+      },
+      "boring_notice": {
+        "short": "Dia avorrit"
+      },
+      "pin": {
+        "short": "Fixa"
+      },
+      "media": {
+        "short": "Multimèdia"
+      },
+      "quote_day": {
+        "title": "Cita del dia",
+        "hint": "Quan tanco el dia i quants missatges calen per avaluar-lo."
+      },
+      "publication": {
+        "title": "Publicació",
+        "hint": "Com presento el resultat al grup."
+      },
+      "time": {
+        "title": "<b>Hora de la cita</b>",
+        "hint": "<i>A aquesta hora tanco el dia i trio la cita.</i>",
+        "line": "Resum del dia: <b>{time}</b>",
+        "timezone": "Zona horària: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>Mínim de missatges</b>",
+        "hint": "<i>Amb menys missatges el dia se salta sense avaluació.</i>",
+        "line": "Mínim: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Zona horària",
+        "hint": "En aquesta zona horària calculo la finestra del dia i l’hora de tancament."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Publicada",
+    "skipped_boring": "😴 Dia avorrit",
+    "publish_failed": "⚠️ No s’ha pogut publicar",
+    "boring_notice_failed": "⚠️ Avís no enviat",
+    "publish_unknown": "⚠️ Publicació sense confirmar",
+    "boring_notice_unknown": "⚠️ Avís sense confirmar"
+  },
+  "admin": {
+    "admin_only": "Això només ho poden canviar els administradors."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\nContent de ser a <b>{chat_title}</b>. Cada dia a les <b>{time}</b> trio la frase més brillant i publico la cita del dia.\n\nObre /start: hi trobaràs estadístiques i configuració.",
+    "need_admin": "⚠️ Fes-me <b>administrador</b> amb permís per <i>fixar</i> missatges — així podré publicar el resultat.",
+    "admin_granted": "Gràcies! Ara ja puc publicar la cita del dia."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ L’enllaç de la cita no és vàlid.",
+    "quote_not_found": "⚠️ No s’ha trobat la cita.",
+    "add_to_group": "Afegeix a un grup",
+    "hello": "<b>Quoto</b>\n\nTrio la cita del dia als xats de grup: recullo els missatges del dia i a l’hora fixada publico la millor frase.\n\nAfegeix-me a un grup i obre-hi /start."
+  },
+  "details": {
+    "title": "<b>Dia #{id}</b>",
+    "total": "Total",
+    "reactions": "Reaccions",
+    "length": "Longitud",
+    "decision_reason": "Motiu de la decisió",
+    "operation_error": "Error tècnic",
+    "ai_choice": "Tria de la IA"
+  },
+  "start": {
+    "group": "<b>Quoto — Cita del dia</b>\n\nRecullo els missatges del dia i al final trio la millor frase.\n\nObre /start per obrir el tauler de control."
+  },
+  "stats": {
+    "missing": "Encara no hi ha estadístiques: aquest grup no està registrat.",
+    "empty": "Aquest xat encara no té cap cita publicada.",
+    "title": "Estadístiques del xat",
+    "hint": "El que ha reunit tot el xat fins ara.",
+    "total_quotes": "Cites en total: <b>{count}</b>",
+    "unique_authors": "Autors: <b>{count}</b>",
+    "avg_score": "Nota mitjana: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Millors autors</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Millor cita</b>"
+  },
+  "user_stats": {
+    "missing": "Encara no hi ha estadístiques.",
+    "empty": "<b>{user}</b>, encara no tens cap cita publicada en aquest xat.\nContinua escrivint, que ja arribarà el teu moment.",
+    "title": "Les teves estadístiques",
+    "hint": "Les teves cites del dia en aquest xat.",
+    "user": "<b>{user}</b>",
+    "wins": "Victòries: <b>{count}</b>",
+    "avg_score": "Nota mitjana: <b>{score:.1f}/10</b>",
+    "rank": "Posició: <b>{rank}</b> de {total}",
+    "best_quote": "<b>Millor cita</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Cita del dia</b>",
+      "photo": "🏆 <b>Foto del dia</b>",
+      "video": "🏆 <b>Vídeo del dia</b>",
+      "voice": "🏆 <b>Veu del dia</b>",
+      "audio": "🏆 <b>Àudio del dia</b>"
+    },
+    "context_truncated": "ℹ️ He comptat els últims {shown} missatges de {total} — context retallat pel volum."
+  },
+  "boring": {
+    "title": "😴 <b>Avui no hi ha cita del dia</b>",
+    "body": "No he trobat cap frase a l’altura del dia. Fins demà!"
+  },
+  "about": {
+    "tagline": "La cita del dia, treta del que s’escriu al xat.",
+    "eval": "Avaluació",
+    "sources": "Codi font",
+    "admin": "Admin"
+  },
+  "agreement": {
+    "title": "Quoto — Condicions d’ús i privadesa",
+    "summary": "En fer servir Quoto en aquest grup acceptes les condicions següents.",
+    "sections": [
+      {
+        "heading": "Què fa Quoto",
+        "text": "Durant el dia llegeixo els missatges enviats en aquest grup i, a l’hora fixada, publico una «cita del dia»."
+      },
+      {
+        "heading": "Què es processa",
+        "text": "Per triar la cita del dia processo:",
+        "items": [
+          "el text dels missatges i els peus de foto",
+          "les reaccions als missatges",
+          "els mitjans: fotos, vídeos, notes de veu i àudio",
+          "el nom de l’autor i el seu ID de Telegram",
+          "l’ID i el títol del grup"
+        ]
+      },
+      {
+        "heading": "Processament amb IA",
+        "text": "Per triar una cita, el text dels missatges i els mitjans s’envien per a l’anàlisi al nostre proveïdor d’IA OpenRouter i als seus proveïdors de models.",
+        "note": "No comparteixis contrasenyes ni dades sensibles als xats on Quoto està actiu."
+      },
+      {
+        "heading": "Conservació",
+        "text": "Les dades principals del dia s’esborren després del processament. Alguns registres de servei i resultats del processament es poden conservar més temps per fiabilitat, control de qualitat i estadístiques; les cites publicades i els identificadors bàsics es queden a l’historial del servei."
+      },
+      {
+        "heading": "Les teves dades",
+        "text": "No venc les teves dades. Per demanar-ne l’eliminació, escriu a {contact}."
+      },
+      {
+        "heading": "Responsabilitat de l’administrador",
+        "text": "En acceptar, un administrador del grup confirma que pot afegir aquest bot i que els membres saben que Quoto processa el xat."
+      },
+      {
+        "heading": "Tal com és",
+        "text": "El servei s’ofereix «tal com és», sense garanties, i les condicions poden canviar; continuar utilitzant-lo vol dir acceptar-les."
+      }
+    ],
+    "signature": {
+      "title": "Signatura del document",
+      "version_label": "Versió de les condicions",
+      "effective_label": "En vigor des de",
+      "operator_label": "Operador",
+      "contact_label": "Contacte"
+    },
+    "accept_hint": "Per activar la cita del dia, un administrador del grup toca «Accepta».",
+    "welcome_note": "<i>Abans de publicar res, un administrador del grup ha d’acceptar les condicions d’ús.</i>",
+    "view_button": "Condicions d’ús",
+    "accept_button": "Accepta",
+    "accepted": "✅ <b>Condicions d’ús acceptades.</b> Gràcies!",
+    "accepted_admin_hint": "<i>Ara fes-me administrador amb permís per fixar missatges, perquè pugui publicar la cita del dia.</i>",
+    "accepted_toast": "Acceptades — gràcies!",
+    "already": "✅ Aquest grup ja ha acceptat les condicions.",
+    "admin_only": "Només un administrador del grup pot acceptar les condicions.",
+    "reminder": "Per publicar la cita del dia, un administrador del grup ha d’acceptar les condicions d’ús de Quoto."
+  }
+}

@@ -1,0 +1,262 @@
+{
+  "language_name": "Français",
+  "months": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+  "common": {
+    "anonymous": "Anonyme",
+    "original": "Original",
+    "details": "Détails",
+    "context": "contexte",
+    "ai": "IA"
+  },
+  "command": {
+    "start_private": "Ouvrir Quoto",
+    "start_group": "Ouvrir le panneau Quoto"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "Mes stats",
+      "chat_stats": "Stats du chat",
+      "stats": "Stats",
+      "group_language": "Langue du groupe",
+      "settings": "Réglages",
+      "back": "Retour",
+      "about": "À propos",
+      "agreement": "Conditions",
+      "close": "Fermer"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Je choisis une citation du jour dans les chats de groupe. Ajoute-moi à un groupe et ouvre /start là-bas.",
+      "language": "Langue de l’interface : <b>{language_name}</b>",
+      "language_note": "En privé, je suis ta langue Telegram."
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Je surveille le chat et je publie la meilleure phrase en fin de journée. Stats et réglages ci-dessous.",
+      "user_body": "Je surveille le chat et je publie la meilleure phrase en fin de journée.",
+      "language_line": "Langue : <b>{language_name}</b>",
+      "schedule_line": "Bilan du jour à <b>{time}</b> · à partir de <b>{min_messages}</b> messages"
+    },
+    "language": {
+      "title": "Langue du groupe",
+      "hint": "Choisis la langue que je parle dans ce groupe.",
+      "source_auto": "Détectée automatiquement",
+      "source_manual": "Choisie à la main",
+      "source_default": "Par défaut · English",
+      "updated": "Langue changée en {language_name}.",
+      "invalid": "Je ne connais pas cette langue."
+    },
+    "other_user": "Ouvre ton propre menu avec /start.",
+    "group_context_required": "Ouvre ça dans un chat de groupe."
+  },
+  "settings": {
+    "updated": "C’est fait.",
+    "invalid": "Ça ne marchera pas.",
+    "block": {
+      "interface": "Interface",
+      "quote_day": "Citation du jour",
+      "behavior": "Comportement"
+    },
+    "button": {
+      "language": "Langue",
+      "interface": "Interface",
+      "quote_day": "Citation",
+      "publication": "Publication",
+      "time": "Heure",
+      "min_messages": "Minimum",
+      "context": "Contexte",
+      "boring_notice": "Jour ennuyeux",
+      "pin": "Épingler",
+      "timezone": "Fuseau horaire",
+      "media": "Médias"
+    },
+    "private": {
+      "title": "<b>Réglages</b>",
+      "hint": "<i>Ils ne valent que pour ce chat privé.</i>",
+      "language_title": "Langue de l’interface",
+      "language_hint": "Garde ta langue Telegram ou choisis-en une à la main.",
+      "telegram_language": "Langue Telegram",
+      "language_source_manual": "Choisie à la main",
+      "language_source_telegram": "Langue Telegram"
+    },
+    "group": {
+      "title": "<b>Réglages du groupe</b>",
+      "hint": "<i>Seuls les admins peuvent me configurer.</i>",
+      "language_auto": "Détecter automatiquement",
+      "language_auto_updated": "Je détecterai la langue moi-même à la prochaine évaluation.",
+      "context": {
+        "short": "Contexte",
+        "title": "Ce qu’est le contexte",
+        "explain": "Le contexte, ce sont les messages que l’IA a choisis autour de la phrase gagnante. S’il y en a plus de cinq, je resserre le bloc autour de la citation elle-même."
+      },
+      "boring_notice": {
+        "short": "Jour ennuyeux"
+      },
+      "pin": {
+        "short": "Épingler"
+      },
+      "media": {
+        "short": "Médias"
+      },
+      "quote_day": {
+        "title": "Citation du jour",
+        "hint": "Quand je clôture la journée et combien de messages il faut pour l’évaluer."
+      },
+      "publication": {
+        "title": "Publication",
+        "hint": "Comment je mets en forme le résultat dans le groupe."
+      },
+      "time": {
+        "title": "<b>Heure de la citation</b>",
+        "hint": "<i>À cette heure, je clôture la journée et je choisis la citation.</i>",
+        "line": "Bilan du jour : <b>{time}</b>",
+        "timezone": "Fuseau horaire : <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>Minimum de messages</b>",
+        "hint": "<i>En dessous, la journée est passée sans évaluation.</i>",
+        "line": "Minimum : <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Fuseau horaire",
+        "hint": "C’est dans ce fuseau que je calcule la fenêtre du jour et l’heure de clôture."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Publiée",
+    "skipped_boring": "😴 Jour ennuyeux",
+    "publish_failed": "⚠️ Échec de la publication",
+    "boring_notice_failed": "⚠️ Avis non envoyé",
+    "publish_unknown": "⚠️ Publication non confirmée",
+    "boring_notice_unknown": "⚠️ Avis non confirmé"
+  },
+  "admin": {
+    "admin_only": "Seuls les admins peuvent changer ça."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\nContent d’être dans <b>{chat_title}</b>. Chaque jour à <b>{time}</b>, je choisis la plus belle phrase et je publie la citation du jour.\n\nOuvre /start : les stats et les réglages sont là.",
+    "need_admin": "⚠️ Passe-moi <b>administrateur</b> avec le droit d’<i>épingler</i> les messages — je pourrai alors publier le résultat.",
+    "admin_granted": "Merci ! Je peux maintenant publier la citation du jour."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ Lien de citation invalide.",
+    "quote_not_found": "⚠️ Citation introuvable.",
+    "add_to_group": "Ajouter à un groupe",
+    "hello": "<b>Quoto</b>\n\nJe choisis une citation du jour dans les chats de groupe : je récolte les messages de la journée et je publie la meilleure phrase à l’heure prévue.\n\nAjoute-moi à un groupe et ouvre /start là-bas."
+  },
+  "details": {
+    "title": "<b>Jour #{id}</b>",
+    "total": "Total",
+    "reactions": "Réactions",
+    "length": "Longueur",
+    "decision_reason": "Raison du choix",
+    "operation_error": "Erreur technique",
+    "ai_choice": "Choix de l’IA"
+  },
+  "start": {
+    "group": "<b>Quoto — Citation du jour</b>\n\nJe récolte les messages de la journée et j’en choisis la meilleure phrase le soir.\n\nOuvre /start pour ouvrir le panneau de contrôle."
+  },
+  "stats": {
+    "missing": "Pas encore de stats : ce groupe n’est pas enregistré.",
+    "empty": "Ce chat n’a encore aucune citation publiée.",
+    "title": "Stats du chat",
+    "hint": "Ce que tout le chat a rassemblé jusqu’ici.",
+    "total_quotes": "Citations au total : <b>{count}</b>",
+    "unique_authors": "Auteurs : <b>{count}</b>",
+    "avg_score": "Note moyenne : <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Meilleurs auteurs</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Meilleure citation</b>"
+  },
+  "user_stats": {
+    "missing": "Pas encore de stats.",
+    "empty": "<b>{user}</b>, tu n’as encore aucune citation publiée dans ce chat.\nContinue d’écrire, ton heure viendra.",
+    "title": "Tes stats",
+    "hint": "Tes citations du jour dans ce chat.",
+    "user": "<b>{user}</b>",
+    "wins": "Victoires : <b>{count}</b>",
+    "avg_score": "Note moyenne : <b>{score:.1f}/10</b>",
+    "rank": "Place : <b>{rank}</b> sur {total}",
+    "best_quote": "<b>Meilleure citation</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Citation du jour</b>",
+      "photo": "🏆 <b>Photo du jour</b>",
+      "video": "🏆 <b>Vidéo du jour</b>",
+      "voice": "🏆 <b>Vocal du jour</b>",
+      "audio": "🏆 <b>Audio du jour</b>"
+    },
+    "context_truncated": "ℹ️ J’ai compté les {shown} derniers messages sur {total} — contexte réduit vu le volume."
+  },
+  "boring": {
+    "title": "😴 <b>Pas de citation du jour aujourd’hui</b>",
+    "body": "Je n’ai pas trouvé de phrase à la hauteur de la journée. À demain !"
+  },
+  "about": {
+    "tagline": "La citation du jour, tirée de ce qui s’écrit dans le chat.",
+    "eval": "Évaluation",
+    "sources": "Sources",
+    "admin": "Admin"
+  },
+  "agreement": {
+    "title": "Quoto — Conditions d’utilisation et confidentialité",
+    "summary": "En utilisant Quoto dans ce groupe, tu acceptes les conditions ci-dessous.",
+    "sections": [
+      {
+        "heading": "Ce que fait Quoto",
+        "text": "Pendant la journée, je lis les messages envoyés dans ce groupe et, à l’heure fixée, je publie une « citation du jour »."
+      },
+      {
+        "heading": "Ce qui est traité",
+        "text": "Pour choisir la citation du jour, je traite :",
+        "items": [
+          "le texte des messages et les légendes",
+          "les réactions aux messages",
+          "les médias : photos, vidéos, vocaux et audio",
+          "le nom de l’auteur et son identifiant Telegram",
+          "l’identifiant et le titre du groupe"
+        ]
+      },
+      {
+        "heading": "Traitement par l’IA",
+        "text": "Pour choisir une citation, le texte des messages et les médias sont envoyés pour analyse à notre fournisseur d’IA OpenRouter et à ses fournisseurs de modèles.",
+        "note": "Ne partage pas de mots de passe ni de données sensibles dans les chats où Quoto est actif."
+      },
+      {
+        "heading": "Conservation",
+        "text": "Les données principales de la journée sont effacées après traitement. Certains enregistrements techniques et résultats de traitement peuvent être gardés plus longtemps pour la fiabilité, le contrôle qualité et les statistiques ; les citations publiées et les identifiants de base restent dans l’historique du service."
+      },
+      {
+        "heading": "Tes données",
+        "text": "Je ne vends pas tes données. Pour demander leur suppression, écris à {contact}."
+      },
+      {
+        "heading": "Responsabilité de l’admin",
+        "text": "En acceptant, un admin du groupe confirme qu’il a le droit d’ajouter ce bot et que les membres savent que le chat est traité par Quoto."
+      },
+      {
+        "heading": "En l’état",
+        "text": "Le service est fourni « en l’état », sans garantie, et les conditions peuvent changer ; continuer à l’utiliser vaut acceptation."
+      }
+    ],
+    "signature": {
+      "title": "Signature du document",
+      "version_label": "Version des conditions",
+      "effective_label": "En vigueur depuis",
+      "operator_label": "Opérateur",
+      "contact_label": "Contact"
+    },
+    "accept_hint": "Pour activer la citation du jour, un admin du groupe appuie sur « Accepter ».",
+    "welcome_note": "<i>Avant que je publie quoi que ce soit, un admin du groupe doit accepter les conditions d’utilisation.</i>",
+    "view_button": "Conditions d’utilisation",
+    "accept_button": "Accepter",
+    "accepted": "✅ <b>Conditions d’utilisation acceptées.</b> Merci !",
+    "accepted_admin_hint": "<i>Passe-moi maintenant administrateur avec le droit d’épingler les messages, pour que je puisse publier la citation du jour.</i>",
+    "accepted_toast": "Accepté — merci !",
+    "already": "✅ Ce groupe a déjà accepté les conditions.",
+    "admin_only": "Seul un admin du groupe peut accepter les conditions.",
+    "reminder": "Pour publier la citation du jour, un admin du groupe doit accepter les conditions d’utilisation de Quoto."
+  }
+}
