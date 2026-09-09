@@ -13,6 +13,21 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+## v0.10.6 - 2026-09-09
+
+Quoto is GPL-3.0. The About card and the agreement signature said Apache-2.0.
+
+### Fixed
+
+- The licence named in the About card and under the user agreement is GPL-3.0,
+  which is what `LICENSE` has always said. Apache-2.0 was written in by
+  assumption from the rest of the family, where it is correct — and it went
+  into two places a reader is meant to be able to rely on, one of them a
+  document people accept.
+
+
+Use this section for changes that are merged but not released yet.
+
 ## v0.10.5 - 2026-09-09
 
 A one-line fix for something v0.10.4 shipped: it reported the wrong version.
