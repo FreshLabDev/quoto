@@ -1,12 +1,23 @@
 {
   "language_name": "中文",
-  "months": ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+  "months": [
+    "一月",
+    "二月",
+    "三月",
+    "四月",
+    "五月",
+    "六月",
+    "七月",
+    "八月",
+    "九月",
+    "十月",
+    "十一月",
+    "十二月"
+  ],
   "common": {
     "anonymous": "匿名",
     "original": "原消息",
-    "details": "详情",
-    "context": "上下文",
-    "ai": "AI"
+    "details": "详情"
   },
   "command": {
     "start_private": "打开 Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "我的统计",
       "chat_stats": "群统计",
       "stats": "统计",
-      "group_language": "群语言",
-      "settings": "设置",
       "back": "返回",
       "about": "关于",
       "agreement": "协议",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "我在群聊里挑选每日金句。把我加进群，然后在那里发送 /start。",
-      "language": "界面语言：<b>{language_name}</b>",
-      "language_note": "私聊里我跟随你的 Telegram 语言。"
+      "language": "界面语言：<b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "好了。",
     "invalid": "这样不行。",
-    "block": {
-      "interface": "界面",
-      "quote_day": "每日金句",
-      "behavior": "行为"
-    },
     "button": {
       "language": "语言",
-      "interface": "界面",
       "quote_day": "每日金句",
       "publication": "发布",
-      "time": "时间",
-      "min_messages": "最少",
       "context": "上下文",
       "boring_notice": "无聊的一天",
       "pin": "置顶",
@@ -71,8 +71,6 @@
       "media": "媒体"
     },
     "private": {
-      "title": "<b>设置</b>",
-      "hint": "<i>只对这个私聊生效。</i>",
       "language_title": "界面语言",
       "language_hint": "保持 Telegram 语言，或者手动选一个。",
       "telegram_language": "Telegram 语言",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Telegram 语言"
     },
     "group": {
-      "title": "<b>群设置</b>",
-      "hint": "<i>只有管理员能配置我。</i>",
       "language_auto": "自动识别",
       "language_auto_updated": "下次评选时我自己识别语言。",
       "context": {
         "short": "上下文",
-        "title": "什么是上下文",
         "explain": "上下文就是 AI 在获胜那句话周围挑出的消息。超过五条时，我会把这一段收紧到金句本身附近。"
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "我在群里如何呈现结果。"
       },
       "time": {
-        "title": "<b>金句时间</b>",
-        "hint": "<i>到点我就结算这一天并挑出金句。</i>",
         "line": "每日总结：<b>{time}</b>",
         "timezone": "时区：<b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>最少消息数</b>",
-        "hint": "<i>少于这个数，这一天就跳过，不做评选。</i>",
         "line": "最少：<b>{count}</b>"
       },
       "tz": {

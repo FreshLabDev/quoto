@@ -1,12 +1,23 @@
 {
   "language_name": "English",
-  "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  "months": [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ],
   "common": {
     "anonymous": "Anonymous",
     "original": "Original",
-    "details": "Details",
-    "context": "context",
-    "ai": "AI"
+    "details": "Details"
   },
   "command": {
     "start_private": "Open Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "My stats",
       "chat_stats": "Chat stats",
       "stats": "Stats",
-      "group_language": "Group language",
-      "settings": "Settings",
       "back": "Back",
       "about": "About",
       "agreement": "Agreement",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "I pick a quote of the day in group chats. Add me to a group and open /start there.",
-      "language": "Interface language: <b>{language_name}</b>",
-      "language_note": "In private chat I follow your Telegram language."
+      "language": "Interface language: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "Done.",
     "invalid": "That won't work.",
-    "block": {
-      "interface": "Interface",
-      "quote_day": "Quote of the day",
-      "behavior": "Behavior"
-    },
     "button": {
       "language": "Language",
-      "interface": "Interface",
       "quote_day": "Quote day",
       "publication": "Publishing",
-      "time": "Time",
-      "min_messages": "Minimum",
       "context": "Context",
       "boring_notice": "Boring day",
       "pin": "Pin",
@@ -71,8 +71,6 @@
       "media": "Media"
     },
     "private": {
-      "title": "<b>Settings</b>",
-      "hint": "<i>These affect only this private chat.</i>",
       "language_title": "Interface language",
       "language_hint": "Keep your Telegram language or choose one manually.",
       "telegram_language": "Telegram language",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Telegram language"
     },
     "group": {
-      "title": "<b>Group settings</b>",
-      "hint": "<i>Only admins can configure me.</i>",
       "language_auto": "Detect automatically",
       "language_auto_updated": "I'll detect the language myself at the next review.",
       "context": {
         "short": "Context",
-        "title": "What context means",
         "explain": "Context is the set of messages AI chose around the winning phrase. If there are more than five, I trim the block around the quote itself."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "How I format the result in the group."
       },
       "time": {
-        "title": "<b>Quote time</b>",
-        "hint": "<i>At this time I close the day and choose the quote.</i>",
         "line": "Daily summary: <b>{time}</b>",
         "timezone": "Timezone: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>Minimum messages</b>",
-        "hint": "<i>With fewer messages the day is skipped without review.</i>",
         "line": "Minimum: <b>{count}</b>"
       },
       "tz": {

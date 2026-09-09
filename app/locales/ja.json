@@ -1,12 +1,23 @@
 {
   "language_name": "日本語",
-  "months": ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+  "months": [
+    "一月",
+    "二月",
+    "三月",
+    "四月",
+    "五月",
+    "六月",
+    "七月",
+    "八月",
+    "九月",
+    "十月",
+    "十一月",
+    "十二月"
+  ],
   "common": {
     "anonymous": "匿名",
     "original": "元メッセージ",
-    "details": "詳細",
-    "context": "文脈",
-    "ai": "AI"
+    "details": "詳細"
   },
   "command": {
     "start_private": "Quoto を開く",
@@ -17,8 +28,6 @@
       "user_stats": "自分の統計",
       "chat_stats": "チャットの統計",
       "stats": "統計",
-      "group_language": "グループの言語",
-      "settings": "設定",
       "back": "戻る",
       "about": "情報",
       "agreement": "利用規約",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "グループチャットで今日の名言を選びます。グループに追加して、そこで /start を開いてください。",
-      "language": "表示言語: <b>{language_name}</b>",
-      "language_note": "個人チャットでは Telegram の言語に従います。"
+      "language": "表示言語: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "完了。",
     "invalid": "それはできません。",
-    "block": {
-      "interface": "表示",
-      "quote_day": "今日の名言",
-      "behavior": "動作"
-    },
     "button": {
       "language": "言語",
-      "interface": "表示",
       "quote_day": "今日の名言",
       "publication": "投稿",
-      "time": "時刻",
-      "min_messages": "最低数",
       "context": "文脈",
       "boring_notice": "退屈な日",
       "pin": "ピン留め",
@@ -71,8 +71,6 @@
       "media": "メディア"
     },
     "private": {
-      "title": "<b>設定</b>",
-      "hint": "<i>この個人チャットだけに効きます。</i>",
       "language_title": "表示言語",
       "language_hint": "Telegram の言語のままにするか、手動で選んでください。",
       "telegram_language": "Telegram の言語",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Telegram の言語"
     },
     "group": {
-      "title": "<b>グループ設定</b>",
-      "hint": "<i>設定できるのは管理者だけです。</i>",
       "language_auto": "自動で判定する",
       "language_auto_updated": "次の評価のときに私が言語を判定します。",
       "context": {
         "short": "文脈",
-        "title": "文脈とは",
         "explain": "文脈とは、AI が選んだ勝者の一言の前後のメッセージです。五件を超える場合は、名言そのものの周りだけに絞ります。"
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "結果をグループでどう見せるかです。"
       },
       "time": {
-        "title": "<b>名言の時刻</b>",
-        "hint": "<i>この時刻に一日を締めて名言を選びます。</i>",
         "line": "その日のまとめ: <b>{time}</b>",
         "timezone": "タイムゾーン: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>最低メッセージ数</b>",
-        "hint": "<i>これより少ない日は評価せずに飛ばします。</i>",
         "line": "最低: <b>{count}</b>"
       },
       "tz": {

@@ -1,12 +1,23 @@
 {
   "language_name": "Français",
-  "months": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+  "months": [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre"
+  ],
   "common": {
     "anonymous": "Anonyme",
     "original": "Original",
-    "details": "Détails",
-    "context": "contexte",
-    "ai": "IA"
+    "details": "Détails"
   },
   "command": {
     "start_private": "Ouvrir Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "Mes stats",
       "chat_stats": "Stats du chat",
       "stats": "Stats",
-      "group_language": "Langue du groupe",
-      "settings": "Réglages",
       "back": "Retour",
       "about": "À propos",
       "agreement": "Conditions",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "Je choisis une citation du jour dans les chats de groupe. Ajoute-moi à un groupe et ouvre /start là-bas.",
-      "language": "Langue de l’interface : <b>{language_name}</b>",
-      "language_note": "En privé, je suis ta langue Telegram."
+      "language": "Langue de l’interface : <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "C’est fait.",
     "invalid": "Ça ne marchera pas.",
-    "block": {
-      "interface": "Interface",
-      "quote_day": "Citation du jour",
-      "behavior": "Comportement"
-    },
     "button": {
       "language": "Langue",
-      "interface": "Interface",
       "quote_day": "Citation",
       "publication": "Publication",
-      "time": "Heure",
-      "min_messages": "Minimum",
       "context": "Contexte",
       "boring_notice": "Jour ennuyeux",
       "pin": "Épingler",
@@ -71,8 +71,6 @@
       "media": "Médias"
     },
     "private": {
-      "title": "<b>Réglages</b>",
-      "hint": "<i>Ils ne valent que pour ce chat privé.</i>",
       "language_title": "Langue de l’interface",
       "language_hint": "Garde ta langue Telegram ou choisis-en une à la main.",
       "telegram_language": "Langue Telegram",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Langue Telegram"
     },
     "group": {
-      "title": "<b>Réglages du groupe</b>",
-      "hint": "<i>Seuls les admins peuvent me configurer.</i>",
       "language_auto": "Détecter automatiquement",
       "language_auto_updated": "Je détecterai la langue moi-même à la prochaine évaluation.",
       "context": {
         "short": "Contexte",
-        "title": "Ce qu’est le contexte",
         "explain": "Le contexte, ce sont les messages que l’IA a choisis autour de la phrase gagnante. S’il y en a plus de cinq, je resserre le bloc autour de la citation elle-même."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "Comment je mets en forme le résultat dans le groupe."
       },
       "time": {
-        "title": "<b>Heure de la citation</b>",
-        "hint": "<i>À cette heure, je clôture la journée et je choisis la citation.</i>",
         "line": "Bilan du jour : <b>{time}</b>",
         "timezone": "Fuseau horaire : <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>Minimum de messages</b>",
-        "hint": "<i>En dessous, la journée est passée sans évaluation.</i>",
         "line": "Minimum : <b>{count}</b>"
       },
       "tz": {

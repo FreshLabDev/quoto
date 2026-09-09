@@ -1,12 +1,23 @@
 {
   "language_name": "Español",
-  "months": ["de enero", "de febrero", "de marzo", "de abril", "de mayo", "de junio", "de julio", "de agosto", "de septiembre", "de octubre", "de noviembre", "de diciembre"],
+  "months": [
+    "de enero",
+    "de febrero",
+    "de marzo",
+    "de abril",
+    "de mayo",
+    "de junio",
+    "de julio",
+    "de agosto",
+    "de septiembre",
+    "de octubre",
+    "de noviembre",
+    "de diciembre"
+  ],
   "common": {
     "anonymous": "Anónimo",
     "original": "Original",
-    "details": "Detalles",
-    "context": "contexto",
-    "ai": "IA"
+    "details": "Detalles"
   },
   "command": {
     "start_private": "Abrir Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "Mis estadísticas",
       "chat_stats": "Estadísticas del chat",
       "stats": "Estadísticas",
-      "group_language": "Idioma del grupo",
-      "settings": "Ajustes",
       "back": "Atrás",
       "about": "Acerca de",
       "agreement": "Acuerdo",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "Elijo la cita del día en los chats de grupo. Añádeme a un grupo y abre /start allí.",
-      "language": "Idioma de la interfaz: <b>{language_name}</b>",
-      "language_note": "En el chat privado sigo tu idioma de Telegram."
+      "language": "Idioma de la interfaz: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "Listo.",
     "invalid": "Así no funciona.",
-    "block": {
-      "interface": "Interfaz",
-      "quote_day": "Cita del día",
-      "behavior": "Comportamiento"
-    },
     "button": {
       "language": "Idioma",
-      "interface": "Interfaz",
       "quote_day": "Cita del día",
       "publication": "Publicación",
-      "time": "Hora",
-      "min_messages": "Mínimo",
       "context": "Contexto",
       "boring_notice": "Día aburrido",
       "pin": "Fijar",
@@ -71,8 +71,6 @@
       "media": "Multimedia"
     },
     "private": {
-      "title": "<b>Ajustes</b>",
-      "hint": "<i>Solo afectan a este chat privado.</i>",
       "language_title": "Idioma de la interfaz",
       "language_hint": "Mantén tu idioma de Telegram o elige uno a mano.",
       "telegram_language": "Idioma de Telegram",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Idioma de Telegram"
     },
     "group": {
-      "title": "<b>Ajustes del grupo</b>",
-      "hint": "<i>Solo los administradores pueden configurarme.</i>",
       "language_auto": "Detectar automáticamente",
       "language_auto_updated": "Detectaré el idioma yo mismo en la próxima evaluación.",
       "context": {
         "short": "Contexto",
-        "title": "Qué es el contexto",
         "explain": "El contexto son los mensajes que la IA eligió alrededor de la frase ganadora. Si hay más de cinco, recorto el bloque en torno a la cita."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "Cómo presento el resultado en el grupo."
       },
       "time": {
-        "title": "<b>Hora de la cita</b>",
-        "hint": "<i>A esta hora cierro el día y elijo la cita.</i>",
         "line": "Resumen del día: <b>{time}</b>",
         "timezone": "Zona horaria: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>Mínimo de mensajes</b>",
-        "hint": "<i>Con menos mensajes el día se salta sin evaluación.</i>",
         "line": "Mínimo: <b>{count}</b>"
       },
       "tz": {

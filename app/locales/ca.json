@@ -1,12 +1,23 @@
 {
   "language_name": "Català",
-  "months": ["de gener", "de febrer", "de març", "d’abril", "de maig", "de juny", "de juliol", "d’agost", "de setembre", "d’octubre", "de novembre", "de desembre"],
+  "months": [
+    "de gener",
+    "de febrer",
+    "de març",
+    "d’abril",
+    "de maig",
+    "de juny",
+    "de juliol",
+    "d’agost",
+    "de setembre",
+    "d’octubre",
+    "de novembre",
+    "de desembre"
+  ],
   "common": {
     "anonymous": "Anònim",
     "original": "Original",
-    "details": "Detalls",
-    "context": "context",
-    "ai": "IA"
+    "details": "Detalls"
   },
   "command": {
     "start_private": "Obre Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "Les meves estadístiques",
       "chat_stats": "Estadístiques del xat",
       "stats": "Estadístiques",
-      "group_language": "Idioma del grup",
-      "settings": "Configuració",
       "back": "Enrere",
       "about": "Quant a",
       "agreement": "Condicions",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "Trio la cita del dia als xats de grup. Afegeix-me a un grup i obre-hi /start.",
-      "language": "Idioma de la interfície: <b>{language_name}</b>",
-      "language_note": "Al xat privat segueixo el teu idioma de Telegram."
+      "language": "Idioma de la interfície: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "Fet.",
     "invalid": "Així no funciona.",
-    "block": {
-      "interface": "Interfície",
-      "quote_day": "Cita del dia",
-      "behavior": "Comportament"
-    },
     "button": {
       "language": "Idioma",
-      "interface": "Interfície",
       "quote_day": "Cita del dia",
       "publication": "Publicació",
-      "time": "Hora",
-      "min_messages": "Mínim",
       "context": "Context",
       "boring_notice": "Dia avorrit",
       "pin": "Fixa",
@@ -71,8 +71,6 @@
       "media": "Multimèdia"
     },
     "private": {
-      "title": "<b>Configuració</b>",
-      "hint": "<i>Només afecta aquest xat privat.</i>",
       "language_title": "Idioma de la interfície",
       "language_hint": "Mantén el teu idioma de Telegram o tria’n un a mà.",
       "telegram_language": "Idioma de Telegram",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Idioma de Telegram"
     },
     "group": {
-      "title": "<b>Configuració del grup</b>",
-      "hint": "<i>Només els administradors em poden configurar.</i>",
       "language_auto": "Detecta automàticament",
       "language_auto_updated": "Detectaré l’idioma jo mateix en la propera avaluació.",
       "context": {
         "short": "Context",
-        "title": "Què és el context",
         "explain": "El context són els missatges que la IA ha triat al voltant de la frase guanyadora. Si n’hi ha més de cinc, estrenyo el bloc al voltant de la cita mateixa."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "Com presento el resultat al grup."
       },
       "time": {
-        "title": "<b>Hora de la cita</b>",
-        "hint": "<i>A aquesta hora tanco el dia i trio la cita.</i>",
         "line": "Resum del dia: <b>{time}</b>",
         "timezone": "Zona horària: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>Mínim de missatges</b>",
-        "hint": "<i>Amb menys missatges el dia se salta sense avaluació.</i>",
         "line": "Mínim: <b>{count}</b>"
       },
       "tz": {

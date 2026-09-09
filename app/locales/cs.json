@@ -1,12 +1,23 @@
 {
   "language_name": "Čeština",
-  "months": ["ledna", "února", "března", "dubna", "května", "června", "července", "srpna", "září", "října", "listopadu", "prosince"],
+  "months": [
+    "ledna",
+    "února",
+    "března",
+    "dubna",
+    "května",
+    "června",
+    "července",
+    "srpna",
+    "září",
+    "října",
+    "listopadu",
+    "prosince"
+  ],
   "common": {
     "anonymous": "Anonym",
     "original": "Originál",
-    "details": "Detaily",
-    "context": "kontext",
-    "ai": "AI"
+    "details": "Detaily"
   },
   "command": {
     "start_private": "Otevřít Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "Moje statistiky",
       "chat_stats": "Statistiky chatu",
       "stats": "Statistiky",
-      "group_language": "Jazyk skupiny",
-      "settings": "Nastavení",
       "back": "Zpět",
       "about": "O botovi",
       "agreement": "Podmínky",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "Ve skupinových chatech vybírám citát dne. Přidej mě do skupiny a otevři tam /start.",
-      "language": "Jazyk rozhraní: <b>{language_name}</b>",
-      "language_note": "V soukromém chatu se držím tvého jazyka Telegramu."
+      "language": "Jazyk rozhraní: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "Hotovo.",
     "invalid": "Takhle to nepůjde.",
-    "block": {
-      "interface": "Rozhraní",
-      "quote_day": "Citát dne",
-      "behavior": "Chování"
-    },
     "button": {
       "language": "Jazyk",
-      "interface": "Rozhraní",
       "quote_day": "Citát dne",
       "publication": "Publikace",
-      "time": "Čas",
-      "min_messages": "Minimum",
       "context": "Kontext",
       "boring_notice": "Nudný den",
       "pin": "Připínat",
@@ -71,8 +71,6 @@
       "media": "Média"
     },
     "private": {
-      "title": "<b>Nastavení</b>",
-      "hint": "<i>Platí jen pro tenhle soukromý chat.</i>",
       "language_title": "Jazyk rozhraní",
       "language_hint": "Nech si jazyk Telegramu, nebo si vyber ručně.",
       "telegram_language": "Jazyk Telegramu",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Jazyk Telegramu"
     },
     "group": {
-      "title": "<b>Nastavení skupiny</b>",
-      "hint": "<i>Nastavovat mě mohou jen správci.</i>",
       "language_auto": "Rozpoznávat automaticky",
       "language_auto_updated": "Jazyk si při příštím vyhodnocení rozpoznám sám.",
       "context": {
         "short": "Kontext",
-        "title": "Co je kontext",
         "explain": "Kontext jsou zprávy, které AI vybrala kolem vítězné věty. Pokud jich je víc než pět, blok kolem samotného citátu zúžím."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "Jak výsledek ve skupině naservíruju."
       },
       "time": {
-        "title": "<b>Čas citátu</b>",
-        "hint": "<i>V tuhle dobu uzavřu den a vyberu citát.</i>",
         "line": "Shrnutí dne: <b>{time}</b>",
         "timezone": "Časové pásmo: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>Minimum zpráv</b>",
-        "hint": "<i>Při menším počtu se den přeskočí bez vyhodnocení.</i>",
         "line": "Minimum: <b>{count}</b>"
       },
       "tz": {

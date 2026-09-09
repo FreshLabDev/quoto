@@ -1,12 +1,23 @@
 {
   "language_name": "Svenska",
-  "months": ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"],
+  "months": [
+    "januari",
+    "februari",
+    "mars",
+    "april",
+    "maj",
+    "juni",
+    "juli",
+    "augusti",
+    "september",
+    "oktober",
+    "november",
+    "december"
+  ],
   "common": {
     "anonymous": "Anonym",
     "original": "Original",
-    "details": "Detaljer",
-    "context": "kontext",
-    "ai": "AI"
+    "details": "Detaljer"
   },
   "command": {
     "start_private": "Öppna Quoto",
@@ -17,8 +28,6 @@
       "user_stats": "Min statistik",
       "chat_stats": "Chattens statistik",
       "stats": "Statistik",
-      "group_language": "Gruppens språk",
-      "settings": "Inställningar",
       "back": "Tillbaka",
       "about": "Om",
       "agreement": "Villkor",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "Jag väljer dagens citat i gruppchattar. Lägg till mig i en grupp och öppna /start där.",
-      "language": "Gränssnittsspråk: <b>{language_name}</b>",
-      "language_note": "I privatchatten följer jag ditt Telegram-språk."
+      "language": "Gränssnittsspråk: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "Klart.",
     "invalid": "Så går det inte.",
-    "block": {
-      "interface": "Gränssnitt",
-      "quote_day": "Dagens citat",
-      "behavior": "Beteende"
-    },
     "button": {
       "language": "Språk",
-      "interface": "Gränssnitt",
       "quote_day": "Dagens citat",
       "publication": "Publicering",
-      "time": "Tid",
-      "min_messages": "Minst",
       "context": "Kontext",
       "boring_notice": "Trist dag",
       "pin": "Fäst",
@@ -71,8 +71,6 @@
       "media": "Media"
     },
     "private": {
-      "title": "<b>Inställningar</b>",
-      "hint": "<i>Gäller bara den här privatchatten.</i>",
       "language_title": "Gränssnittsspråk",
       "language_hint": "Behåll ditt Telegram-språk eller välj ett manuellt.",
       "telegram_language": "Telegram-språk",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Telegram-språk"
     },
     "group": {
-      "title": "<b>Gruppinställningar</b>",
-      "hint": "<i>Bara admins kan ställa in mig.</i>",
       "language_auto": "Identifiera automatiskt",
       "language_auto_updated": "Jag identifierar språket själv vid nästa bedömning.",
       "context": {
         "short": "Kontext",
-        "title": "Vad kontext betyder",
         "explain": "Kontexten är de meddelanden som AI valde runt den vinnande repliken. Är de fler än fem drar jag ihop blocket runt själva citatet."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "Hur jag presenterar resultatet i gruppen."
       },
       "time": {
-        "title": "<b>Tid för citatet</b>",
-        "hint": "<i>Vid den här tiden stänger jag dagen och väljer citatet.</i>",
         "line": "Dagens sammanfattning: <b>{time}</b>",
         "timezone": "Tidszon: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>Minsta antal meddelanden</b>",
-        "hint": "<i>Med färre meddelanden hoppas dagen över utan bedömning.</i>",
         "line": "Minst: <b>{count}</b>"
       },
       "tz": {

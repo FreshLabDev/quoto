@@ -1,12 +1,23 @@
 {
   "language_name": "Türkçe",
-  "months": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+  "months": [
+    "Ocak",
+    "Şubat",
+    "Mart",
+    "Nisan",
+    "Mayıs",
+    "Haziran",
+    "Temmuz",
+    "Ağustos",
+    "Eylül",
+    "Ekim",
+    "Kasım",
+    "Aralık"
+  ],
   "common": {
     "anonymous": "Anonim",
     "original": "Orijinal",
-    "details": "Ayrıntılar",
-    "context": "bağlam",
-    "ai": "AI"
+    "details": "Ayrıntılar"
   },
   "command": {
     "start_private": "Quoto’yu aç",
@@ -17,8 +28,6 @@
       "user_stats": "İstatistiklerim",
       "chat_stats": "Sohbet istatistikleri",
       "stats": "İstatistikler",
-      "group_language": "Grup dili",
-      "settings": "Ayarlar",
       "back": "Geri",
       "about": "Hakkında",
       "agreement": "Koşullar",
@@ -27,8 +36,7 @@
     "private": {
       "title": "Quoto",
       "body": "Grup sohbetlerinde günün sözünü seçerim. Beni bir gruba ekle ve orada /start yaz.",
-      "language": "Arayüz dili: <b>{language_name}</b>",
-      "language_note": "Özel sohbette Telegram dilini kullanırım."
+      "language": "Arayüz dili: <b>{language_name}</b>"
     },
     "group": {
       "title": "Quoto",
@@ -52,18 +60,10 @@
   "settings": {
     "updated": "Tamam.",
     "invalid": "Böyle olmaz.",
-    "block": {
-      "interface": "Arayüz",
-      "quote_day": "Günün sözü",
-      "behavior": "Davranış"
-    },
     "button": {
       "language": "Dil",
-      "interface": "Arayüz",
       "quote_day": "Günün sözü",
       "publication": "Yayın",
-      "time": "Saat",
-      "min_messages": "En az",
       "context": "Bağlam",
       "boring_notice": "Sıkıcı gün",
       "pin": "Sabitle",
@@ -71,8 +71,6 @@
       "media": "Medya"
     },
     "private": {
-      "title": "<b>Ayarlar</b>",
-      "hint": "<i>Yalnızca bu özel sohbet için geçerli.</i>",
       "language_title": "Arayüz dili",
       "language_hint": "Telegram dilini koru ya da elle bir dil seç.",
       "telegram_language": "Telegram dili",
@@ -80,13 +78,10 @@
       "language_source_telegram": "Telegram dili"
     },
     "group": {
-      "title": "<b>Grup ayarları</b>",
-      "hint": "<i>Beni yalnızca yöneticiler ayarlayabilir.</i>",
       "language_auto": "Otomatik algıla",
       "language_auto_updated": "Dili bir sonraki değerlendirmede kendim algılarım.",
       "context": {
         "short": "Bağlam",
-        "title": "Bağlam ne demek",
         "explain": "Bağlam, yapay zekânın kazanan cümlenin çevresinden seçtiği mesajlardır. Beşten fazlaysa bloğu alıntının etrafında daraltırım."
       },
       "boring_notice": {
@@ -107,14 +102,10 @@
         "hint": "Sonucu grupta nasıl sunduğum."
       },
       "time": {
-        "title": "<b>Söz saati</b>",
-        "hint": "<i>Bu saatte günü kapatır ve sözü seçerim.</i>",
         "line": "Gün özeti: <b>{time}</b>",
         "timezone": "Saat dilimi: <b>{timezone}</b>"
       },
       "min_messages": {
-        "title": "<b>En az mesaj sayısı</b>",
-        "hint": "<i>Daha azında gün değerlendirilmeden atlanır.</i>",
         "line": "En az: <b>{count}</b>"
       },
       "tz": {
