@@ -13,6 +13,8 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+## v0.11.0-alpha.1 - 2026-09-09
+
 ### Changed
 
 - The panel now follows the Asterfield family contract, so a person who learns
