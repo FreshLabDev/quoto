@@ -249,5 +249,9 @@
     "already": "✅ Ta grupa już zaakceptowała regulamin.",
     "admin_only": "Regulamin może zaakceptować tylko administrator grupy.",
     "reminder": "Aby publikować cytat dnia, administrator grupy musi zaakceptować regulamin Quoto."
+  },
+  "date": {
+    "day_month": "{day} {month}",
+    "day_month_year": "{day} {month} {year}"
   }
 }

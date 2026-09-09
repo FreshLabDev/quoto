@@ -249,5 +249,9 @@
     "already": "✅ Den här gruppen har redan godkänt villkoren.",
     "admin_only": "Bara en gruppadmin kan godkänna villkoren.",
     "reminder": "För att dagens citat ska publiceras måste en gruppadmin godkänna Quotos användarvillkor."
+  },
+  "date": {
+    "day_month": "{day} {month}",
+    "day_month_year": "{day} {month} {year}"
   }
 }

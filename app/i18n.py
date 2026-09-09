@@ -138,6 +138,27 @@ def month_name(language: object | None, month: int) -> str:
     return str(month)
 
 
+def format_date(language: object | None, value, *, with_year: bool = False) -> str:
+    """Render a date the way the language writes one.
+
+    Gluing "{day} {month}" together at the call site only works for the
+    languages that happen to write a date that way. Spanish needs a preposition
+    before the month and another before the year, German and Czech put a period
+    after the day, and Chinese and Japanese start with the year and end with a
+    character. So the order lives in the locale beside the month names, not in
+    the code.
+    """
+    lang = language_or_default(language)
+    key = "date.day_month_year" if with_year else "date.day_month"
+    return t(
+        lang,
+        key,
+        day=value.day,
+        month=month_name(lang, value.month),
+        year=value.year,
+    )
+
+
 def _load(language: str) -> dict[str, Any]:
     lang = language_or_default(language)
     cached = _CACHE.get(lang)

@@ -249,5 +249,9 @@
     "already": "✅ Tahle skupina už podmínky přijala.",
     "admin_only": "Podmínky může přijmout jen správce skupiny.",
     "reminder": "Aby se citát dne zveřejňoval, musí správce skupiny přijmout podmínky použití Quoto."
+  },
+  "date": {
+    "day_month": "{day}. {month}",
+    "day_month_year": "{day}. {month} {year}"
   }
 }

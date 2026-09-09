@@ -1,18 +1,18 @@
 {
   "language_name": "Català",
   "months": [
-    "de gener",
-    "de febrer",
-    "de març",
-    "d’abril",
-    "de maig",
-    "de juny",
-    "de juliol",
-    "d’agost",
-    "de setembre",
-    "d’octubre",
-    "de novembre",
-    "de desembre"
+    "gener",
+    "febrer",
+    "març",
+    "abril",
+    "maig",
+    "juny",
+    "juliol",
+    "agost",
+    "setembre",
+    "octubre",
+    "novembre",
+    "desembre"
   ],
   "common": {
     "anonymous": "Anònim",
@@ -249,5 +249,9 @@
     "already": "✅ Aquest grup ja ha acceptat les condicions.",
     "admin_only": "Només un administrador del grup pot acceptar les condicions.",
     "reminder": "Per publicar la cita del dia, un administrador del grup ha d’acceptar les condicions d’ús de Quoto."
+  },
+  "date": {
+    "day_month": "{day} de {month}",
+    "day_month_year": "{day} de {month} de {year}"
   }
 }

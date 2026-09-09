@@ -249,5 +249,9 @@
     "already": "✅ Bu grup koşulları zaten kabul etti.",
     "admin_only": "Koşulları yalnızca bir grup yöneticisi kabul edebilir.",
     "reminder": "Günün sözünü yayınlamak için bir grup yöneticisinin Quoto kullanım koşullarını kabul etmesi gerekiyor."
+  },
+  "date": {
+    "day_month": "{day} {month}",
+    "day_month_year": "{day} {month} {year}"
   }
 }

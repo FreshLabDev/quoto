@@ -1,18 +1,18 @@
 {
   "language_name": "Español",
   "months": [
-    "de enero",
-    "de febrero",
-    "de marzo",
-    "de abril",
-    "de mayo",
-    "de junio",
-    "de julio",
-    "de agosto",
-    "de septiembre",
-    "de octubre",
-    "de noviembre",
-    "de diciembre"
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre"
   ],
   "common": {
     "anonymous": "Anónimo",
@@ -249,5 +249,9 @@
     "already": "✅ Este grupo ya ha aceptado el acuerdo.",
     "admin_only": "Solo un administrador del grupo puede aceptar el acuerdo.",
     "reminder": "Para publicar la cita del día, un administrador del grupo tiene que aceptar el acuerdo de uso de Quoto."
+  },
+  "date": {
+    "day_month": "{day} de {month}",
+    "day_month_year": "{day} de {month} de {year}"
   }
 }

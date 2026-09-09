@@ -249,5 +249,9 @@
     "already": "✅ Ce groupe a déjà accepté les conditions.",
     "admin_only": "Seul un admin du groupe peut accepter les conditions.",
     "reminder": "Pour publier la citation du jour, un admin du groupe doit accepter les conditions d’utilisation de Quoto."
+  },
+  "date": {
+    "day_month": "{day} {month}",
+    "day_month_year": "{day} {month} {year}"
   }
 }

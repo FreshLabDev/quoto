@@ -249,5 +249,9 @@
     "already": "✅ Diese Gruppe hat die Vereinbarung bereits akzeptiert.",
     "admin_only": "Nur ein Gruppen-Admin kann die Vereinbarung akzeptieren.",
     "reminder": "Um das Zitat des Tages zu veröffentlichen, muss ein Gruppen-Admin die Quoto-Nutzungsvereinbarung akzeptieren."
+  },
+  "date": {
+    "day_month": "{day}. {month}",
+    "day_month_year": "{day}. {month} {year}"
   }
 }

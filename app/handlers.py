@@ -533,7 +533,7 @@ async def private_handler(
             safe_model_short = _html(model_short)
 
             created = detail["created_at"]
-            date_str = f"{created.day} {i18n.month_name(language, created.month)} {created.year}"
+            date_str = i18n.format_date(language, created, with_year=True)
 
             link_chat_id = None
             if detail.get("message_id") and detail.get("chat_id"):

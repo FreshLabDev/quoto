@@ -249,5 +249,9 @@
     "already": "✅ This group has already accepted the agreement.",
     "admin_only": "Only a group admin can accept the agreement.",
     "reminder": "To publish the quote of the day, a group admin needs to accept the Quoto user agreement."
+  },
+  "date": {
+    "day_month": "{day} {month}",
+    "day_month_year": "{day} {month} {year}"
   }
 }

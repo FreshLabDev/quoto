@@ -815,7 +815,7 @@ def _format_context_quote_body(context_lines: list[dict[str, object]], text_limi
 
 
 def _format_quote_day(quote_day, language: str) -> str:
-    return f"{quote_day.day} {i18n.month_name(language, quote_day.month)}"
+    return i18n.format_date(language, quote_day)
 
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
