@@ -130,9 +130,18 @@ async def _edit_panel(
                 await richmd.edit_markdown(
                     bot, panel.chat.id, panel.message_id, markdown, reply_markup
                 )
-            except TelegramNotFound as exc:
-                # The server had the method at startup and lost it. Say so once,
-                # then show the same screen the HTML-only path would have shown.
+            except (TelegramNotFound, TelegramBadRequest) as exc:
+                # The server had the method at startup and cannot serve this
+                # call now. A 404 means the method went away; a 400 is the more
+                # likely one -- a server that does not understand `rich_message`
+                # ignores the field and complains the text is empty. Either way
+                # the agreement must still appear, so fall through to the HTML
+                # rendering this document is authored twice for.
+                #
+                # "message is not modified" is not a failure: the panel already
+                # shows this screen.
+                if "message is not modified" in str(exc).lower():
+                    return True
                 await richmd.note_method_lost(exc)
                 await panel.edit_text(text, reply_markup=reply_markup)
         else:

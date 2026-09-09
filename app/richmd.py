@@ -19,8 +19,11 @@ from typing import Any, Union
 from aiogram import Bot, types
 from aiogram.exceptions import (
     TelegramAPIError,
+    TelegramConflictError,
     TelegramForbiddenError,
     TelegramNotFound,
+    TelegramRetryAfter,
+    TelegramServerError,
     TelegramUnauthorizedError,
 )
 from aiogram.methods.base import TelegramMethod
@@ -94,9 +97,17 @@ async def preflight(bot: Bot) -> bool:
         _supported = None
         log.warning(f"⚠️ sendRichMessage probe was refused ({exc}) — staying on plain HTML")
         return False
+    except (TelegramRetryAfter, TelegramServerError, TelegramConflictError) as exc:
+        # Not an answer about the method. Flood control, a 5xx and a webhook
+        # conflict are all TelegramAPIError subclasses, so treating "any other
+        # API error" as proof of existence would latch the rich path on for the
+        # life of the process because the server was briefly busy at startup.
+        _supported = None
+        log.warning(f"⚠️ sendRichMessage probe was inconclusive ({exc}) — staying on plain HTML")
+        return False
     except TelegramAPIError:
-        # Any other API answer — a 400 on the empty body, most often — means the
-        # method is there and only the parameters were missing.
+        # A 400 on the empty body: the method is there and only the parameters
+        # were missing.
         _supported = True
         log.info("📄 Rich Markdown available: the user agreement renders natively")
         return True

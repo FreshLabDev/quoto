@@ -39,11 +39,15 @@ services:
       LC_ALL: C.UTF-8
     volumes:
       - ./logs:/app/logs
-    # telegram_bot_api_net reaches the self-hosted Bot API server. Quoto needs it
-    # for getFile, not for rich text: Telegram's own endpoint always has the
-    # newest Bot API, but caps a download at 20 MB, and quoto analyses video up
-    # to MEDIA_VIDEO_MAX_SECONDS. Anything larger is simply unreadable there, and
-    # the day's media is skipped without anybody being told.
+    # telegram_bot_api_net is joined so the option exists, but the switch --
+    # TELEGRAM_BOT_API_BASE_URL in .env -- must stay empty until the server's
+    # media directory is mounted here. That server runs with --local: getFile
+    # answers with a path on its own disk rather than something downloadable, so
+    # the file has to be readable from inside this container. Mount only quoto's
+    # own token subdirectory, as voicy does, and run as the uid the server
+    # writes with. Turned on without that, every photo, video, circle and voice
+    # note fails analysis and the day's quote quietly gets worse.
+    # See docs/releases.md for the full list, including the one-way logOut.
     networks: [core_net, telegram_bot_api_net]
     logging:
       driver: json-file

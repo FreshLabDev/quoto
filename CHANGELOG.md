@@ -163,6 +163,25 @@ Use this section for changes that are merged but not released yet.
 
 ### Fixed
 
+- The Bot API session is built with `is_local=True`. Our server runs with
+  `--local`, where `getFile` answers with a path on the server's own disk and
+  the `/file/bot<token>/…` route returns 404 by design. Left at aiogram's
+  default, pointing quoto at that server would have failed the download of every
+  photo, video, circle and voice note — not as a retry or a skip, but as a
+  stored failed analysis, whose only symptom is a duller quote a day later.
+- A transport error is scrubbed before it is logged and before it is stored. Its
+  text carries the request URL, and a Bot API URL carries the bot token, so the
+  media failure path was writing the token into `logs/` and into
+  `message_media.error`.
+- The rich-Markdown fallback also catches a `400`. It caught only `404`, but a
+  server that does not understand `rich_message` ignores the field and complains
+  the text is empty — which is a 400, and would have left the agreement tab dead
+  rather than falling back to the HTML the document is authored twice for.
+- The startup probe no longer reads flood control, a `5xx` or a webhook conflict
+  as proof that `sendRichMessage` exists. All three are `TelegramAPIError`
+  subclasses, so a server that was briefly busy at startup would have latched
+  the rich path on for the life of the process.
+
 - The operator contact in the user agreement was `@amti_yo`, which is not a
   Telegram account. It is `@amtiyo`, corrected in all four locales, and the
   document now takes it from one constant instead of repeating it.

@@ -149,11 +149,23 @@ a patch that fixes what went wrong; never retag or delete the bad release.
 | Env file | `.app.env` on the host, never in git |
 | Networks | `core_net` (core-postgres), `telegram_bot_api_net` (the self-hosted Bot API server) |
 
-Quoto reads the self-hosted Bot API server for **downloads**, not for rich text:
-Telegram's own endpoint always carries the newest Bot API, but caps `getFile` at
-20 MB, and quoto analyses video up to `MEDIA_VIDEO_MAX_SECONDS`. Without
-`TELEGRAM_BOT_API_BASE_URL` anything larger is unreadable and the day's media is
-skipped with nobody told.
+**Leave `TELEGRAM_BOT_API_BASE_URL` empty for now.** Quoto would benefit from the
+self-hosted server for downloads — Telegram's own endpoint caps `getFile` at
+20 MB and quoto analyses video far longer than that — but three things have to
+be true before it can be switched on, and none of them is done:
+
+- The server runs with `--local`, so `getFile` answers with a path on the
+  server's own disk and the `/file/bot<token>/…` route returns 404. Quoto sets
+  `is_local=True` for that, which means the file is *read*, not fetched — so the
+  server's media directory has to be mounted into this container. Mount only
+  quoto's own token subdirectory, the way voicy does: the parent holds one per
+  bot, each named after that bot's full token.
+- The server writes as uid 101; quoto's image runs as 1000.
+- A token is logged in on exactly one server at a time. Moving quoto means
+  `logOut` on api.telegram.org first, and that is a one-way step.
+
+Switched on without the mount, every photo, video, circle and voice note fails
+analysis and the day's quote quietly gets worse — visible a day later, if at all.
 
 The stack directory on the host still splits its configuration in two: `.env`
 for the Compose variables and `.app.env` for the application. This manifest
