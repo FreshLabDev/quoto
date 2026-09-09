@@ -1,6 +1,9 @@
 FROM python:3.12-slim-bookworm
 
-ARG QUOTO_VERSION=0.10.2
+# No real default: the release workflow passes the tag. A version baked in
+# here goes stale the moment it is not bumped, and then the image reports a
+# release it is not.
+ARG QUOTO_VERSION=dev
 ARG QUOTO_REVISION=unknown
 
 LABEL org.opencontainers.image.title="Quoto" \
