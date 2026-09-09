@@ -1,0 +1,262 @@
+{
+  "language_name": "Čeština",
+  "months": ["ledna", "února", "března", "dubna", "května", "června", "července", "srpna", "září", "října", "listopadu", "prosince"],
+  "common": {
+    "anonymous": "Anonym",
+    "original": "Originál",
+    "details": "Detaily",
+    "context": "kontext",
+    "ai": "AI"
+  },
+  "command": {
+    "start_private": "Otevřít Quoto",
+    "start_group": "Otevřít panel Quoto"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "Moje statistiky",
+      "chat_stats": "Statistiky chatu",
+      "stats": "Statistiky",
+      "group_language": "Jazyk skupiny",
+      "settings": "Nastavení",
+      "back": "Zpět",
+      "about": "O botovi",
+      "agreement": "Podmínky",
+      "close": "Zavřít"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Ve skupinových chatech vybírám citát dne. Přidej mě do skupiny a otevři tam /start.",
+      "language": "Jazyk rozhraní: <b>{language_name}</b>",
+      "language_note": "V soukromém chatu se držím tvého jazyka Telegramu."
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Sleduju chat a na konci dne zveřejním nejlepší větu. Statistiky a nastavení najdeš níž.",
+      "user_body": "Sleduju chat a na konci dne zveřejním nejlepší větu.",
+      "language_line": "Jazyk: <b>{language_name}</b>",
+      "schedule_line": "Shrnutí dne v <b>{time}</b> · od <b>{min_messages}</b> zpráv"
+    },
+    "language": {
+      "title": "Jazyk skupiny",
+      "hint": "Vyber jazyk, kterým v této skupině mluvím.",
+      "source_auto": "Rozpoznán automaticky",
+      "source_manual": "Nastaven ručně",
+      "source_default": "Výchozí · English",
+      "updated": "Nový jazyk: {language_name}.",
+      "invalid": "Takový jazyk neznám."
+    },
+    "other_user": "Otevři si vlastní menu přes /start.",
+    "group_context_required": "Otevři to ve skupinovém chatu."
+  },
+  "settings": {
+    "updated": "Hotovo.",
+    "invalid": "Takhle to nepůjde.",
+    "block": {
+      "interface": "Rozhraní",
+      "quote_day": "Citát dne",
+      "behavior": "Chování"
+    },
+    "button": {
+      "language": "Jazyk",
+      "interface": "Rozhraní",
+      "quote_day": "Citát dne",
+      "publication": "Publikace",
+      "time": "Čas",
+      "min_messages": "Minimum",
+      "context": "Kontext",
+      "boring_notice": "Nudný den",
+      "pin": "Připínat",
+      "timezone": "Časové pásmo",
+      "media": "Média"
+    },
+    "private": {
+      "title": "<b>Nastavení</b>",
+      "hint": "<i>Platí jen pro tenhle soukromý chat.</i>",
+      "language_title": "Jazyk rozhraní",
+      "language_hint": "Nech si jazyk Telegramu, nebo si vyber ručně.",
+      "telegram_language": "Jazyk Telegramu",
+      "language_source_manual": "Nastaven ručně",
+      "language_source_telegram": "Jazyk Telegramu"
+    },
+    "group": {
+      "title": "<b>Nastavení skupiny</b>",
+      "hint": "<i>Nastavovat mě mohou jen správci.</i>",
+      "language_auto": "Rozpoznávat automaticky",
+      "language_auto_updated": "Jazyk si při příštím vyhodnocení rozpoznám sám.",
+      "context": {
+        "short": "Kontext",
+        "title": "Co je kontext",
+        "explain": "Kontext jsou zprávy, které AI vybrala kolem vítězné věty. Pokud jich je víc než pět, blok kolem samotného citátu zúžím."
+      },
+      "boring_notice": {
+        "short": "Nudný den"
+      },
+      "pin": {
+        "short": "Připínat"
+      },
+      "media": {
+        "short": "Média"
+      },
+      "quote_day": {
+        "title": "Citát dne",
+        "hint": "Kdy uzavřu den a kolik zpráv je potřeba k vyhodnocení."
+      },
+      "publication": {
+        "title": "Publikace",
+        "hint": "Jak výsledek ve skupině naservíruju."
+      },
+      "time": {
+        "title": "<b>Čas citátu</b>",
+        "hint": "<i>V tuhle dobu uzavřu den a vyberu citát.</i>",
+        "line": "Shrnutí dne: <b>{time}</b>",
+        "timezone": "Časové pásmo: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>Minimum zpráv</b>",
+        "hint": "<i>Při menším počtu se den přeskočí bez vyhodnocení.</i>",
+        "line": "Minimum: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Časové pásmo",
+        "hint": "V tomhle pásmu počítám okno dne i čas uzávěrky."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Zveřejněno",
+    "skipped_boring": "😴 Nudný den",
+    "publish_failed": "⚠️ Publikace se nezdařila",
+    "boring_notice_failed": "⚠️ Upozornění neodesláno",
+    "publish_unknown": "⚠️ Publikace nepotvrzena",
+    "boring_notice_unknown": "⚠️ Upozornění nepotvrzeno"
+  },
+  "admin": {
+    "admin_only": "Tohle můžou měnit jen správci."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\nRád jsem v <b>{chat_title}</b>. Každý den v <b>{time}</b> vyberu tu nejlepší větu a zveřejním citát dne.\n\nOtevři /start — statistiky a nastavení jsou tam.",
+    "need_admin": "⚠️ Udělej ze mě <b>správce</b> s právem <i>připínat</i> zprávy — pak můžu zveřejnit výsledek.",
+    "admin_granted": "Díky! Teď můžu zveřejňovat citát dne."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ Neplatný odkaz na citát.",
+    "quote_not_found": "⚠️ Citát nenalezen.",
+    "add_to_group": "Přidat do skupiny",
+    "hello": "<b>Quoto</b>\n\nVe skupinových chatech vybírám citát dne: nasbírám zprávy za den a v nastavený čas zveřejním nejlepší větu.\n\nPřidej mě do skupiny a otevři tam /start."
+  },
+  "details": {
+    "title": "<b>Den #{id}</b>",
+    "total": "Celkem",
+    "reactions": "Reakce",
+    "length": "Délka",
+    "decision_reason": "Důvod rozhodnutí",
+    "operation_error": "Technická chyba",
+    "ai_choice": "Volba AI"
+  },
+  "start": {
+    "group": "<b>Quoto — Citát dne</b>\n\nSbírám zprávy za celý den a na jeho konci vyberu nejlepší větu.\n\nOtevři /start a zobrazí se ovládací panel."
+  },
+  "stats": {
+    "missing": "Statistiky zatím nejsou — tahle skupina není zaregistrovaná.",
+    "empty": "V tomhle chatu zatím nejsou zveřejněné citáty.",
+    "title": "Statistiky chatu",
+    "hint": "Co celý chat zatím nasbíral.",
+    "total_quotes": "Citátů celkem: <b>{count}</b>",
+    "unique_authors": "Autorů: <b>{count}</b>",
+    "avg_score": "Průměrné hodnocení: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Nejlepší autoři</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Nejlepší citát</b>"
+  },
+  "user_stats": {
+    "missing": "Statistiky zatím nejsou.",
+    "empty": "<b>{user}</b>, v tomhle chatu zatím nemáš zveřejněný citát.\nPiš dál — tvůj čas přijde.",
+    "title": "Tvoje statistiky",
+    "hint": "Tvoje citáty dne v tomhle chatu.",
+    "user": "<b>{user}</b>",
+    "wins": "Výher: <b>{count}</b>",
+    "avg_score": "Průměrné hodnocení: <b>{score:.1f}/10</b>",
+    "rank": "Pořadí: <b>{rank}</b> z {total}",
+    "best_quote": "<b>Nejlepší citát</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Citát dne</b>",
+      "photo": "🏆 <b>Fotka dne</b>",
+      "video": "🏆 <b>Video dne</b>",
+      "voice": "🏆 <b>Hlasovka dne</b>",
+      "audio": "🏆 <b>Audio dne</b>"
+    },
+    "context_truncated": "ℹ️ Započítal jsem posledních {shown} z {total} zpráv — kontext zkrácen kvůli objemu."
+  },
+  "boring": {
+    "title": "😴 <b>Dnes bez citátu dne</b>",
+    "body": "Nenašel jsem větu, která by za ten den stála. Zítra zas!"
+  },
+  "about": {
+    "tagline": "Citát dne z toho, co se v chatu napsalo.",
+    "eval": "Hodnocení",
+    "sources": "Zdrojový kód",
+    "admin": "Správce"
+  },
+  "agreement": {
+    "title": "Quoto — Podmínky použití a soukromí",
+    "summary": "Používáním Quoto v této skupině přijímáš podmínky níže.",
+    "sections": [
+      {
+        "heading": "Co Quoto dělá",
+        "text": "Během dne čtu zprávy poslané v této skupině a v nastavený čas zveřejním jeden „citát dne“."
+      },
+      {
+        "heading": "Co se zpracovává",
+        "text": "Abych vybral citát dne, zpracovávám:",
+        "items": [
+          "text zpráv a popisky",
+          "reakce na zprávy",
+          "média: fotky, videa, hlasovky a audio",
+          "jméno autora a jeho Telegram ID",
+          "ID a název skupiny"
+        ]
+      },
+      {
+        "heading": "Zpracování AI",
+        "text": "Pro výběr citátu se text zpráv a média posílají k analýze našemu poskytovateli AI OpenRouter a jeho poskytovatelům modelů.",
+        "note": "Nesdílej hesla ani citlivé údaje v chatech, kde Quoto běží."
+      },
+      {
+        "heading": "Uchovávání",
+        "text": "Hlavní data dne se po zpracování mažou. Vybrané servisní záznamy a výsledky zpracování se mohou uchovávat déle kvůli spolehlivosti, kontrole kvality a statistikám; zveřejněné citáty a základní identifikátory zůstávají v historii služby."
+      },
+      {
+        "heading": "Tvoje data",
+        "text": "Tvoje data neprodávám. O smazání si napiš na {contact}."
+      },
+      {
+        "heading": "Odpovědnost správce",
+        "text": "Přijetím správce skupiny potvrzuje, že tohoto bota může přidat a že členové vědí, že chat zpracovává Quoto."
+      },
+      {
+        "heading": "Tak jak je",
+        "text": "Služba je poskytována „tak jak je“, bez záruk, a podmínky se mohou měnit; další používání znamená souhlas."
+      }
+    ],
+    "signature": {
+      "title": "Podpis dokumentu",
+      "version_label": "Verze podmínek",
+      "effective_label": "Platné od",
+      "operator_label": "Provozovatel",
+      "contact_label": "Kontakt"
+    },
+    "accept_hint": "Aby citát dne fungoval, správce skupiny klepne na „Souhlasím“.",
+    "welcome_note": "<i>Než něco zveřejním, musí správce skupiny přijmout podmínky použití.</i>",
+    "view_button": "Podmínky použití",
+    "accept_button": "Souhlasím",
+    "accepted": "✅ <b>Podmínky použití přijaty.</b> Díky!",
+    "accepted_admin_hint": "<i>Teď ze mě udělej správce s právem připínat zprávy, ať můžu zveřejňovat citát dne.</i>",
+    "accepted_toast": "Přijato — díky!",
+    "already": "✅ Tahle skupina už podmínky přijala.",
+    "admin_only": "Podmínky může přijmout jen správce skupiny.",
+    "reminder": "Aby se citát dne zveřejňoval, musí správce skupiny přijmout podmínky použití Quoto."
+  }
+}
