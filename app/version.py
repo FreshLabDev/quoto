@@ -7,7 +7,14 @@ with reality is exactly how it ended up pointing at an account that never
 existed.
 """
 
-VERSION = "0.10.3"
+import os
+
+# The running build. Dockerfile exports QUOTO_VERSION from the release
+# workflow's tag, so a released image carries its own version and nothing here
+# has to be edited for a release. A literal would go stale the moment it is not
+# bumped and then name a release this is not -- which is exactly what v0.10.4
+# shipped as, reporting 0.10.3 to its logs and to the About card.
+VERSION = os.environ.get("QUOTO_VERSION", "").strip().lstrip("v") or "dev"
 
 REPOSITORY = "FreshLabDev/quoto"
 REPOSITORY_URL = f"https://github.com/{REPOSITORY}"
