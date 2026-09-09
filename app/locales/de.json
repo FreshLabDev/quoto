@@ -25,21 +25,21 @@
       "close": "Schließen"
     },
     "private": {
-      "title": "<b>Quoto</b>",
+      "title": "Quoto",
       "body": "Ich wähle ein Zitat des Tages in Gruppenchats. Füge mich zu einer Gruppe hinzu und öffne dort /start.",
       "language": "Sprache der Oberfläche: <b>{language_name}</b>",
       "language_note": "Im privaten Chat nutze ich deine Telegram-Sprache."
     },
     "group": {
-      "title": "<b>Quoto</b>",
+      "title": "Quoto",
       "admin_body": "Ich beobachte den Chat und veröffentliche am Tagesende die beste Zeile. Statistik und Einstellungen unten.",
       "user_body": "Ich beobachte den Chat und veröffentliche am Tagesende die beste Zeile.",
       "language_line": "Sprache: <b>{language_name}</b>",
       "schedule_line": "Tagesfazit um <b>{time}</b> · ab <b>{min_messages}</b> Nachrichten"
     },
     "language": {
-      "title": "<b>Gruppensprache</b>",
-      "hint": "<i>Wähle die Sprache, in der ich in dieser Gruppe spreche.</i>",
+      "title": "Gruppensprache",
+      "hint": "Wähle die Sprache, in der ich in dieser Gruppe spreche.",
       "source_auto": "Automatisch erkannt",
       "source_manual": "Manuell gesetzt",
       "source_default": "Standard · English",
@@ -73,8 +73,8 @@
     "private": {
       "title": "<b>Einstellungen</b>",
       "hint": "<i>Gelten nur in diesem privaten Chat.</i>",
-      "language_title": "<b>Sprache im privaten Chat</b>",
-      "language_hint": "<i>Behalte deine Telegram-Sprache oder wähle manuell.</i>",
+      "language_title": "Sprache im privaten Chat",
+      "language_hint": "Behalte deine Telegram-Sprache oder wähle manuell.",
       "telegram_language": "Telegram-Sprache",
       "language_source_manual": "Manuell gesetzt",
       "language_source_telegram": "Telegram-Sprache"
@@ -86,29 +86,25 @@
       "language_auto_updated": "Ich erkenne die Sprache bei der nächsten Auswertung selbst.",
       "context": {
         "short": "Kontext",
-        "label": "Zitat-Kontext",
         "title": "Was Kontext bedeutet",
-        "explain": "<i>Kontext sind die Nachrichten, die die KI rund um den Gewinner-Satz ausgewählt hat. Bei mehr als fünf kürze ich den Block um das Zitat selbst.</i>"
+        "explain": "Kontext sind die Nachrichten, die die KI rund um den Gewinner-Satz ausgewählt hat. Bei mehr als fünf kürze ich den Block um das Zitat selbst."
       },
       "boring_notice": {
-        "short": "Langweiliger Tag",
-        "label": "Hinweis zum langweiligen Tag senden"
+        "short": "Langweiliger Tag"
       },
       "pin": {
-        "short": "Anheften",
-        "label": "Veröffentlichtes Zitat anheften"
+        "short": "Anheften"
       },
       "media": {
-        "short": "Medien",
-        "label": "Medien analysieren (an OpenRouter)"
+        "short": "Medien"
       },
       "quote_day": {
-        "title": "<b>Zitat des Tages</b>",
-        "hint": "<i>Wann der Tag endet und wie viele Nachrichten für die Auswertung nötig sind.</i>"
+        "title": "Zitat des Tages",
+        "hint": "Wann der Tag endet und wie viele Nachrichten für die Auswertung nötig sind."
       },
       "publication": {
-        "title": "<b>Veröffentlichung</b>",
-        "hint": "<i>Wie ich das Ergebnis in der Gruppe formatiere.</i>"
+        "title": "Veröffentlichung",
+        "hint": "Wie ich das Ergebnis in der Gruppe formatiere."
       },
       "time": {
         "title": "<b>Zeit für das Zitat</b>",
@@ -122,8 +118,8 @@
         "line": "Minimum: <b>{count}</b>"
       },
       "tz": {
-        "title": "<b>Zeitzone</b>",
-        "hint": "<i>In dieser Zeitzone berechne ich das Tagesfenster und die Schlusszeit.</i>"
+        "title": "Zeitzone",
+        "hint": "In dieser Zeitzone berechne ich das Tagesfenster und die Schlusszeit."
       }
     }
   },
@@ -164,7 +160,8 @@
   "stats": {
     "missing": "Statistik ist noch nicht verfügbar — diese Gruppe ist nicht registriert.",
     "empty": "Dieser Chat hat noch keine veröffentlichten Zitate.",
-    "title": "<b>Chat-Statistik</b>",
+    "title": "Chat-Statistik",
+    "hint": "Was der ganze Chat bisher gesammelt hat.",
     "total_quotes": "Zitate gesamt: <b>{count}</b>",
     "unique_authors": "Autoren: <b>{count}</b>",
     "avg_score": "Durchschnitt: <b>{score:.1f}/10</b>",
@@ -175,7 +172,8 @@
   "user_stats": {
     "missing": "Statistik ist noch nicht verfügbar.",
     "empty": "<b>{user}</b>, du hast in diesem Chat noch keine veröffentlichten Zitate.\nSchreib weiter — deine Zeit kommt.",
-    "title": "<b>Deine Statistik</b>",
+    "title": "Deine Statistik",
+    "hint": "Deine Zitate des Tages in diesem Chat.",
     "user": "<b>{user}</b>",
     "wins": "Siege: <b>{count}</b>",
     "avg_score": "Durchschnitt: <b>{score:.1f}/10</b>",

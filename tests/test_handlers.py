@@ -264,9 +264,33 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             for row in panel.edit_markups[0].inline_keyboard
             for button in row
         ]
-        self.assertIn("+1 ч", labels)
+        self.assertIn("+1:00", labels)
         self.assertIn("+5", labels)
         self.assertEqual(labels[-2:], ["Назад", "Закрыть"])
+
+    async def test_the_schedule_nudges_read_the_same_in_every_language(self) -> None:
+        # These used to spell their units in Russian, on every locale's panel.
+        for language in handlers.i18n.SUPPORTED_LANGUAGES:
+            _, keyboard = handlers.menu.build_group_panel(
+                owner_id=777,
+                language=language,
+                group_language=language,
+                group_language_source=None,
+                is_admin=True,
+                quote_time="21:00",
+                min_messages=10,
+                timezone_name="Europe/Kyiv",
+                boring_notice_enabled=True,
+                pin_enabled=True,
+                quote_context_enabled=True,
+                section=handlers.menu.SECTION_SCHEDULE,
+            )
+            nudges = [button.text for row in keyboard.inline_keyboard[:3] for button in row]
+            self.assertEqual(
+                nudges,
+                ["−1:00", "+1:00", "−0:15", "+0:15", "−5", "+5", "−1", "+1"],
+                language,
+            )
 
     async def test_group_publication_settings_explains_quote_context(self) -> None:
         panel = DummyResponse(
@@ -805,3 +829,102 @@ class GroupLifecycleTests(unittest.IsolatedAsyncioTestCase):
             await handlers.bot_added_to_chat_event(event)
         set_active.assert_awaited_once_with(-100123456, False)
         event.answer.assert_not_awaited()
+
+
+class StatsPanelShapeTests(unittest.TestCase):
+    """The stats tabs are screens like any other, so they are built by the
+    same panel helper: title, hint, and one blockquote — never a second
+    blockquote nested inside the first."""
+
+    CHAT_STATS = {
+        "total_quotes": 12,
+        "unique_authors": 4,
+        "avg_score": 0.82,
+        "top_authors": [
+            {"name": "Alice", "wins": 5, "avg_score": 0.9},
+            {"name": "Bob", "wins": 4, "avg_score": 0.8},
+        ],
+        "best_quote": {"text": "a line", "author": "Alice", "score": 0.95},
+    }
+    USER_STATS = {
+        "user_name": "Alice",
+        "wins": 3,
+        "avg_score": 0.7,
+        "rank": 2,
+        "total_participants": 9,
+        "best_quote": {"text": "a line", "score": 0.9},
+    }
+
+    def _assert_panel(self, text: str) -> None:
+        head, _, body = text.partition("\n\n")
+        lines = head.split("\n")
+        self.assertEqual(len(lines), 2, text)
+        self.assertTrue(lines[0].startswith("<b>") and lines[0].endswith("</b>"), lines[0])
+        self.assertTrue(lines[1].startswith("<i>") and lines[1].endswith("</i>"), lines[1])
+        self.assertEqual(body.count("<blockquote>"), 1, text)
+        self.assertTrue(body.startswith("<blockquote>"), body)
+        self.assertTrue(body.endswith("</blockquote>"), body)
+
+    def test_every_state_of_both_tabs_is_a_panel(self) -> None:
+        for language in handlers.i18n.SUPPORTED_LANGUAGES:
+            for stats in (None, {"total_quotes": 0}, self.CHAT_STATS):
+                self._assert_panel(handlers._format_chat_stats_text(language, stats))
+            for stats in (None, {"wins": 0, "user_name": "Alice"}, self.USER_STATS):
+                self._assert_panel(handlers._format_user_stats_text(language, stats))
+
+
+class TelegramLanguageButtonTests(unittest.IsolatedAsyncioTestCase):
+    """Quoto is the family's reference for "Telegram language": the button
+    clears this bot's own manual claim in core and lets the Telegram client's
+    hint decide again. The other bots copy these semantics, so they are pinned
+    here rather than left to the handler's shape."""
+
+    def _callback(self, panel, language_code: str = "de"):
+        return SimpleNamespace(
+            data=f"menu:777:p:{handlers.menu.ACTION_AUTO_PRIVATE_LANGUAGE}",
+            from_user=SimpleNamespace(id=777, language_code=language_code),
+            message=panel,
+            answer=AsyncMock(),
+        )
+
+    async def test_it_clears_this_bot_s_claim_and_falls_back_to_the_client_hint(self) -> None:
+        panel = DummyResponse(chat=SimpleNamespace(id=777, type="private", title=None), message_id=902)
+        callback = self._callback(panel)
+
+        with (
+            patch.object(handlers.core, "user_getOrCreate", new=AsyncMock()),
+            patch.object(
+                handlers.core, "user_language_state", new=AsyncMock(return_value=("ru", "manual"))
+            ),
+            patch.object(
+                handlers.core, "clear_user_language", new=AsyncMock(return_value=True)
+            ) as clear,
+        ):
+            await handlers.start_menu_callback(callback, AsyncMock())
+
+        clear.assert_awaited_once_with(777)
+        # The panel comes back in the Telegram language, saying so.
+        self.assertIn(handlers.i18n.t("de", "settings.private.language_title"), panel.edits[0])
+        self.assertIn(
+            handlers.i18n.t("de", "settings.private.language_source_telegram"), panel.edits[0]
+        )
+
+    async def test_it_sits_under_the_language_grid_and_over_the_navigation(self) -> None:
+        _, keyboard = handlers.menu.build_private_panel(
+            owner_id=777,
+            language="en",
+            language_source=None,
+            bot_username="quoto_test_bot",
+            section=handlers.menu.SECTION_LANGUAGE,
+        )
+        rows = keyboard.inline_keyboard
+        grid = (len(handlers.i18n.language_options()) + 1) // 2  # two languages to a row
+        self.assertEqual(
+            [button.text for button in rows[grid]],
+            [handlers.i18n.t("en", "settings.private.telegram_language")],
+        )
+        self.assertEqual(
+            [button.text for button in rows[grid + 1]], [handlers.i18n.t("en", "menu.button.back")]
+        )
+        # It performs an action, so it is never painted as a state.
+        self.assertIsNone(rows[grid][0].style)

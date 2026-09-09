@@ -13,7 +13,33 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
-## v0.10.6 - 2026-09-09
+### Changed
+
+- The panel now follows the Asterfield family contract, so a person who learns
+  one of the bots reads all of them. Every screen — both homes, language,
+  quote day, timezone, publishing, stats, About and the user agreement — is
+  built by one helper as title, hint, quote, and no screen repeats the bot's
+  name above its own title any more.
+- The language picker shows flag and native name in the family order
+  (`en, ru, uk, de`), two to a row, in the panel and in the agreement alike.
+  The list and its labels live in `app/i18n.py`; quoto renders the languages it
+  has, so a new locale is a JSON file plus a code and its button appears in the
+  right place by itself.
+- Buttons carry colour where Telegram can show it: Close is destructive, the
+  current language, the chosen timezone and the open stats tab are marked as
+  the state you are in, and each screen with one obvious next step has exactly
+  one highlighted button — "Add to group" in a direct chat, "Stats" in a group,
+  "Accept" on the agreement. Screens that lead nowhere have none.
+- The timezone, language and publishing screens no longer list in the message
+  what their own buttons already say. The state lives on the buttons; the text
+  says only what a button cannot — where a language came from, and what
+  "context" means.
+
+### Fixed
+
+- The quote-day time nudges said "ч" and "м" on every locale's panel, Russian
+  units on the English and German ones included. They now read `−1:00` and
+  `+0:15`, which is the same in every language and needs no translation.
 
 Quoto is GPL-3.0. The About card and the agreement signature said Apache-2.0.
 

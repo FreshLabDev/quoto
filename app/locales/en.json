@@ -25,21 +25,21 @@
       "close": "Close"
     },
     "private": {
-      "title": "<b>Quoto</b>",
+      "title": "Quoto",
       "body": "I pick a quote of the day in group chats. Add me to a group and open /start there.",
       "language": "Interface language: <b>{language_name}</b>",
       "language_note": "In private chat I follow your Telegram language."
     },
     "group": {
-      "title": "<b>Quoto</b>",
+      "title": "Quoto",
       "admin_body": "I watch the chat and publish the best line at the end of the day. Stats and settings below.",
       "user_body": "I watch the chat and publish the best line at the end of the day.",
       "language_line": "Language: <b>{language_name}</b>",
       "schedule_line": "Daily summary at <b>{time}</b> · from <b>{min_messages}</b> messages"
     },
     "language": {
-      "title": "<b>Group language</b>",
-      "hint": "<i>Choose the language I speak in this group.</i>",
+      "title": "Group language",
+      "hint": "Choose the language I speak in this group.",
       "source_auto": "Detected automatically",
       "source_manual": "Set manually",
       "source_default": "Default · English",
@@ -73,8 +73,8 @@
     "private": {
       "title": "<b>Settings</b>",
       "hint": "<i>These affect only this private chat.</i>",
-      "language_title": "<b>Interface language</b>",
-      "language_hint": "<i>Keep your Telegram language or choose one manually.</i>",
+      "language_title": "Interface language",
+      "language_hint": "Keep your Telegram language or choose one manually.",
       "telegram_language": "Telegram language",
       "language_source_manual": "Set manually",
       "language_source_telegram": "Telegram language"
@@ -86,29 +86,25 @@
       "language_auto_updated": "I'll detect the language myself at the next review.",
       "context": {
         "short": "Context",
-        "label": "Quote context",
         "title": "What context means",
-        "explain": "<i>Context is the set of messages AI chose around the winning phrase. If there are more than five, I trim the block around the quote itself.</i>"
+        "explain": "Context is the set of messages AI chose around the winning phrase. If there are more than five, I trim the block around the quote itself."
       },
       "boring_notice": {
-        "short": "Boring day",
-        "label": "Send boring-day notice"
+        "short": "Boring day"
       },
       "pin": {
-        "short": "Pin",
-        "label": "Pin the published quote"
+        "short": "Pin"
       },
       "media": {
-        "short": "Media",
-        "label": "Analyze media (sent to OpenRouter)"
+        "short": "Media"
       },
       "quote_day": {
-        "title": "<b>Quote of the day</b>",
-        "hint": "<i>When to wrap up the day and how many messages are needed for review.</i>"
+        "title": "Quote of the day",
+        "hint": "When to wrap up the day and how many messages are needed for review."
       },
       "publication": {
-        "title": "<b>Publishing</b>",
-        "hint": "<i>How I format the result in the group.</i>"
+        "title": "Publishing",
+        "hint": "How I format the result in the group."
       },
       "time": {
         "title": "<b>Quote time</b>",
@@ -122,8 +118,8 @@
         "line": "Minimum: <b>{count}</b>"
       },
       "tz": {
-        "title": "<b>Timezone</b>",
-        "hint": "<i>I compute the day's window and cutoff in this timezone.</i>"
+        "title": "Timezone",
+        "hint": "I compute the day's window and cutoff in this timezone."
       }
     }
   },
@@ -164,7 +160,8 @@
   "stats": {
     "missing": "Stats are not available yet — this group is not registered.",
     "empty": "This chat has no published quotes yet.",
-    "title": "<b>Chat stats</b>",
+    "title": "Chat stats",
+    "hint": "What the whole chat has collected so far.",
     "total_quotes": "Total quotes: <b>{count}</b>",
     "unique_authors": "Authors: <b>{count}</b>",
     "avg_score": "Average rating: <b>{score:.1f}/10</b>",
@@ -175,7 +172,8 @@
   "user_stats": {
     "missing": "Stats are not available yet.",
     "empty": "<b>{user}</b>, you have no published quotes in this chat yet.\nKeep writing — your time will come.",
-    "title": "<b>Your stats</b>",
+    "title": "Your stats",
+    "hint": "Your own quotes of the day in this chat.",
     "user": "<b>{user}</b>",
     "wins": "Wins: <b>{count}</b>",
     "avg_score": "Average rating: <b>{score:.1f}/10</b>",
