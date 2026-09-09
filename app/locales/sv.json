@@ -1,0 +1,262 @@
+{
+  "language_name": "Svenska",
+  "months": ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"],
+  "common": {
+    "anonymous": "Anonym",
+    "original": "Original",
+    "details": "Detaljer",
+    "context": "kontext",
+    "ai": "AI"
+  },
+  "command": {
+    "start_private": "Öppna Quoto",
+    "start_group": "Öppna Quoto-panelen"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "Min statistik",
+      "chat_stats": "Chattens statistik",
+      "stats": "Statistik",
+      "group_language": "Gruppens språk",
+      "settings": "Inställningar",
+      "back": "Tillbaka",
+      "about": "Om",
+      "agreement": "Villkor",
+      "close": "Stäng"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Jag väljer dagens citat i gruppchattar. Lägg till mig i en grupp och öppna /start där.",
+      "language": "Gränssnittsspråk: <b>{language_name}</b>",
+      "language_note": "I privatchatten följer jag ditt Telegram-språk."
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Jag håller koll på chatten och publicerar dagens bästa replik när dagen är slut. Statistik och inställningar nedan.",
+      "user_body": "Jag håller koll på chatten och publicerar dagens bästa replik när dagen är slut.",
+      "language_line": "Språk: <b>{language_name}</b>",
+      "schedule_line": "Dagens sammanfattning kl. <b>{time}</b> · från <b>{min_messages}</b> meddelanden"
+    },
+    "language": {
+      "title": "Gruppens språk",
+      "hint": "Välj språket jag pratar i den här gruppen.",
+      "source_auto": "Identifierat automatiskt",
+      "source_manual": "Valt manuellt",
+      "source_default": "Standard · English",
+      "updated": "Språket har ändrats till {language_name}.",
+      "invalid": "Det språket känner jag inte till."
+    },
+    "other_user": "Öppna din egen meny med /start.",
+    "group_context_required": "Öppna det här i en gruppchatt."
+  },
+  "settings": {
+    "updated": "Klart.",
+    "invalid": "Så går det inte.",
+    "block": {
+      "interface": "Gränssnitt",
+      "quote_day": "Dagens citat",
+      "behavior": "Beteende"
+    },
+    "button": {
+      "language": "Språk",
+      "interface": "Gränssnitt",
+      "quote_day": "Dagens citat",
+      "publication": "Publicering",
+      "time": "Tid",
+      "min_messages": "Minst",
+      "context": "Kontext",
+      "boring_notice": "Trist dag",
+      "pin": "Fäst",
+      "timezone": "Tidszon",
+      "media": "Media"
+    },
+    "private": {
+      "title": "<b>Inställningar</b>",
+      "hint": "<i>Gäller bara den här privatchatten.</i>",
+      "language_title": "Gränssnittsspråk",
+      "language_hint": "Behåll ditt Telegram-språk eller välj ett manuellt.",
+      "telegram_language": "Telegram-språk",
+      "language_source_manual": "Valt manuellt",
+      "language_source_telegram": "Telegram-språk"
+    },
+    "group": {
+      "title": "<b>Gruppinställningar</b>",
+      "hint": "<i>Bara admins kan ställa in mig.</i>",
+      "language_auto": "Identifiera automatiskt",
+      "language_auto_updated": "Jag identifierar språket själv vid nästa bedömning.",
+      "context": {
+        "short": "Kontext",
+        "title": "Vad kontext betyder",
+        "explain": "Kontexten är de meddelanden som AI valde runt den vinnande repliken. Är de fler än fem drar jag ihop blocket runt själva citatet."
+      },
+      "boring_notice": {
+        "short": "Trist dag"
+      },
+      "pin": {
+        "short": "Fäst"
+      },
+      "media": {
+        "short": "Media"
+      },
+      "quote_day": {
+        "title": "Dagens citat",
+        "hint": "När jag stänger dagen och hur många meddelanden som krävs för en bedömning."
+      },
+      "publication": {
+        "title": "Publicering",
+        "hint": "Hur jag presenterar resultatet i gruppen."
+      },
+      "time": {
+        "title": "<b>Tid för citatet</b>",
+        "hint": "<i>Vid den här tiden stänger jag dagen och väljer citatet.</i>",
+        "line": "Dagens sammanfattning: <b>{time}</b>",
+        "timezone": "Tidszon: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>Minsta antal meddelanden</b>",
+        "hint": "<i>Med färre meddelanden hoppas dagen över utan bedömning.</i>",
+        "line": "Minst: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Tidszon",
+        "hint": "I den här tidszonen räknar jag dagens fönster och när den stängs."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Publicerat",
+    "skipped_boring": "😴 Trist dag",
+    "publish_failed": "⚠️ Publiceringen misslyckades",
+    "boring_notice_failed": "⚠️ Avisering inte skickad",
+    "publish_unknown": "⚠️ Publicering inte bekräftad",
+    "boring_notice_unknown": "⚠️ Avisering inte bekräftad"
+  },
+  "admin": {
+    "admin_only": "Det här kan bara admins ändra."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\nKul att vara i <b>{chat_title}</b>. Varje dag kl. <b>{time}</b> väljer jag den vassaste repliken och publicerar dagens citat.\n\nÖppna /start — statistik och inställningar finns där.",
+    "need_admin": "⚠️ Gör mig till <b>administratör</b> med rätt att <i>fästa</i> meddelanden — då kan jag publicera resultatet.",
+    "admin_granted": "Tack! Nu kan jag publicera dagens citat."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ Ogiltig citatlänk.",
+    "quote_not_found": "⚠️ Citatet hittades inte.",
+    "add_to_group": "Lägg till i grupp",
+    "hello": "<b>Quoto</b>\n\nJag väljer dagens citat i gruppchattar: jag samlar dagens meddelanden och publicerar den bästa repliken på utsatt tid.\n\nLägg till mig i en grupp och öppna /start där."
+  },
+  "details": {
+    "title": "<b>Dag #{id}</b>",
+    "total": "Totalt",
+    "reactions": "Reaktioner",
+    "length": "Längd",
+    "decision_reason": "Skäl till valet",
+    "operation_error": "Tekniskt fel",
+    "ai_choice": "AI:s val"
+  },
+  "start": {
+    "group": "<b>Quoto — Dagens citat</b>\n\nJag samlar dagens meddelanden och väljer den bästa repliken när dagen är slut.\n\nÖppna /start för att öppna kontrollpanelen."
+  },
+  "stats": {
+    "missing": "Ingen statistik än — den här gruppen är inte registrerad.",
+    "empty": "Den här chatten har inga publicerade citat än.",
+    "title": "Chattens statistik",
+    "hint": "Vad hela chatten har samlat ihop hittills.",
+    "total_quotes": "Citat totalt: <b>{count}</b>",
+    "unique_authors": "Författare: <b>{count}</b>",
+    "avg_score": "Snittbetyg: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Bästa författare</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Bästa citatet</b>"
+  },
+  "user_stats": {
+    "missing": "Ingen statistik än.",
+    "empty": "<b>{user}</b>, du har inga publicerade citat i den här chatten än.\nFortsätt skriva — din tid kommer.",
+    "title": "Din statistik",
+    "hint": "Dina dagens citat i den här chatten.",
+    "user": "<b>{user}</b>",
+    "wins": "Vinster: <b>{count}</b>",
+    "avg_score": "Snittbetyg: <b>{score:.1f}/10</b>",
+    "rank": "Placering: <b>{rank}</b> av {total}",
+    "best_quote": "<b>Bästa citatet</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Dagens citat</b>",
+      "photo": "🏆 <b>Dagens bild</b>",
+      "video": "🏆 <b>Dagens video</b>",
+      "voice": "🏆 <b>Dagens röstmeddelande</b>",
+      "audio": "🏆 <b>Dagens ljud</b>"
+    },
+    "context_truncated": "ℹ️ Räknade de {shown} senaste av {total} meddelandena — kontexten kortades på grund av mängden."
+  },
+  "boring": {
+    "title": "😴 <b>Idag blev det inget citat</b>",
+    "body": "Jag hittade ingen replik som var dagen värd. Vi ses i morgon!"
+  },
+  "about": {
+    "tagline": "Dagens citat, ur allt som skrivs i chatten.",
+    "eval": "Bedömning",
+    "sources": "Källkod",
+    "admin": "Admin"
+  },
+  "agreement": {
+    "title": "Quoto — Användarvillkor och integritet",
+    "summary": "Genom att använda Quoto i den här gruppen godkänner du villkoren nedan.",
+    "sections": [
+      {
+        "heading": "Vad Quoto gör",
+        "text": "Under dagen läser jag meddelandena som skickas i den här gruppen och publicerar vid den inställda tiden ett ”dagens citat”."
+      },
+      {
+        "heading": "Vad som behandlas",
+        "text": "För att välja dagens citat behandlar jag:",
+        "items": [
+          "meddelandetext och bildtexter",
+          "reaktioner på meddelanden",
+          "media: foton, videor, röstmeddelanden och ljud",
+          "författarens namn och Telegram-ID",
+          "gruppens ID och namn"
+        ]
+      },
+      {
+        "heading": "AI-behandling",
+        "text": "För att välja ett citat skickas meddelandetext och media för analys till vår AI-leverantör OpenRouter och dess modelleverantörer.",
+        "note": "Dela inte lösenord eller känsliga uppgifter i chattar där Quoto är aktiv."
+      },
+      {
+        "heading": "Lagring",
+        "text": "Dagens primära data rensas efter behandlingen. Vissa tekniska noteringar och behandlingsresultat kan sparas längre för driftsäkerhet, kvalitetskontroll och statistik; publicerade citat och grundläggande identifierare finns kvar i tjänstens historik."
+      },
+      {
+        "heading": "Dina uppgifter",
+        "text": "Jag säljer inte dina uppgifter. Vill du att de raderas, skriv till {contact}."
+      },
+      {
+        "heading": "Adminens ansvar",
+        "text": "Genom att godkänna intygar en gruppadmin att hen får lägga till boten och att medlemmarna vet att chatten behandlas av Quoto."
+      },
+      {
+        "heading": "I befintligt skick",
+        "text": "Tjänsten tillhandahålls ”i befintligt skick”, utan garantier, och villkoren kan ändras; fortsatt användning innebär att du godtar dem."
+      }
+    ],
+    "signature": {
+      "title": "Dokumentsignatur",
+      "version_label": "Version av villkoren",
+      "effective_label": "Gäller från",
+      "operator_label": "Operatör",
+      "contact_label": "Kontakt"
+    },
+    "accept_hint": "För att slå på dagens citat trycker en gruppadmin på ”Godkänn”.",
+    "welcome_note": "<i>Innan jag publicerar något måste en gruppadmin godkänna användarvillkoren.</i>",
+    "view_button": "Användarvillkor",
+    "accept_button": "Godkänn",
+    "accepted": "✅ <b>Användarvillkoren är godkända.</b> Tack!",
+    "accepted_admin_hint": "<i>Gör mig nu till administratör med rätt att fästa meddelanden, så att jag kan publicera dagens citat.</i>",
+    "accepted_toast": "Godkänt — tack!",
+    "already": "✅ Den här gruppen har redan godkänt villkoren.",
+    "admin_only": "Bara en gruppadmin kan godkänna villkoren.",
+    "reminder": "För att dagens citat ska publiceras måste en gruppadmin godkänna Quotos användarvillkor."
+  }
+}

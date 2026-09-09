@@ -1,0 +1,262 @@
+{
+  "language_name": "Türkçe",
+  "months": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+  "common": {
+    "anonymous": "Anonim",
+    "original": "Orijinal",
+    "details": "Ayrıntılar",
+    "context": "bağlam",
+    "ai": "AI"
+  },
+  "command": {
+    "start_private": "Quoto’yu aç",
+    "start_group": "Quoto panelini aç"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "İstatistiklerim",
+      "chat_stats": "Sohbet istatistikleri",
+      "stats": "İstatistikler",
+      "group_language": "Grup dili",
+      "settings": "Ayarlar",
+      "back": "Geri",
+      "about": "Hakkında",
+      "agreement": "Koşullar",
+      "close": "Kapat"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Grup sohbetlerinde günün sözünü seçerim. Beni bir gruba ekle ve orada /start yaz.",
+      "language": "Arayüz dili: <b>{language_name}</b>",
+      "language_note": "Özel sohbette Telegram dilini kullanırım."
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Sohbeti izliyorum ve gün sonunda en iyi cümleyi yayınlıyorum. İstatistikler ve ayarlar aşağıda.",
+      "user_body": "Sohbeti izliyorum ve gün sonunda en iyi cümleyi yayınlıyorum.",
+      "language_line": "Dil: <b>{language_name}</b>",
+      "schedule_line": "Gün özeti <b>{time}</b> · <b>{min_messages}</b> mesajdan itibaren"
+    },
+    "language": {
+      "title": "Grup dili",
+      "hint": "Bu grupta konuştuğum dili seç.",
+      "source_auto": "Otomatik algılandı",
+      "source_manual": "Elle seçildi",
+      "source_default": "Varsayılan · English",
+      "updated": "Dil {language_name} olarak değiştirildi.",
+      "invalid": "Böyle bir dil bilmiyorum."
+    },
+    "other_user": "Kendi menünü /start ile aç.",
+    "group_context_required": "Bunu bir grup sohbetinde aç."
+  },
+  "settings": {
+    "updated": "Tamam.",
+    "invalid": "Böyle olmaz.",
+    "block": {
+      "interface": "Arayüz",
+      "quote_day": "Günün sözü",
+      "behavior": "Davranış"
+    },
+    "button": {
+      "language": "Dil",
+      "interface": "Arayüz",
+      "quote_day": "Günün sözü",
+      "publication": "Yayın",
+      "time": "Saat",
+      "min_messages": "En az",
+      "context": "Bağlam",
+      "boring_notice": "Sıkıcı gün",
+      "pin": "Sabitle",
+      "timezone": "Saat dilimi",
+      "media": "Medya"
+    },
+    "private": {
+      "title": "<b>Ayarlar</b>",
+      "hint": "<i>Yalnızca bu özel sohbet için geçerli.</i>",
+      "language_title": "Arayüz dili",
+      "language_hint": "Telegram dilini koru ya da elle bir dil seç.",
+      "telegram_language": "Telegram dili",
+      "language_source_manual": "Elle seçildi",
+      "language_source_telegram": "Telegram dili"
+    },
+    "group": {
+      "title": "<b>Grup ayarları</b>",
+      "hint": "<i>Beni yalnızca yöneticiler ayarlayabilir.</i>",
+      "language_auto": "Otomatik algıla",
+      "language_auto_updated": "Dili bir sonraki değerlendirmede kendim algılarım.",
+      "context": {
+        "short": "Bağlam",
+        "title": "Bağlam ne demek",
+        "explain": "Bağlam, yapay zekânın kazanan cümlenin çevresinden seçtiği mesajlardır. Beşten fazlaysa bloğu alıntının etrafında daraltırım."
+      },
+      "boring_notice": {
+        "short": "Sıkıcı gün"
+      },
+      "pin": {
+        "short": "Sabitle"
+      },
+      "media": {
+        "short": "Medya"
+      },
+      "quote_day": {
+        "title": "Günün sözü",
+        "hint": "Günü ne zaman kapattığım ve değerlendirme için kaç mesaj gerektiği."
+      },
+      "publication": {
+        "title": "Yayın",
+        "hint": "Sonucu grupta nasıl sunduğum."
+      },
+      "time": {
+        "title": "<b>Söz saati</b>",
+        "hint": "<i>Bu saatte günü kapatır ve sözü seçerim.</i>",
+        "line": "Gün özeti: <b>{time}</b>",
+        "timezone": "Saat dilimi: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "title": "<b>En az mesaj sayısı</b>",
+        "hint": "<i>Daha azında gün değerlendirilmeden atlanır.</i>",
+        "line": "En az: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Saat dilimi",
+        "hint": "Günün penceresini ve kapanışını bu saat diliminde hesaplarım."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Yayınlandı",
+    "skipped_boring": "😴 Sıkıcı gün",
+    "publish_failed": "⚠️ Yayınlanamadı",
+    "boring_notice_failed": "⚠️ Bildirim gönderilmedi",
+    "publish_unknown": "⚠️ Yayın doğrulanmadı",
+    "boring_notice_unknown": "⚠️ Bildirim doğrulanmadı"
+  },
+  "admin": {
+    "admin_only": "Bunu yalnızca yöneticiler değiştirebilir."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\n<b>{chat_title}</b> grubunda olmak güzel. Her gün <b>{time}</b> saatinde en parlak cümleyi seçip günün sözünü yayınlıyorum.\n\n/start yaz — istatistikler ve ayarlar orada.",
+    "need_admin": "⚠️ Beni mesajları <i>sabitleme</i> yetkisi olan bir <b>yönetici</b> yap — sonucu o zaman yayınlayabilirim.",
+    "admin_granted": "Teşekkürler! Artık günün sözünü yayınlayabilirim."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ Geçersiz alıntı bağlantısı.",
+    "quote_not_found": "⚠️ Alıntı bulunamadı.",
+    "add_to_group": "Gruba ekle",
+    "hello": "<b>Quoto</b>\n\nGrup sohbetlerinde günün sözünü seçerim: gün boyunca mesajları toplar ve belirlenen saatte en iyi cümleyi yayınlarım.\n\nBeni bir gruba ekle ve orada /start yaz."
+  },
+  "details": {
+    "title": "<b>Gün #{id}</b>",
+    "total": "Toplam",
+    "reactions": "Tepkiler",
+    "length": "Uzunluk",
+    "decision_reason": "Karar gerekçesi",
+    "operation_error": "Teknik hata",
+    "ai_choice": "Yapay zekânın seçimi"
+  },
+  "start": {
+    "group": "<b>Quoto — Günün sözü</b>\n\nGün boyunca mesajları toplar, günün sonunda en iyi cümleyi seçerim.\n\nKontrol panelini açmak için /start yaz."
+  },
+  "stats": {
+    "missing": "İstatistikler henüz yok — bu grup kayıtlı değil.",
+    "empty": "Bu sohbette henüz yayınlanmış söz yok.",
+    "title": "Sohbet istatistikleri",
+    "hint": "Tüm sohbetin şimdiye kadar biriktirdikleri.",
+    "total_quotes": "Toplam söz: <b>{count}</b>",
+    "unique_authors": "Yazar: <b>{count}</b>",
+    "avg_score": "Ortalama puan: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>En iyi yazarlar</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>En iyi söz</b>"
+  },
+  "user_stats": {
+    "missing": "İstatistikler henüz yok.",
+    "empty": "<b>{user}</b>, bu sohbette henüz yayınlanmış sözün yok.\nYazmaya devam et — senin de zamanın gelecek.",
+    "title": "İstatistiklerin",
+    "hint": "Bu sohbetteki günün sözlerin.",
+    "user": "<b>{user}</b>",
+    "wins": "Galibiyet: <b>{count}</b>",
+    "avg_score": "Ortalama puan: <b>{score:.1f}/10</b>",
+    "rank": "Sıra: <b>{rank}</b> / {total}",
+    "best_quote": "<b>En iyi söz</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Günün sözü</b>",
+      "photo": "🏆 <b>Günün fotoğrafı</b>",
+      "video": "🏆 <b>Günün videosu</b>",
+      "voice": "🏆 <b>Günün sesi</b>",
+      "audio": "🏆 <b>Günün ses dosyası</b>"
+    },
+    "context_truncated": "ℹ️ {total} mesajın son {shown} tanesi sayıldı — bağlam hacim nedeniyle kısaltıldı."
+  },
+  "boring": {
+    "title": "😴 <b>Bugün günün sözü yok</b>",
+    "body": "Güne yakışan bir cümle bulamadım. Yarın görüşürüz!"
+  },
+  "about": {
+    "tagline": "Sohbette yazılanlardan günün sözü.",
+    "eval": "Değerlendirme",
+    "sources": "Kaynak kodu",
+    "admin": "Yönetici"
+  },
+  "agreement": {
+    "title": "Quoto — Kullanım koşulları ve gizlilik",
+    "summary": "Bu grupta Quoto’yu kullanarak aşağıdaki koşulları kabul ediyorsun.",
+    "sections": [
+      {
+        "heading": "Quoto ne yapar",
+        "text": "Gün boyunca bu gruba gönderilen mesajları okurum ve belirlenen saatte bir “günün sözü” yayınlarım."
+      },
+      {
+        "heading": "Neler işleniyor",
+        "text": "Günün sözünü seçmek için şunları işlerim:",
+        "items": [
+          "mesaj metinleri ve açıklamalar",
+          "mesajlara verilen tepkiler",
+          "medya: fotoğraf, video, sesli mesaj ve ses dosyaları",
+          "yazarın adı ve Telegram kimliği",
+          "grubun kimliği ve adı"
+        ]
+      },
+      {
+        "heading": "Yapay zekâ ile işleme",
+        "text": "Bir söz seçmek için mesaj metinleri ve medya, analiz edilmek üzere yapay zekâ sağlayıcımız OpenRouter’a ve onun model sağlayıcılarına gönderilir.",
+        "note": "Quoto’nun açık olduğu sohbetlerde parola veya hassas veri paylaşma."
+      },
+      {
+        "heading": "Saklama",
+        "text": "Günün asıl verileri işlendikten sonra silinir. Güvenilirlik, kalite kontrolü ve istatistikler için bazı servis kayıtları ve işleme sonuçları daha uzun süre tutulabilir; yayınlanan sözler ve temel tanımlayıcılar servis geçmişinde kalır."
+      },
+      {
+        "heading": "Verilerin",
+        "text": "Verilerini satmıyorum. Silinmesini istemek için {contact} adresine yaz."
+      },
+      {
+        "heading": "Yöneticinin sorumluluğu",
+        "text": "Kabul ederek grup yöneticisi, bu botu ekleyebileceğini ve üyelerin sohbetin Quoto tarafından işlendiğini bildiğini onaylar."
+      },
+      {
+        "heading": "Olduğu gibi",
+        "text": "Hizmet “olduğu gibi”, garantisiz sunulur ve koşullar değişebilir; kullanmaya devam etmek kabul anlamına gelir."
+      }
+    ],
+    "signature": {
+      "title": "Belge imzası",
+      "version_label": "Koşulların sürümü",
+      "effective_label": "Yürürlük tarihi",
+      "operator_label": "İşletmeci",
+      "contact_label": "İletişim"
+    },
+    "accept_hint": "Günün sözünü açmak için bir grup yöneticisi “Kabul et”e dokunur.",
+    "welcome_note": "<i>Bir şey yayınlamadan önce bir grup yöneticisinin kullanım koşullarını kabul etmesi gerekiyor.</i>",
+    "view_button": "Kullanım koşulları",
+    "accept_button": "Kabul et",
+    "accepted": "✅ <b>Kullanım koşulları kabul edildi.</b> Teşekkürler!",
+    "accepted_admin_hint": "<i>Şimdi beni mesajları sabitleme yetkisi olan bir yönetici yap ki günün sözünü yayınlayabileyim.</i>",
+    "accepted_toast": "Kabul edildi — teşekkürler!",
+    "already": "✅ Bu grup koşulları zaten kabul etti.",
+    "admin_only": "Koşulları yalnızca bir grup yöneticisi kabul edebilir.",
+    "reminder": "Günün sözünü yayınlamak için bir grup yöneticisinin Quoto kullanım koşullarını kabul etmesi gerekiyor."
+  }
+}
