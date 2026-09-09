@@ -202,6 +202,10 @@ quoto/
 │   ├── scheduler.py    # APScheduler jobs & quote of the day pipeline
 │   ├── scoring.py      # Scoring engine & best quote selection
 │   └── utils.py        # Utility functions
+├── scripts/
+│   ├── bench_web.py           # Local web hub: replay a day, stream models, compare picks; media tab for own files
+│   ├── compare_eval_models.py  # Replay audited days against several eval models
+│   └── try_media_model.py      # Test one media model against a local file
 ├── docker-compose.yml
 ├── Dockerfile
 ├── main.py             # Entry point

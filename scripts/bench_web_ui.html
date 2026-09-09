@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>quoto · bench</title>
+<style>
+  :root {
+    --bg: #12100e;
+    --panel: #1a1815;
+    --panel-2: #211e1a;
+    --line: #322d27;
+    --ink: #ece7df;
+    --ink-dim: #a49a8d;
+    --ink-faint: #6f6659;
+    --accent: #d98b3f;
+    --accent-2: #5f97b8;
+    --ok: #7fa650;
+    --warn: #d9a13f;
+    --bad: #c4614b;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f3ee; --panel: #fffdfa; --panel-2: #f1ece4; --line: #ddd5c8;
+      --ink: #211d18; --ink-dim: #5f5749; --ink-faint: #8d8474;
+      --accent: #a8601c; --accent-2: #2f6a8c;
+    }
+  }
+  /* Each tab carries its own accent so it is obvious which side you are on. */
+  .pane[data-mode="media"] { --accent: var(--accent-2); }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  button, input, select { font: inherit; color: inherit; }
+
+  header {
+    display: flex; align-items: center; gap: 16px; padding: 10px 18px;
+    border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .04em; }
+  header h1 span { color: var(--ink-faint); font-weight: 400; }
+  header .path { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  header .spacer { flex: 1; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button {
+    padding: 5px 14px; background: none; border: 1px solid var(--line); border-radius: 4px;
+    color: var(--ink-dim); cursor: pointer; font-size: 12px;
+  }
+  .tabs button[data-mode="eval"][aria-pressed="true"] { border-color: #d98b3f; color: var(--ink); background: var(--panel-2); }
+  .tabs button[data-mode="media"][aria-pressed="true"] { border-color: var(--accent-2); color: var(--ink); background: var(--panel-2); }
+  .status { font-size: 12px; color: var(--ink-dim); font-variant-numeric: tabular-nums; text-align: right; }
+
+  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 45px); }
+  aside { border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; max-height: calc(100vh - 45px); position: sticky; top: 45px; }
+  main { padding: 18px; min-width: 0; }
+
+  .side-title { padding: 12px 16px 8px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .row {
+    display: block; width: 100%; text-align: left; background: none; border: 0;
+    border-bottom: 1px solid var(--line); padding: 10px 16px; cursor: pointer;
+  }
+  .row:hover { background: var(--panel-2); }
+  .row[aria-selected="true"] { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+  .row .date { font-family: var(--mono); font-size: 12px; }
+  .row .meta { color: var(--ink-faint); font-size: 11px; margin-top: 2px; }
+  .row .pick { color: var(--ink-dim); font-size: 11px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .tagline { font-size: 10px; font-family: var(--mono); color: var(--ink-faint); margin-top: 3px; }
+
+  .panel { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; margin-bottom: 16px; }
+  .panel > h2 {
+    margin: 0; padding: 10px 14px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-faint); border-bottom: 1px solid var(--line); font-weight: 600;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .panel > h2 em { font-style: normal; color: var(--accent); letter-spacing: 0; text-transform: none; font-weight: 400; }
+  .panel .body { padding: 14px; }
+
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .field > label { display: block; font-size: 11px; color: var(--ink-faint); margin-bottom: 5px; letter-spacing: .04em; }
+  .field input[type="number"], .field input[type="search"], .field select {
+    width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 4px; font-family: var(--mono); font-size: 12px;
+  }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button {
+    padding: 5px 9px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+    cursor: pointer; font-family: var(--mono); font-size: 11px; color: var(--ink-dim);
+  }
+  .seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: var(--panel-2); }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 11px; color: var(--ink-dim); }
+  .filters label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .filters select { padding: 4px 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; }
+  .model-search { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .model-search input { flex: 1; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+  .model-search button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; color: var(--ink-dim); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px;
+    border: 1px solid var(--accent); background: var(--panel-2); font-family: var(--mono); font-size: 11px;
+  }
+  .chip button { background: none; border: 0; color: var(--ink-faint); cursor: pointer; padding: 0 2px; }
+  .chip select { background: var(--bg); border: 1px solid var(--line); border-radius: 3px; font-family: var(--mono); font-size: 10px; padding: 1px 3px; color: var(--ink-dim); }
+  .chip select[data-custom="1"] { border-color: var(--accent); color: var(--ink); }
+  .model-list { max-height: 210px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
+  .model-row {
+    display: grid; grid-template-columns: minmax(0,1fr) auto auto auto auto auto; gap: 8px; align-items: center;
+    padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .model-row:last-child { border-bottom: 0; }
+  .model-row:hover { background: var(--panel-2); }
+  .model-row[aria-selected="true"] { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+  .model-row .id { font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .model-row .tag { font-size: 10px; color: var(--ink-faint); font-family: var(--mono); }
+  .model-row .tag.free { color: var(--ok); }
+  .model-row .tag.yes { color: var(--ok); }
+  .model-row .tag.no { color: var(--bad); }
+
+  .run-bar { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .run-bar button.go {
+    padding: 8px 18px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent);
+    color: var(--bg); font-weight: 600; cursor: pointer;
+  }
+  .run-bar button.ghost { padding: 8px 14px; background: none; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .run-bar button:disabled { opacity: .45; cursor: not-allowed; }
+  .hint { color: var(--ink-faint); font-size: 11px; }
+
+  .drop { border: 1px dashed var(--line); border-radius: 6px; padding: 20px; text-align: center; color: var(--ink-faint); cursor: pointer; font-size: 12px; }
+  .drop.over { border-color: var(--accent); color: var(--ink); background: var(--panel-2); }
+  .library { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 12px; }
+  .media-card { border: 1px solid var(--line); border-radius: 5px; overflow: hidden; cursor: pointer; background: var(--bg); }
+  .media-card[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .media-card .thumb { width: 100%; height: 110px; object-fit: cover; display: block; background: var(--panel-2); }
+  .media-card audio { width: 100%; margin-top: 6px; }
+  .media-card .info { padding: 7px 9px; font-size: 11px; }
+  .media-card .info .fn { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .media-card .info .sz { color: var(--ink-faint); margin-top: 3px; }
+  .media-card .rm { float: right; background: none; border: 0; color: var(--ink-faint); cursor: pointer; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
+  .card { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
+  .card > header {
+    position: static; display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+    border-bottom: 1px solid var(--line); background: var(--panel-2);
+  }
+  .card .name { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex: none; }
+  .dot.think { background: var(--warn); animation: pulse 1.1s infinite; }
+  .dot.write { background: var(--accent); animation: pulse 1.1s infinite; }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .card .phase { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .stream { border-bottom: 1px solid var(--line); }
+  .stream summary { cursor: pointer; padding: 7px 12px; font-size: 11px; color: var(--ink-faint); letter-spacing: .06em; text-transform: uppercase; list-style: none; }
+  .stream summary::-webkit-details-marker { display: none; }
+  .stream summary::before { content: "▸ "; }
+  .stream[open] summary::before { content: "▾ "; }
+  .stream pre {
+    margin: 0; padding: 0 12px 10px; max-height: 220px; overflow-y: auto;
+    font-family: var(--mono); font-size: 11px; line-height: 1.55; color: var(--ink-dim);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .stream.answer pre { color: var(--ink); }
+
+  .result { padding: 12px; }
+  .quote { font-size: 14px; line-height: 1.45; }
+  .quote .author { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+  .context { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .context .head { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+  .context .line { display: grid; grid-template-columns: 54px minmax(0,1fr); gap: 8px; padding: 3px 0; font-size: 12px; line-height: 1.45; }
+  .context .line .mid { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
+  .context .line .who { color: var(--ink-dim); font-family: var(--mono); font-size: 11px; }
+  .context .line.primary { background: var(--panel-2); box-shadow: inset 2px 0 0 var(--ok); border-radius: 2px; }
+  .context .line.primary .who { color: var(--accent); }
+  .desc { white-space: pre-wrap; line-height: 1.5; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink-dim); }
+  .badge.match { border-color: var(--ok); color: var(--ok); }
+  .badge.bad { border-color: var(--bad); color: var(--bad); }
+  .fail { color: var(--bad); font-family: var(--mono); font-size: 11px; white-space: pre-wrap; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; cursor: pointer; user-select: none; }
+  th:hover { color: var(--ink-dim); }
+  th[aria-sort] { color: var(--accent); }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  td .q { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; display: block; }
+
+  .messages { max-height: 320px; overflow-y: auto; }
+  .msg { display: grid; grid-template-columns: 62px minmax(0,1fr); gap: 10px; padding: 5px 14px; border-bottom: 1px solid var(--line); }
+  .msg:last-child { border-bottom: 0; }
+  .msg .mid { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
+  .msg .who { color: var(--accent); font-family: var(--mono); font-size: 11px; }
+  .msg .kindly { color: var(--ink-faint); font-style: italic; }
+  .msg.picked { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--ok); }
+  .empty { color: var(--ink-faint); padding: 14px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>quoto <span>· bench</span></h1>
+  <div class="tabs" id="tabs">
+    <button data-mode="eval" aria-pressed="true">Цитата дня</button>
+    <button data-mode="media">Медиа</button>
+  </div>
+  <span class="path" id="auditPath"></span>
+  <span class="spacer"></span>
+  <span class="status" id="status">—</span>
+</header>
+
+<div class="layout">
+  <aside>
+    <div id="sideEval">
+      <div class="side-title">Дни из аудита</div>
+      <div id="days"><div class="empty">загрузка…</div></div>
+    </div>
+    <div id="sideMedia" hidden>
+      <div class="side-title">Загруженные файлы</div>
+      <div id="mediaSide"><div class="empty">пусто</div></div>
+    </div>
+    <div class="side-title">История прогонов</div>
+    <div id="history"><div class="empty">пусто</div></div>
+  </aside>
+
+  <main>
+    <!-- ══ вкладка «Цитата дня» ══════════════════════════════════════════ -->
+    <div class="pane" id="pane-eval" data-mode="eval">
+      <section class="panel" id="dayPanel" hidden>
+        <h2>День <em id="dayTitle"></em></h2>
+        <div class="body" style="padding:0"><div class="messages" id="messages"></div></div>
+      </section>
+
+      <section class="panel">
+        <h2>Настройки <em>оценка дня · ответ по json-schema · весь день одним запросом</em></h2>
+        <div class="body">
+          <div class="controls">
+            <div class="field">
+              <label>Reasoning effort по умолчанию</label>
+              <div class="seg" data-effort="eval"></div>
+            </div>
+            <div class="field">
+              <label>max_tokens <span class="hint" id="auditedTokens"></span></label>
+              <input type="number" id="eval-maxTokens" min="256" step="1024" placeholder="как в проде">
+            </div>
+            <div class="field">
+              <label>Повторов на модель</label>
+              <input type="number" id="eval-runs" min="1" max="5" value="1">
+            </div>
+            <div class="field">
+              <label>Параллельно</label>
+              <input type="number" id="eval-concurrency" min="1" max="12" value="4">
+            </div>
+            <div class="field">
+              <label>Поток размышления</label>
+              <div class="seg" data-reasoning="eval">
+                <button data-v="1" aria-pressed="true">показывать</button>
+                <button data-v="0">скрыть (exclude)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Модели <em>для выбора цитаты</em></h2>
+        <div class="body">
+          <div class="filters">
+            <label>сортировка
+              <select id="eval-sort">
+                <option value="created">по дате, новые сверху</option>
+                <option value="id">по алфавиту</option>
+                <option value="price">по цене</option>
+              </select>
+            </label>
+            <label><input type="checkbox" id="eval-structured" checked> только с json-schema</label>
+            <label><input type="checkbox" id="eval-free"> только бесплатные</label>
+            <span class="hint" id="eval-count"></span>
+          </div>
+          <div class="model-search">
+            <input type="search" id="eval-filter" placeholder="фильтр: glm, free, gemini…">
+            <button id="eval-manual">вписать id</button>
+          </div>
+          <div class="chips" id="eval-chips"></div>
+          <div class="model-list" id="eval-models"></div>
+          <div class="run-bar">
+            <button class="go" id="eval-run" disabled>Оценить день</button>
+            <button class="ghost" id="eval-stop" hidden>Остановить</button>
+            <span class="hint" id="eval-hint">выбери день и модели</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid" id="eval-cards"></div>
+      <section class="panel" id="eval-summaryPanel" hidden>
+        <h2>Сводка <em>кто какую цитату выбрал</em></h2>
+        <div class="body" style="padding:0"><table id="eval-summary"></table></div>
+      </section>
+    </div>
+
+    <!-- ══ вкладка «Медиа» ═══════════════════════════════════════════════ -->
+    <div class="pane" id="pane-media" data-mode="media" hidden>
+      <section class="panel">
+        <h2>Файл <em id="mediaTitle">ничего не выбрано</em></h2>
+        <div class="body">
+          <div class="filters" style="margin-bottom:10px">
+            <label>тип
+              <select id="uploadKind">
+                <option value="">определить по расширению</option>
+                <option value="photo">фото</option>
+                <option value="sticker">стикер</option>
+                <option value="video">видео</option>
+                <option value="animation">гифка</option>
+                <option value="video_note">кружок</option>
+                <option value="voice">голосовое</option>
+                <option value="audio">аудио</option>
+              </select>
+            </label>
+            <span class="hint">файл проходит ту же нормализацию, что и в боте: ресайз, перекодирование, битрейт</span>
+          </div>
+          <div class="drop" id="drop">перетащи файл сюда или нажми, чтобы выбрать</div>
+          <input type="file" id="fileInput" hidden>
+          <div class="library" id="library"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Настройки <em>описание вложения · свободный текст · один файл в запросе</em></h2>
+        <div class="body">
+          <div class="controls">
+            <div class="field">
+              <label>Reasoning effort по умолчанию</label>
+              <div class="seg" data-effort="media"></div>
+            </div>
+            <div class="field">
+              <label>max_tokens <span class="hint">в проде не задаётся</span></label>
+              <input type="number" id="media-maxTokens" min="256" step="512" placeholder="без лимита">
+            </div>
+            <div class="field">
+              <label>Повторов на модель</label>
+              <input type="number" id="media-runs" min="1" max="5" value="1">
+            </div>
+            <div class="field">
+              <label>Параллельно</label>
+              <input type="number" id="media-concurrency" min="1" max="12" value="4">
+            </div>
+            <div class="field">
+              <label>Поток размышления</label>
+              <div class="seg" data-reasoning="media">
+                <button data-v="1" aria-pressed="true">показывать</button>
+                <button data-v="0">скрыть (exclude)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Модели <em id="media-modalityNote">для описания вложений</em></h2>
+        <div class="body">
+          <div class="filters">
+            <label>сортировка
+              <select id="media-sort">
+                <option value="created">по дате, новые сверху</option>
+                <option value="id">по алфавиту</option>
+                <option value="price">по цене</option>
+              </select>
+            </label>
+            <label><input type="checkbox" id="media-all"> все модели, не только под тип файла</label>
+            <label><input type="checkbox" id="media-free"> только бесплатные</label>
+            <span class="hint" id="media-count"></span>
+          </div>
+          <div class="model-search">
+            <input type="search" id="media-filter" placeholder="фильтр: gemini, omni, free…">
+            <button id="media-manual">вписать id</button>
+          </div>
+          <div class="chips" id="media-chips"></div>
+          <div class="model-list" id="media-models"></div>
+          <div class="run-bar">
+            <button class="go" id="media-run" disabled>Описать файл</button>
+            <button class="ghost" id="media-stop" hidden>Остановить</button>
+            <span class="hint" id="media-hint">загрузи файл и выбери модели</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid" id="media-cards"></div>
+      <section class="panel" id="media-summaryPanel" hidden>
+        <h2>Сводка <em>кто как описал</em></h2>
+        <div class="body" style="padding:0"><table id="media-summary"></table></div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+const EFFORTS = [
+  ["", "как в проде"], ["off", "без блока"], ["none", "none"], ["minimal", "minimal"],
+  ["low", "low"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh"], ["max", "max"],
+];
+
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const money = (v) => v == null ? "—" : v === 0 ? "free" : "$" + v.toFixed(5);
+const num = (v) => v == null ? "—" : v.toLocaleString("ru-RU");
+const kb = (b) => b == null ? "—" : b < 1048576 ? `${Math.round(b / 1024)} КБ` : `${(b / 1048576).toFixed(1)} МБ`;
+const dur = (s) => s == null ? "" : s < 60 ? `${s.toFixed(0)} с` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const effortLabel = (v) => (EFFORTS.find(([value]) => value === v) || ["", v])[1];
+const setStatus = (t) => { $("#status").textContent = t; };
+
+// The two tabs are separate benchmarks: different prompts, different models,
+// different results. Each keeps its own selection, settings and cards.
+const panes = {
+  eval: { mode: "eval", chosen: [], effort: "", showReasoning: true, cards: new Map(), controller: null, sort: { key: "cost", dir: "asc" }, rows: [] },
+  media: { mode: "media", chosen: [], effort: "", showReasoning: true, cards: new Map(), controller: null, allModalities: false, sort: { key: "cost", dir: "asc" }, rows: [] },
+};
+const state = { mode: "eval", models: [], days: [], day: null, media: [], mediaId: null };
+
+const EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+const modelInfo = (id) => state.models.find((m) => m.id === id) || null;
+
+// OpenRouter tells us which efforts a model really accepts; offering the rest
+// only produces 400s or silent downgrades, so the picker shows just these.
+function allowedEfforts(id) {
+  const options = [["", "как в проде"], ["off", "без блока"]];
+  const info = modelInfo(id);
+  if (!info || !info.has_reasoning) return options;
+  for (const value of EFFORT_ORDER) {
+    if ((info.supported_efforts || []).includes(value)) options.push([value, value]);
+  }
+  return options;
+}
+
+function effortNote(id) {
+  const info = modelInfo(id);
+  if (!info) return "";
+  if (!info.has_reasoning) return "не думает";
+  if (!(info.supported_efforts || []).length) return "effort не принимает";
+  if (info.reasoning_mandatory) return "reasoning обязателен";
+  return "";
+}
+
+const chosenIndex = (pane, id) => pane.chosen.findIndex((m) => m.id === id);
+const activeMedia = () => state.media.find((m) => m.id === state.mediaId) || null;
+
+function setMode(mode) {
+  state.mode = mode;
+  $("#tabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+  $("#pane-eval").hidden = mode !== "eval";
+  $("#pane-media").hidden = mode !== "media";
+  $("#sideEval").hidden = mode !== "eval";
+  $("#sideMedia").hidden = mode !== "media";
+}
+
+// ── model catalog: shared data, per-pane filtering and selection ───────────
+async function loadModels() {
+  const data = await (await fetch("/api/models")).json();
+  state.models = data.models || [];
+  for (const pane of Object.values(panes)) {
+    const saved = JSON.parse(localStorage.getItem(`bench.models.${pane.mode}`) || "null");
+    const source = saved?.length ? saved : (pane.mode === "eval" ? (data.configured || []) : []);
+    pane.chosen = source.map((item) => (typeof item === "string" ? { id: item, effort: null } : item));
+    renderChosen(pane);
+    renderModelList(pane);
+  }
+}
+
+function neededModality(pane) {
+  if (pane.mode !== "media" || pane.allModalities) return null;
+  const item = activeMedia();
+  return item ? item.modality : null;
+}
+
+function renderModelList(pane) {
+  const box = $(`#${pane.mode}-models`);
+  const filter = $(`#${pane.mode}-filter`).value.trim().toLowerCase();
+  const sort = $(`#${pane.mode}-sort`).value;
+  const onlyFree = $(`#${pane.mode}-free`).checked;
+  const onlyStructured = pane.mode === "eval" && $("#eval-structured").checked;
+  const modality = neededModality(pane);
+
+  const rows = state.models.filter((m) => {
+    if (modality && !m.modalities.includes(modality)) return false;
+    if (onlyStructured && !m.supports_structured) return false;
+    if (onlyFree && !m.free) return false;
+    if (!filter) return true;
+    if (filter === "free") return m.free;
+    return m.id.toLowerCase().includes(filter);
+  });
+  if (sort === "id") rows.sort((a, b) => a.id.localeCompare(b.id));
+  else if (sort === "price") rows.sort((a, b) => (a.prompt_price - b.prompt_price) || (a.completion_price - b.completion_price));
+  else rows.sort((a, b) => (b.created || 0) - (a.created || 0));
+
+  $(`#${pane.mode}-count`).textContent = modality
+    ? `${rows.length} из ${state.models.length} · умеют ${modality}`
+    : `${rows.length} из ${state.models.length}`;
+  if (pane.mode === "media") {
+    const item = activeMedia();
+    $("#media-modalityNote").textContent = item
+      ? `для описания вложений · нужен вход ${item.modality}`
+      : "для описания вложений";
+  }
+
+  box.textContent = "";
+  for (const m of rows.slice(0, 250)) {
+    const row = el("div", "model-row");
+    row.setAttribute("aria-selected", String(chosenIndex(pane, m.id) >= 0));
+    row.append(el("div", "id", m.id));
+    row.append(el("div", "tag", m.created ? new Date(m.created * 1000).toISOString().slice(0, 7) : ""));
+    row.append(el("div", "tag" + (m.free ? " free" : ""), m.free ? "free" : `$${(m.prompt_price * 1e6).toFixed(2)}/${(m.completion_price * 1e6).toFixed(2)}`));
+    row.append(el("div", "tag", m.context_length ? Math.round(m.context_length / 1000) + "k" : ""));
+    if (pane.mode === "eval") {
+      row.append(el("div", "tag " + (m.supports_structured ? "yes" : "no"), m.supports_structured ? "json" : "нет json"));
+    } else {
+      const kinds = m.modalities.filter((x) => x !== "text");
+      row.append(el("div", "tag " + (kinds.length ? "yes" : "no"), kinds.join("/") || "только текст"));
+    }
+    const efforts = m.supported_efforts || [];
+    const effortTag = !m.has_reasoning ? "без reasoning"
+      : !efforts.length ? "effort n/a"
+      : EFFORT_ORDER.filter((v) => efforts.includes(v)).join("/");
+    const tag = el("div", "tag" + (efforts.length ? " yes" : ""), effortTag);
+    if (m.reasoning_mandatory) tag.title = "reasoning нельзя отключить";
+    row.append(tag);
+    row.onclick = () => toggleModel(pane, m.id);
+    box.append(row);
+  }
+  if (!rows.length) box.append(el("div", "empty", "ничего не найдено"));
+}
+
+function toggleModel(pane, id) {
+  const i = chosenIndex(pane, id);
+  if (i >= 0) pane.chosen.splice(i, 1);
+  else pane.chosen.push({ id, effort: null });
+  localStorage.setItem(`bench.models.${pane.mode}`, JSON.stringify(pane.chosen));
+  renderChosen(pane);
+  renderModelList(pane);
+  refreshRun(pane);
+}
+
+function renderChosen(pane) {
+  const box = $(`#${pane.mode}-chips`);
+  box.textContent = "";
+  for (const entry of pane.chosen) {
+    const chip = el("span", "chip", entry.id);
+    const options = allowedEfforts(entry.id);
+    if (entry.effort !== null && !options.some(([value]) => value === entry.effort)) {
+      entry.effort = null; // stored effort the model turned out not to support
+    }
+    const note = effortNote(entry.id);
+    if (note) chip.append(el("span", "hint", note));
+    const select = document.createElement("select");
+    select.title = "reasoning effort для этой модели";
+    const follow = el("option", null, `общий · ${effortLabel(pane.effort)}`);
+    follow.value = "__follow__";
+    select.append(follow);
+    for (const [value, label] of options) {
+      const option = el("option", null, label);
+      option.value = value;
+      select.append(option);
+    }
+    select.value = entry.effort === null ? "__follow__" : entry.effort;
+    select.dataset.custom = entry.effort === null ? "0" : "1";
+    select.onchange = () => {
+      entry.effort = select.value === "__follow__" ? null : select.value;
+      select.dataset.custom = entry.effort === null ? "0" : "1";
+      localStorage.setItem(`bench.models.${pane.mode}`, JSON.stringify(pane.chosen));
+    };
+    chip.append(select);
+    const x = el("button", null, "×");
+    x.onclick = () => toggleModel(pane, entry.id);
+    chip.append(x);
+    box.append(chip);
+  }
+  if (!pane.chosen.length) box.append(el("span", "hint", "модели не выбраны"));
+}
+
+function refreshRun(pane) {
+  const target = pane.mode === "eval" ? state.day : activeMedia();
+  const ready = Boolean(target) && pane.chosen.length > 0;
+  $(`#${pane.mode}-run`).disabled = !ready;
+  const hint = $(`#${pane.mode}-hint`);
+  if (!ready) {
+    hint.textContent = pane.mode === "eval" ? "выбери день и модели" : "загрузи файл и выбери модели";
+    return;
+  }
+  const what = pane.mode === "eval" ? `на дне ${state.day.day}` : `на файле ${activeMedia().filename}`;
+  hint.textContent = `${pane.chosen.length} модел. × ${$(`#${pane.mode}-runs`).value} прогон. ${what}`;
+}
+
+// ── days ──────────────────────────────────────────────────────────────────
+async function loadDays() {
+  const data = await (await fetch("/api/days")).json();
+  $("#auditPath").textContent = data.audit_path;
+  state.days = data.days;
+  const box = $("#days");
+  box.textContent = "";
+  if (!data.days.length) { box.append(el("div", "empty", "в аудите нет дней")); return; }
+  for (const day of data.days) {
+    const b = el("button", "row");
+    b.dataset.day = day.day;
+    b.append(el("div", "date", day.day));
+    b.append(el("div", "meta", `${day.message_count} сообщений · прод: ${day.production_model}`));
+    if (day.production_pick) {
+      b.append(el("div", "pick", `${day.production_pick.author}: ${day.production_pick.text || day.production_pick.description}`));
+    }
+    b.onclick = () => selectDay(day.day);
+    box.append(b);
+  }
+  selectDay(data.days[0].day);
+}
+
+async function selectDay(dayId) {
+  state.day = state.days.find((d) => d.day === dayId) || null;
+  $("#days").querySelectorAll(".row").forEach((n) => n.setAttribute("aria-selected", String(n.dataset.day === dayId)));
+  $("#auditedTokens").textContent = state.day?.audited_max_tokens ? `· в проде ${state.day.audited_max_tokens}` : "";
+  const data = await (await fetch(`/api/days/${dayId}/messages`)).json();
+  renderMessages(data.messages);
+  refreshRun(panes.eval);
+}
+
+function renderMessages(messages) {
+  const box = $("#messages");
+  box.textContent = "";
+  $("#dayPanel").hidden = false;
+  $("#dayTitle").textContent = `${state.day.day} · ${messages.length} сообщений · прод выбрал #${state.day.production_primary_id ?? "—"}`;
+  for (const m of messages) {
+    const row = el("div", "msg" + (m.id === state.day.production_primary_id ? " picked" : ""));
+    row.append(el("div", "mid", "#" + m.id));
+    const body = el("div");
+    body.append(el("span", "who", m.author + " "));
+    if (m.text) body.append(document.createTextNode(m.text));
+    else if (m.description) body.append(el("span", "kindly", `[${m.kind}] ${m.description}`));
+    else body.append(el("span", "kindly", `[${m.kind}]`));
+    const re = Object.entries(m.reactions || {});
+    if (re.length) body.append(el("span", "mid", "  " + re.map(([k, v]) => `${k}${v}`).join(" ")));
+    row.append(body);
+    box.append(row);
+  }
+}
+
+// ── media library ─────────────────────────────────────────────────────────
+async function loadMedia() {
+  const data = await (await fetch("/api/media")).json();
+  state.media = data.media || [];
+  if (!state.media.some((m) => m.id === state.mediaId)) state.mediaId = state.media[0]?.id || null;
+  renderLibrary();
+  renderModelList(panes.media);
+  refreshRun(panes.media);
+}
+
+function selectMedia(id) {
+  state.mediaId = id;
+  renderLibrary();
+  renderModelList(panes.media);
+  refreshRun(panes.media);
+}
+
+function renderLibrary() {
+  const box = $("#library");
+  const side = $("#mediaSide");
+  box.textContent = "";
+  side.textContent = "";
+  const current = activeMedia();
+  $("#mediaTitle").textContent = current
+    ? [current.filename, current.kind, dur(current.duration_seconds),
+       `${kb(current.raw_bytes)} → ${kb(current.normalized_bytes)}`, current.normalized_mime]
+      .filter(Boolean).join(" · ")
+    : "ничего не выбрано";
+  if (!state.media.length) {
+    box.append(el("div", "empty", "пока ничего не загружено"));
+    side.append(el("div", "empty", "пусто"));
+    return;
+  }
+  for (const media of state.media) {
+    const card = el("div", "media-card");
+    card.setAttribute("aria-selected", String(media.id === state.mediaId));
+    const src = `/api/media/${media.id}/preview`;
+    if (media.modality === "image") {
+      const img = el("img", "thumb"); img.src = src; img.loading = "lazy"; img.alt = media.filename;
+      card.append(img);
+    } else if (media.modality === "video") {
+      const video = el("video", "thumb"); video.src = src; video.muted = true; video.controls = true;
+      card.append(video);
+    } else {
+      const audio = document.createElement("audio"); audio.src = src; audio.controls = true;
+      card.append(audio);
+    }
+    const info = el("div", "info");
+    const rm = el("button", "rm", "×");
+    rm.title = "удалить";
+    rm.onclick = async (e) => { e.stopPropagation(); await fetch(`/api/media/${media.id}`, { method: "DELETE" }); loadMedia(); };
+    info.append(rm, el("div", "fn", media.filename), el("div", "sz",
+      [media.kind, dur(media.duration_seconds), kb(media.normalized_bytes)].filter(Boolean).join(" · ")));
+    card.append(info);
+    card.onclick = () => selectMedia(media.id);
+    box.append(card);
+
+    const row = el("button", "row");
+    row.setAttribute("aria-selected", String(media.id === state.mediaId));
+    row.append(el("div", "date", media.filename));
+    row.append(el("div", "meta", [media.kind, dur(media.duration_seconds), kb(media.normalized_bytes)].filter(Boolean).join(" · ")));
+    row.append(el("div", "tagline", `нужен вход: ${media.modality}`));
+    row.onclick = () => selectMedia(media.id);
+    side.append(row);
+  }
+}
+
+async function upload(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const kind = $("#uploadKind").value;
+  if (kind) form.append("kind", kind);
+  setStatus(`нормализую ${file.name}…`);
+  const res = await fetch("/api/media", { method: "POST", body: form });
+  if (!res.ok) { setStatus("загрузка не удалась: " + (await res.text()).slice(0, 120)); return; }
+  const meta = await res.json();
+  state.mediaId = meta.id;
+  setStatus(`${meta.filename}: ${kb(meta.raw_bytes)} → ${kb(meta.normalized_bytes)}`);
+  loadMedia();
+}
+
+// ── running ───────────────────────────────────────────────────────────────
+function cardFor(pane, key, model, attempt, runs, effort) {
+  if (pane.cards.has(key)) return pane.cards.get(key);
+  const card = el("section", "card");
+  const head = el("header");
+  const dot = el("span", "dot");
+  const suffix = [effort ? effortLabel(effort) : null, runs > 1 ? `#${attempt}` : null].filter(Boolean).join(" · ");
+  head.append(dot, el("span", "name", model + (suffix ? ` · ${suffix}` : "")));
+  const phase = el("span", "phase", "ожидание");
+  head.append(phase);
+
+  const think = el("details", "stream");
+  think.open = true;
+  think.append(el("summary", null, "размышление"));
+  const thinkPre = el("pre");
+  think.append(thinkPre);
+
+  const answer = el("details", "stream answer");
+  answer.append(el("summary", null, pane.mode === "eval" ? "ответ" : "описание"));
+  const answerPre = el("pre");
+  answer.append(answerPre);
+
+  const result = el("div", "result");
+  result.hidden = true;
+  card.append(head, think, answer, result);
+  $(`#${pane.mode}-cards`).append(card);
+
+  const entry = { card, dot, phase, think, thinkPre, answer, answerPre, result, started: performance.now() };
+  entry.timer = setInterval(() => {
+    if (entry.done) return;
+    entry.phase.textContent = `${entry.label || "…"} · ${((performance.now() - entry.started) / 1000).toFixed(0)}s`;
+  }, 500);
+  pane.cards.set(key, entry);
+  return entry;
+}
+
+function appendStream(pre, text) {
+  const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
+  pre.append(document.createTextNode(text));
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
+}
+
+function renderResult(entry, event) {
+  entry.done = true;
+  clearInterval(entry.timer);
+  entry.result.hidden = false;
+  entry.result.textContent = "";
+  const seconds = (event.seconds || 0).toFixed(1);
+  const usage = event.usage || {};
+
+  if (event.status !== "ok") {
+    entry.dot.className = "dot bad";
+    entry.phase.textContent = `${event.status} · ${seconds}s`;
+    entry.result.append(el("div", "fail", event.message || event.status));
+  } else if (event.description !== undefined) {
+    entry.dot.className = "dot ok";
+    entry.phase.textContent = `готово · ${seconds}s`;
+    entry.result.append(el("div", "desc", event.description));
+  } else {
+    entry.dot.className = "dot ok";
+    entry.phase.textContent = `готово · ${seconds}s`;
+    const quote = el("div", "quote");
+    quote.append(el("span", "author", (event.pick?.author || "?") + ": "));
+    quote.append(document.createTextNode(event.pick ? (event.pick.text || event.pick.description || `[${event.pick.kind}]`) : "—"));
+    entry.result.append(quote);
+  }
+
+  if (event.status === "ok" && (event.context || []).length) {
+    // Production publishes the context in this exact order, so show it that way.
+    const box = el("div", "context");
+    box.append(el("div", "head", `контекст, ${event.context.length} сообщ. — в порядке публикации`));
+    for (const m of event.context) {
+      const line = el("div", "line" + (m.is_primary ? " primary" : ""));
+      line.append(el("div", "mid", "#" + m.id));
+      const body = el("div");
+      body.append(el("span", "who", m.author + " "));
+      body.append(document.createTextNode(m.text || (m.description ? `[${m.kind}] ${m.description}` : `[${m.kind}]`)));
+      line.append(body);
+      box.append(line);
+    }
+    entry.result.append(box);
+  }
+
+  const badges = el("div", "badges");
+  if (event.status === "ok" && event.description !== undefined) {
+    badges.append(el("span", "badge", `${event.description.length} символов`));
+  } else if (event.status === "ok") {
+    if (event.matches_production) badges.append(el("span", "badge match", "как у прода"));
+    if (event.primary_score != null) badges.append(el("span", "badge", "балл " + event.primary_score.toFixed(2)));
+    if (event.should_publish === true) badges.append(el("span", "badge", "публиковать"));
+    if (event.should_publish === false) badges.append(el("span", "badge bad", "не публиковать · " + (event.reason_code || "")));
+    if (event.verdict_error) badges.append(el("span", "badge bad", "вердикт не разобран"));
+    if (event.context_needed) badges.append(el("span", "badge", "нужен контекст"));
+    if ((event.context || []).length) badges.append(el("span", "badge", `в публикацию: ${event.context.length} сообщ.`));
+  }
+  badges.append(el("span", "badge", `${num(usage.prompt_tokens)} → ${num(usage.completion_tokens)} ток.`));
+  if (usage.reasoning_tokens) badges.append(el("span", "badge", num(usage.reasoning_tokens) + " reasoning"));
+  badges.append(el("span", "badge", money(usage.cost_usd)));
+  entry.result.append(badges);
+}
+
+// Cheapest first by default: picking a model is mostly a price question.
+const SUMMARY_COLUMNS = {
+  eval: [
+    { key: "model", label: "модель", value: (r) => r.model },
+    { key: "effort", label: "effort", value: (r) => r.effort || "" },
+    { key: "pick", label: "выбор", value: (r) => r.pick ? `${r.pick.author}: ${r.pick.text || r.pick.description}` : r.status },
+    { key: "score", label: "балл", num: true, value: (r) => r.primary_score },
+    { key: "tokens", label: "токены", num: true, value: (r) => (r.usage || {}).completion_tokens },
+    { key: "reasoning", label: "reasoning", num: true, value: (r) => (r.usage || {}).reasoning_tokens },
+    { key: "cost", label: "цена", num: true, value: (r) => (r.usage || {}).cost_usd },
+    { key: "seconds", label: "сек", num: true, value: (r) => r.seconds },
+  ],
+  media: [
+    { key: "model", label: "модель", value: (r) => r.model },
+    { key: "effort", label: "effort", value: (r) => r.effort || "" },
+    { key: "pick", label: "описание", value: (r) => r.description ?? r.status },
+    { key: "length", label: "символов", num: true, value: (r) => (r.description || "").length },
+    { key: "tokens", label: "токены", num: true, value: (r) => (r.usage || {}).completion_tokens },
+    { key: "reasoning", label: "reasoning", num: true, value: (r) => (r.usage || {}).reasoning_tokens },
+    { key: "cost", label: "цена", num: true, value: (r) => (r.usage || {}).cost_usd },
+    { key: "seconds", label: "сек", num: true, value: (r) => r.seconds },
+  ],
+};
+
+function sortedRows(pane) {
+  const column = SUMMARY_COLUMNS[pane.mode].find((c) => c.key === pane.sort.key);
+  if (!column) return pane.rows.slice();
+  const factor = pane.sort.dir === "asc" ? 1 : -1;
+  return pane.rows.slice().sort((a, b) => {
+    const x = column.value(a);
+    const y = column.value(b);
+    // Rows without a number (failures, free models with no cost) sink to the bottom.
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    if (typeof x === "number" && typeof y === "number") return (x - y) * factor;
+    return String(x).localeCompare(String(y)) * factor;
+  });
+}
+
+function renderSummary(pane, rows) {
+  if (rows) pane.rows = rows;
+  const panel = $(`#${pane.mode}-summaryPanel`);
+  if (!pane.rows.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const table = $(`#${pane.mode}-summary`);
+  table.textContent = "";
+  const columns = SUMMARY_COLUMNS[pane.mode];
+
+  const head = el("tr");
+  for (const column of columns) {
+    const th = el("th", column.num ? "num" : null, column.label);
+    if (pane.sort.key === column.key) {
+      th.setAttribute("aria-sort", pane.sort.dir === "asc" ? "ascending" : "descending");
+      th.textContent = `${column.label} ${pane.sort.dir === "asc" ? "↑" : "↓"}`;
+    }
+    th.onclick = () => {
+      if (pane.sort.key === column.key) pane.sort.dir = pane.sort.dir === "asc" ? "desc" : "asc";
+      else pane.sort = { key: column.key, dir: column.num ? "asc" : "asc" };
+      renderSummary(pane);
+    };
+    head.append(th);
+  }
+  table.append(head);
+
+  let total = 0;
+  for (const r of sortedRows(pane)) {
+    const usage = r.usage || {};
+    total += usage.cost_usd || 0;
+    const tr = el("tr");
+    tr.append(el("td", null, r.model + (r.attempt > 1 ? ` #${r.attempt}` : "")));
+    tr.append(el("td", null, effortLabel(r.effort || "")));
+    const cell = el("td");
+    const span = el("span", "q");
+    if (r.status !== "ok") span.textContent = r.status;
+    else if (r.description !== undefined) span.textContent = r.description;
+    else if (r.pick) {
+      span.textContent = `${r.pick.author}: ${r.pick.text || r.pick.description}`;
+      if (r.matches_production) span.style.color = "var(--ok)";
+    }
+    if (r.description) span.title = r.description;
+    cell.append(span);
+    tr.append(cell);
+    tr.append(el("td", "num", pane.mode === "media"
+      ? String((r.description || "").length)
+      : r.primary_score != null ? r.primary_score.toFixed(2) : "—"));
+    tr.append(el("td", "num", `${num(usage.prompt_tokens)}/${num(usage.completion_tokens)}`));
+    tr.append(el("td", "num", num(usage.reasoning_tokens)));
+    tr.append(el("td", "num", money(usage.cost_usd)));
+    tr.append(el("td", "num", (r.seconds || 0).toFixed(1)));
+    table.append(tr);
+  }
+  const foot = el("tr");
+  columns.forEach((column, i) => foot.append(el("td", column.num ? "num" : null,
+    i === 0 ? "итого" : column.key === "cost" ? money(total) : "")));
+  table.append(foot);
+}
+
+async function run(pane) {
+  $(`#${pane.mode}-cards`).textContent = "";
+  $(`#${pane.mode}-summaryPanel`).hidden = true;
+  pane.cards.clear();
+  const collected = [];
+  const runs = Number($(`#${pane.mode}-runs`).value) || 1;
+
+  const payload = {
+    models: pane.chosen.map((m) => ({ id: m.id, effort: m.effort === null ? pane.effort : m.effort })),
+    effort: pane.effort,
+    max_tokens: Number($(`#${pane.mode}-maxTokens`).value) || null,
+    runs,
+    concurrency: Number($(`#${pane.mode}-concurrency`).value) || 4,
+    show_reasoning: pane.showReasoning,
+  };
+  if (pane.mode === "eval") payload.day = state.day.day;
+  else payload.media_id = state.mediaId;
+
+  pane.controller = new AbortController();
+  $(`#${pane.mode}-run`).disabled = true;
+  $(`#${pane.mode}-stop`).hidden = false;
+  setStatus("прогон идёт…");
+
+  let response;
+  try {
+    response = await fetch(pane.mode === "eval" ? "/api/run" : "/api/media/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: pane.controller.signal,
+    });
+  } catch (err) {
+    setStatus("не удалось начать: " + err.message);
+    finishRun(pane);
+    return;
+  }
+  if (!response.ok) {
+    setStatus("ошибка: " + (await response.text()).slice(0, 120));
+    finishRun(pane);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data: ")) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); }
+        catch (err) { console.warn("не разобрал событие", line, err); continue; }
+        try { handleEvent(pane, event, collected, runs); }
+        catch (err) { console.error("ошибка обработки события", event, err); setStatus("сбой отрисовки: " + err.message); }
+      }
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") setStatus("поток оборвался: " + err.message);
+  }
+  renderSummary(pane, collected);
+  finishRun(pane);
+}
+
+function handleEvent(pane, event, collected, runs) {
+  if (event.type === "run_start") {
+    setStatus(`${(event.models || pane.chosen).length} модел. × ${event.runs}`);
+    return;
+  }
+  if (event.type === "run_done") {
+    setStatus("готово · " + money(event.total_cost_usd));
+    loadHistory();
+    return;
+  }
+  const entry = cardFor(pane, event.key, event.model, event.attempt, runs, event.effort);
+  if (event.type === "start") { entry.label = "запрос"; entry.dot.className = "dot think"; return; }
+  if (event.type === "reasoning") {
+    entry.label = "думает"; entry.dot.className = "dot think";
+    appendStream(entry.thinkPre, event.delta);
+    return;
+  }
+  if (event.type === "content") {
+    entry.label = pane.mode === "eval" ? "отвечает" : "описывает";
+    entry.dot.className = "dot write";
+    entry.answer.open = true;
+    appendStream(entry.answerPre, event.delta);
+    return;
+  }
+  if (event.type === "result" || event.type === "error") {
+    if (event.type === "error") event.status = event.status || "error";
+    collected.push({ ...event, type: "result" });
+    renderResult(entry, event);
+  }
+}
+
+function finishRun(pane) {
+  pane.controller = null;
+  $(`#${pane.mode}-run`).disabled = false;
+  $(`#${pane.mode}-stop`).hidden = true;
+  for (const entry of pane.cards.values()) clearInterval(entry.timer);
+}
+
+// ── history ───────────────────────────────────────────────────────────────
+async function loadHistory() {
+  const data = await (await fetch("/api/history")).json();
+  const box = $("#history");
+  box.textContent = "";
+  if (!data.history.length) { box.append(el("div", "empty", "пусто")); return; }
+  for (const item of data.history) {
+    const isMedia = item.kind === "media";
+    const b = el("button", "row");
+    b.append(el("div", "date", isMedia ? (item.media_filename || "медиа") : item.day));
+    b.append(el("div", "meta", `${(item.models || []).length} модел. · ${money(item.total_cost_usd)}`));
+    b.append(el("div", "tagline", isMedia ? "медиа" : "цитата дня"));
+    b.onclick = () => showHistory(item.id, isMedia ? "media" : "eval");
+    box.append(b);
+  }
+}
+
+async function showHistory(id, mode) {
+  const data = await (await fetch("/api/history/" + id)).json();
+  const pane = panes[mode];
+  setMode(mode);
+  $(`#${mode}-cards`).textContent = "";
+  pane.cards.clear();
+  for (const r of data.results || []) {
+    const entry = cardFor(pane, r.key || `${r.model}#${r.attempt}`, r.model, r.attempt, data.runs, r.effort);
+    entry.think.remove();
+    entry.answerPre.textContent = r.raw_content || r.description || "";
+    renderResult(entry, r);
+  }
+  renderSummary(pane, data.results || []);
+  setStatus(`история ${data.day || (data.media || {}).filename || ""} · ${money(data.total_cost_usd)}`);
+}
+
+// ── wiring ────────────────────────────────────────────────────────────────
+for (const pane of Object.values(panes)) {
+  const seg = document.querySelector(`[data-effort="${pane.mode}"]`);
+  for (const [value, label] of EFFORTS) {
+    const b = el("button", null, label);
+    b.dataset.v = value;
+    if (value === "") b.setAttribute("aria-pressed", "true");
+    seg.append(b);
+  }
+  seg.onclick = (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    pane.effort = btn.dataset.v;
+    seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+    renderChosen(pane);
+  };
+
+  const reasoningSeg = document.querySelector(`[data-reasoning="${pane.mode}"]`);
+  reasoningSeg.onclick = (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    pane.showReasoning = btn.dataset.v === "1";
+    reasoningSeg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+  };
+
+  $(`#${pane.mode}-filter`).oninput = () => renderModelList(pane);
+  $(`#${pane.mode}-sort`).onchange = () => renderModelList(pane);
+  $(`#${pane.mode}-free`).onchange = () => renderModelList(pane);
+  $(`#${pane.mode}-runs`).oninput = () => refreshRun(pane);
+  $(`#${pane.mode}-manual`).onclick = () => {
+    const id = prompt("id модели на OpenRouter, например z-ai/glm-5.3-flash");
+    if (id) toggleModel(pane, id.trim());
+  };
+  $(`#${pane.mode}-run`).onclick = () => run(pane);
+  $(`#${pane.mode}-stop`).onclick = () => { pane.controller?.abort(); setStatus("остановлено"); finishRun(pane); };
+}
+
+$("#eval-structured").onchange = () => renderModelList(panes.eval);
+$("#media-all").onchange = (e) => { panes.media.allModalities = e.target.checked; renderModelList(panes.media); };
+$("#tabs").onclick = (e) => { const btn = e.target.closest("button"); if (btn) setMode(btn.dataset.mode); };
+$("#drop").onclick = () => $("#fileInput").click();
+$("#fileInput").onchange = (e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ""; };
+$("#drop").ondragover = (e) => { e.preventDefault(); $("#drop").classList.add("over"); };
+$("#drop").ondragleave = () => $("#drop").classList.remove("over");
+$("#drop").ondrop = (e) => {
+  e.preventDefault();
+  $("#drop").classList.remove("over");
+  if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
+};
+
+loadDays().catch((e) => setStatus("дни: " + e.message));
+loadModels().catch((e) => setStatus("каталог: " + e.message));
+loadMedia().catch((e) => setStatus("медиа: " + e.message));
+loadHistory().catch(() => {});
+</script>
+</body>
+</html>

@@ -10,6 +10,60 @@ GitHub Releases.
 
 Use this section for changes that are merged but not released yet.
 
+### Changed
+- Media description prompts now cast the model as the eyes and ears of someone
+  who can't see or hear the file: on-screen text and speech must be quoted
+  verbatim (screenshots of chats keep every line with its sender), unclear
+  audio is marked `[неразборчиво]` instead of guessed, and the length caps grow
+  to 1200 characters when there is a lot of text or speech (the payload still
+  clips descriptions at 1500). `MEDIA_CACHE_PROMPT_VERSION` is deliberately
+  left at `v2`, so already-described files keep their old descriptions.
+
+### Removed
+- Legacy `OPENROUTER_MODEL` setting. The quote evaluation model is now read only
+  from `OPENROUTER_EVAL_MODEL`, whose default is `poolside/laguna-s-2.1:free`;
+  a blank value falls back to that default. Previously the two settings aliased
+  each other at startup and whatever was written into `OPENROUTER_MODEL` was
+  silently overwritten.
+
+### Added
+- `scripts/bench_web.py` + `scripts/bench_web_ui.html`: a local web hub for
+  picking an eval model. Lists the days recorded in `logs/ai_audit.jsonl`, shows
+  the day's messages and what production picked, runs any set of models against
+  that day with a chosen reasoning effort, streams each model's reasoning and
+  answer live, then compares the picked quotes with tokens, cost and timing.
+  Runs are archived under `logs/bench_runs/`. Read-only, and it sends nothing
+  until Run is pressed. Sampling temperature is never set, matching production.
+  Each selected model can carry its own reasoning effort (or follow the global
+  one), and the catalog sorts by release date, alphabetically or by price, with
+  filters for structured-output support and free models.
+  A second, fully separate tab benchmarks media description: upload an image,
+  video or audio file, watch it go through the bot's own normalization pipeline
+  (resize, re-encode), and compare how each model describes it and at what cost.
+  Each tab keeps its own model selection, efforts, settings and results, since
+  the two jobs need different models. The media tab narrows the catalog to the
+  input modality the uploaded file needs; image-generating models (anything
+  that answers with pictures) and `:batch` tier ids (refused by
+  `/chat/completions`) are dropped from the catalog entirely. The effort picker
+  offers only the efforts a model actually accepts, read from the catalog's
+  `reasoning` block, and flags models where reasoning is mandatory or where the
+  effort is ignored. When a model asks for context, the card shows the whole
+  context block in the exact order production would publish it, reusing
+  `scoring._valid_context_messages` so the two can't drift apart. The summary
+  table sorts by price ascending out of the box, and every column header is a
+  sort toggle; rows without a value (failures) always sink to the bottom.
+- `scripts/compare_eval_models.py`: replays days saved in `logs/ai_audit.jsonl`
+  against several eval models in parallel and prints, per model, the quote it
+  picked, the day verdict, token usage and the dollar cost. Read-only — nothing
+  is written to the database.
+- Token usage and cost of the winning eval call are now requested from
+  OpenRouter (`usage.include`) and stored on `ai_evaluation_runs`
+  (`prompt_tokens`, `completion_tokens`, `reasoning_tokens`, `total_tokens`,
+  `cost_usd`); migration `20260907_01`.
+- Startup warning for renamed env keys (`OPENROUTER_MODEL`,
+  `OPENROUTER_REASONING_EFFORT`). `extra="ignore"` used to swallow them, so a
+  stale `.env` kept settings that had stopped applying.
+
 ## v0.10.3 - 2026-08-22
 
 ### Added
@@ -45,6 +99,51 @@ Use this section for changes that are merged but not released yet.
 ## Unreleased
 
 Use this section for changes that are merged but not released yet.
+
+### Removed
+- Legacy `OPENROUTER_MODEL` setting. The quote evaluation model is now read only
+  from `OPENROUTER_EVAL_MODEL`, whose default is `poolside/laguna-s-2.1:free`;
+  a blank value falls back to that default. Previously the two settings aliased
+  each other at startup and whatever was written into `OPENROUTER_MODEL` was
+  silently overwritten.
+
+### Added
+- `scripts/bench_web.py` + `scripts/bench_web_ui.html`: a local web hub for
+  picking an eval model. Lists the days recorded in `logs/ai_audit.jsonl`, shows
+  the day's messages and what production picked, runs any set of models against
+  that day with a chosen reasoning effort, streams each model's reasoning and
+  answer live, then compares the picked quotes with tokens, cost and timing.
+  Runs are archived under `logs/bench_runs/`. Read-only, and it sends nothing
+  until Run is pressed. Sampling temperature is never set, matching production.
+  Each selected model can carry its own reasoning effort (or follow the global
+  one), and the catalog sorts by release date, alphabetically or by price, with
+  filters for structured-output support and free models.
+  A second, fully separate tab benchmarks media description: upload an image,
+  video or audio file, watch it go through the bot's own normalization pipeline
+  (resize, re-encode), and compare how each model describes it and at what cost.
+  Each tab keeps its own model selection, efforts, settings and results, since
+  the two jobs need different models. The media tab narrows the catalog to the
+  input modality the uploaded file needs; image-generating models (anything
+  that answers with pictures) and `:batch` tier ids (refused by
+  `/chat/completions`) are dropped from the catalog entirely. The effort picker
+  offers only the efforts a model actually accepts, read from the catalog's
+  `reasoning` block, and flags models where reasoning is mandatory or where the
+  effort is ignored. When a model asks for context, the card shows the whole
+  context block in the exact order production would publish it, reusing
+  `scoring._valid_context_messages` so the two can't drift apart. The summary
+  table sorts by price ascending out of the box, and every column header is a
+  sort toggle; rows without a value (failures) always sink to the bottom.
+- `scripts/compare_eval_models.py`: replays days saved in `logs/ai_audit.jsonl`
+  against several eval models in parallel and prints, per model, the quote it
+  picked, the day verdict, token usage and the dollar cost. Read-only — nothing
+  is written to the database.
+- Token usage and cost of the winning eval call are now requested from
+  OpenRouter (`usage.include`) and stored on `ai_evaluation_runs`
+  (`prompt_tokens`, `completion_tokens`, `reasoning_tokens`, `total_tokens`,
+  `cost_usd`); migration `20260907_01`.
+- Startup warning for renamed env keys (`OPENROUTER_MODEL`,
+  `OPENROUTER_REASONING_EFFORT`). `extra="ignore"` used to swallow them, so a
+  stale `.env` kept settings that had stopped applying.
 
 ## v0.10.1 - 2026-07-21
 

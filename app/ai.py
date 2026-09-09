@@ -7,7 +7,7 @@ import os
 import random
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -101,23 +101,30 @@ _INJECTION_GUARD = (
 )
 
 _IMAGE_DESCRIPTION_PROMPT = (
-    "Статичное изображение. Опиши только факты: кто/что видно, действие, место, важные детали и надписи. "
-    "2-4 коротких предложения, только описание."
+    "Ты — глаза того, кто не видит картинку. Опиши всё, что важно для понимания: "
+    "кто, что делает, где, заметные детали. Текст на изображении приводи дословно; "
+    "если это скриншот переписки — все реплики по порядку, с именами. "
+    "Без догадок и оценок. 2-4 предложения, при обилии текста — до 1200 символов."
 )
 
 _STICKER_DESCRIPTION_PROMPT = (
-    "Telegram-стикер или мем-картинка. Опиши персонажа/объект, эмоцию, позу, надпись и мемный смысл. "
-    "1-2 коротких предложения, только описание."
+    "Стикер или мем. Ты — глаза того, кто его не видит: персонаж, эмоция, поза, "
+    "происходящее; надпись — дословно. Узнаваемый мем назови. "
+    "1-2 предложения, без оценок."
 )
 
 _VIDEO_DESCRIPTION_PROMPT = (
-    "Видео, анимация или видеокружок. Опиши по порядку события, людей/объекты, действия, место, надписи, "
-    "речь и звуки. Если речь плохо слышна, укажи это. 4-6 коротких предложений, только описание."
+    "Видео, гифка или кружок. Ты — глаза и уши того, кто не видит и не слышит. "
+    "По порядку: кто в кадре, действия, место, смены сцен. Речь и надписи — дословно, "
+    "с указанием говорящих; неразборчивое помечай [неразборчиво]. Без догадок. "
+    "4-6 предложений, при обилии речи — до 1200 символов."
 )
 
 _AUDIO_DESCRIPTION_PROMPT = (
-    "Только аудио. Опиши речь кратким пересказом или ключевыми фразами в кавычках, тон, паузы, смех "
-    "и фоновые звуки. Если речь плохо слышна, укажи это. 1-4 коротких предложения, только слышимое."
+    "Только звук. Ты — уши того, кто не слышит запись. Речь — дословно, с указанием "
+    "говорящих; неразборчивое помечай [неразборчиво]. Кратко отметь тон, смех, паузы, "
+    "фоновые звуки. Без пересказа и оценок. "
+    "1-4 предложения, при длинной речи — до 1200 символов."
 )
 
 _SCORE_RESPONSE_SCHEMA = {
@@ -211,6 +218,34 @@ class InterfaceLanguageChoice:
     interface_language: str = i18n.DEFAULT_LANGUAGE
 
 
+@dataclass(frozen=True)
+class TokenUsage:
+    """What one OpenRouter call actually consumed, as reported by the API."""
+
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: float | None = None
+
+
+def _extract_usage(data: dict[str, Any]) -> TokenUsage:
+    usage = data.get("usage") or {}
+    if not isinstance(usage, dict):
+        return TokenUsage()
+    completion_details = usage.get("completion_tokens_details") or {}
+    cost = usage.get("cost")
+    return TokenUsage(
+        prompt_tokens=_optional_int(usage.get("prompt_tokens")),
+        completion_tokens=_optional_int(usage.get("completion_tokens")),
+        reasoning_tokens=_optional_int(
+            completion_details.get("reasoning_tokens") if isinstance(completion_details, dict) else None
+        ),
+        total_tokens=_optional_int(usage.get("total_tokens")),
+        cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
+    )
+
+
 @dataclass
 class EvaluationResult:
     scores: dict[int, float]
@@ -222,6 +257,7 @@ class EvaluationResult:
     day_verdict_error: str | None = None
     quote_choice: QuoteContextChoice | None = None
     language_choice: InterfaceLanguageChoice | None = None
+    usage: TokenUsage = field(default_factory=TokenUsage)
 
 
 class DayVerdictParseError(ValueError):
@@ -497,6 +533,8 @@ async def _evaluate_with_model(
             {"role": "user", "content": user_payload},
         ],
         "response_format": response_format,
+        # Makes OpenRouter return token counts and the dollar cost of this call.
+        "usage": {"include": True},
     }
     if max_tokens > 0:
         body["max_tokens"] = max_tokens
@@ -508,6 +546,7 @@ async def _evaluate_with_model(
         }
 
     max_retries = 3
+    usage = TokenUsage()
 
     for attempt in range(max_retries):
         audit_record: dict[str, Any] = {
@@ -536,6 +575,8 @@ async def _evaluate_with_model(
                 response.raise_for_status()
 
             data = response.json()
+            usage = _extract_usage(data)
+            audit_record["usage"] = asdict(usage)
             actual_model = data.get("model", model)
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             content = content.strip()
@@ -567,6 +608,7 @@ async def _evaluate_with_model(
                     scores=neutral_scores,
                     actual_model=actual_model,
                     requested_model=requested_model,
+                    usage=usage,
                     status="ai_failed",
                     request_id=request_id,
                     day_verdict=default_verdict if not include_day_verdict else None,
@@ -605,6 +647,7 @@ async def _evaluate_with_model(
                 actual_model=actual_model,
                 requested_model=requested_model,
                 status="parsed",
+                usage=usage,
                 request_id=request_id,
                 day_verdict=verdict,
                 day_verdict_error=verdict_error,
@@ -657,6 +700,7 @@ async def _evaluate_with_model(
                 actual_model=actual_model,
                 requested_model=requested_model,
                 status="parse_failed",
+                usage=usage,
                 request_id=request_id,
                 day_verdict=default_verdict if not include_day_verdict else None,
                 day_verdict_error=(
@@ -679,6 +723,7 @@ async def _evaluate_with_model(
         actual_model=model,
         requested_model=requested_model,
         status="ai_failed",
+        usage=usage,
         request_id=request_id,
         day_verdict=default_verdict if not include_day_verdict else None,
         day_verdict_error=(

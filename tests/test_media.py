@@ -459,36 +459,47 @@ class AIMediaPayloadTests(unittest.TestCase):
     def test_media_description_prompt_is_audio_only_for_voice(self) -> None:
         prompt = ai._media_description_prompt("voice")
 
-        self.assertIn("Только аудио", prompt)
-        self.assertIn("ключевыми фразами", prompt)
-        self.assertIn("1-4 коротких предложения", prompt)
+        self.assertIn("Только звук", prompt)
+        # Verbatim speech is the point: a paraphrase loses the quotable line.
+        self.assertIn("дословно", prompt)
+        self.assertIn("[неразборчиво]", prompt)
+        self.assertIn("1-4 предложения", prompt)
         self.assertNotIn("Запрещено", prompt)
 
     def test_media_description_prompt_is_visual_only_for_photo(self) -> None:
         prompt = ai._media_description_prompt("photo")
 
-        self.assertIn("Статичное изображение", prompt)
-        self.assertIn("Опиши только факты", prompt)
-        self.assertIn("надписи", prompt)
-        self.assertIn("2-4 коротких предложения", prompt)
+        self.assertIn("не видит картинку", prompt)
+        self.assertIn("дословно", prompt)
+        self.assertIn("скриншот переписки", prompt)
+        self.assertIn("2-4 предложения", prompt)
         self.assertNotIn("атмосфер", prompt.lower())
         self.assertNotIn("Не выдумывай", prompt)
 
     def test_media_description_prompt_is_video_specific_for_video_note(self) -> None:
         prompt = ai._media_description_prompt("video_note")
 
-        self.assertIn("Видео, анимация или видеокружок", prompt)
-        self.assertIn("по порядку", prompt)
-        self.assertIn("речь и звуки", prompt)
-        self.assertIn("4-6 коротких предложений", prompt)
+        self.assertIn("Видео, гифка или кружок", prompt)
+        self.assertIn("По порядку", prompt)
+        self.assertIn("Речь и надписи — дословно", prompt)
+        self.assertIn("[неразборчиво]", prompt)
+        self.assertIn("4-6 предложений", prompt)
 
     def test_media_description_prompt_is_sticker_specific(self) -> None:
         prompt = ai._media_description_prompt("sticker")
 
-        self.assertIn("Telegram-стикер", prompt)
-        self.assertIn("мем", prompt)
-        self.assertIn("эмоцию", prompt)
-        self.assertIn("1-2 коротких предложения", prompt)
+        self.assertIn("Стикер или мем", prompt)
+        self.assertIn("эмоция", prompt)
+        self.assertIn("дословно", prompt)
+        self.assertIn("1-2 предложения", prompt)
+
+    def test_every_media_prompt_fits_the_payload_cap(self) -> None:
+        # Prompts advertise 1200 chars; the payload clips descriptions at 1500.
+        for kind in ("photo", "sticker", "video", "voice"):
+            prompt = ai._media_description_prompt(kind)
+            self.assertLess(len(prompt), 400, kind)
+            if kind != "sticker":
+                self.assertIn("1200 символов", prompt)
 
 
 class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
@@ -558,8 +569,8 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.prompt_tokens, 100)
         self.assertEqual(captured_body["model"], "google/gemini-3.1-flash-lite")
         self.assertEqual(captured_body["reasoning"], {"enabled": True, "effort": "medium", "exclude": True})
-        self.assertIn("Статичное изображение", captured_body["messages"][0]["content"][0]["text"])
-        self.assertIn("2-4 коротких предложения", captured_body["messages"][0]["content"][0]["text"])
+        self.assertIn("не видит картинку", captured_body["messages"][0]["content"][0]["text"])
+        self.assertIn("2-4 предложения", captured_body["messages"][0]["content"][0]["text"])
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "image_url")
         self.assertEqual(captured_headers["HTTP-Referer"], "https://t.me/quototbot")
         self.assertEqual(captured_headers["X-OpenRouter-Title"], "Quoto")
@@ -612,9 +623,9 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.description, "Слышен мужской голос: «тест». Фон тихий.")
         prompt = captured_body["messages"][0]["content"][0]["text"]
-        self.assertIn("Только аудио", prompt)
-        self.assertIn("ключевыми фразами", prompt)
-        self.assertIn("1-4 коротких предложения", prompt)
+        self.assertIn("Только звук", prompt)
+        self.assertIn("дословно", prompt)
+        self.assertIn("1-4 предложения", prompt)
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "input_audio")
 
     async def test_describe_media_file_falls_back_to_secondary_model_after_primary_failure(self) -> None:

@@ -12,6 +12,17 @@ from .windows import QuoteWindow, utc_now
 log = setup_logging(logging.getLogger(__name__))
 
 
+def _usage_fields(evaluation: Any) -> dict[str, Any]:
+    """Token counts and cost of the winning call; empty when the API withheld them."""
+    usage = getattr(evaluation, "usage", None)
+    if usage is None:
+        return {}
+    return {
+        field: getattr(usage, field, None)
+        for field in ("prompt_tokens", "completion_tokens", "reasoning_tokens", "total_tokens", "cost_usd")
+    }
+
+
 async def save_evaluation_report(
     *,
     group_id: int,
@@ -30,6 +41,7 @@ async def save_evaluation_report(
     context_internal_ids = _context_internal_ids(quote_choice)
     context_telegram_ids = _context_telegram_ids(context_internal_ids, scored_messages)
     status = getattr(evaluation, "status", None) or "parsed"
+    usage = _usage_fields(evaluation)
 
     run = models.AIEvaluationRun(
         group_id=group_id,
@@ -37,9 +49,14 @@ async def save_evaluation_report(
         quote_day=window.quote_day,
         window_start_at=window.start_utc,
         window_end_at=window.end_utc,
-        requested_model=getattr(evaluation, "requested_model", None) or settings.OPENROUTER_MODEL,
-        actual_model=getattr(evaluation, "actual_model", None) or settings.OPENROUTER_MODEL,
+        requested_model=getattr(evaluation, "requested_model", None) or settings.OPENROUTER_EVAL_MODEL,
+        actual_model=getattr(evaluation, "actual_model", None) or settings.OPENROUTER_EVAL_MODEL,
         status=status,
+        prompt_tokens=usage.get("prompt_tokens"),
+        completion_tokens=usage.get("completion_tokens"),
+        reasoning_tokens=usage.get("reasoning_tokens"),
+        total_tokens=usage.get("total_tokens"),
+        cost_usd=usage.get("cost_usd"),
         message_count=len(scored_messages),
         source_message_count=len(source_messages),
         selected_message_db_id=selected_message.id if selected_message else None,

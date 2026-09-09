@@ -86,6 +86,68 @@ class DayVerdictParsingTests(unittest.TestCase):
         self.assertEqual(language_choice.interface_language, "uk")
 
 
+class AIUsageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_evaluate_messages_reports_tokens_and_cost(self) -> None:
+        captured_body: dict | None = None
+
+        class FakeResponse:
+            status_code = 200
+            text = "{}"
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {
+                    "model": "openrouter/test",
+                    "choices": [{"message": {"content": '[{"id":1,"score":6}]'}}],
+                    "usage": {
+                        "prompt_tokens": 1200,
+                        "completion_tokens": 450,
+                        "total_tokens": 1650,
+                        "cost": 0.00042,
+                        "completion_tokens_details": {"reasoning_tokens": 300},
+                    },
+                }
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def post(self, *_args, **kwargs):
+                nonlocal captured_body
+                captured_body = kwargs["json"]
+                return FakeResponse()
+
+        with (
+            patch.object(ai.settings, "OPENROUTER_API_KEY", "test-key"),
+            patch.object(ai.settings, "OPENROUTER_EVAL_MODEL", "openrouter/test"),
+            patch.object(ai.httpx, "AsyncClient", return_value=FakeClient()),
+        ):
+            result = await ai.evaluate_messages(
+                [{"id": 1, "author": "Alice", "text": "quote"}],
+                include_day_verdict=False,
+            )
+
+        self.assertEqual(captured_body["usage"], {"include": True})
+        self.assertEqual(result.usage.prompt_tokens, 1200)
+        self.assertEqual(result.usage.completion_tokens, 450)
+        self.assertEqual(result.usage.reasoning_tokens, 300)
+        self.assertEqual(result.usage.total_tokens, 1650)
+        self.assertAlmostEqual(result.usage.cost_usd, 0.00042)
+
+    def test_extract_usage_tolerates_missing_fields(self) -> None:
+        self.assertEqual(ai._extract_usage({}), ai.TokenUsage())
+        self.assertEqual(ai._extract_usage({"usage": "nope"}), ai.TokenUsage())
+        partial = ai._extract_usage({"usage": {"prompt_tokens": 10}})
+        self.assertEqual(partial.prompt_tokens, 10)
+        self.assertIsNone(partial.cost_usd)
+        self.assertIsNone(partial.reasoning_tokens)
+
+
 class AIRetryTests(unittest.IsolatedAsyncioTestCase):
     async def test_evaluate_messages_sends_reactions_when_present(self) -> None:
         captured_body: dict | None = None
