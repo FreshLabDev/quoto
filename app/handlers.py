@@ -210,17 +210,28 @@ def _format_context_lines(context_messages: list[dict[str, object]], language: s
 
 
 def _format_chat_stats_text(language: str, stats: dict[str, object] | None) -> str:
+    """The chat tab of the stats screen, built by the panel helper like every
+    other screen: title, hint, and the numbers in one blockquote."""
+    title = i18n.t(language, "stats.title")
+    hint = i18n.t(language, "stats.hint")
+
     if not stats:
-        return i18n.t(language, "stats.missing")
+        return menu.panel(title, hint, [i18n.t(language, "stats.missing")])
 
     if int(stats["total_quotes"]) == 0:
-        return i18n.t(language, "stats.empty")
+        return menu.panel(title, hint, [i18n.t(language, "stats.empty")])
 
     medals = ["🥇", "🥈", "🥉"]
-    top_lines = []
+    lines = [
+        i18n.t(language, "stats.total_quotes", count=stats["total_quotes"]),
+        i18n.t(language, "stats.unique_authors", count=stats["unique_authors"]),
+        i18n.t(language, "stats.avg_score", score=stats["avg_score"] * 10),
+        "",
+        i18n.t(language, "stats.top_authors"),
+    ]
     for i, author in enumerate(stats["top_authors"]):
         medal = medals[i] if i < len(medals) else f"{i + 1}."
-        top_lines.append(
+        lines.append(
             i18n.t(
                 language,
                 "stats.author_row",
@@ -230,52 +241,54 @@ def _format_chat_stats_text(language: str, stats: dict[str, object] | None) -> s
                 score=author["avg_score"] * 10,
             )
         )
-    top_text = "\n".join(top_lines)
-
-    text = (
-        f"{i18n.t(language, 'stats.title')}\n\n"
-        f"{i18n.t(language, 'stats.total_quotes', count=stats['total_quotes'])}\n"
-        f"{i18n.t(language, 'stats.unique_authors', count=stats['unique_authors'])}\n"
-        f"{i18n.t(language, 'stats.avg_score', score=stats['avg_score'] * 10)}\n\n"
-        f"{i18n.t(language, 'stats.top_authors')}\n{top_text}"
-    )
 
     if stats.get("best_quote"):
         bq = stats["best_quote"]
         quote_text = bq["text"][:80] + ("…" if len(bq["text"]) > 80 else "")
-        text += (
-            f"\n\n{i18n.t(language, 'stats.best_quote')}\n"
-            f"<blockquote><i>«{_html(quote_text)}»</i>\n"
-            f"— {_html(bq['author'])} · {bq['score'] * 10:.1f}/10</blockquote>"
+        lines.extend(
+            [
+                "",
+                i18n.t(language, "stats.best_quote"),
+                f"<i>«{_html(quote_text)}»</i>",
+                f"— {_html(bq['author'])} · {bq['score'] * 10:.1f}/10",
+            ]
         )
 
-    return text
+    return menu.panel(title, hint, lines)
 
 
 def _format_user_stats_text(language: str, stats: dict[str, object] | None) -> str:
+    """The personal tab of the stats screen, in the same shape."""
+    title = i18n.t(language, "user_stats.title")
+    hint = i18n.t(language, "user_stats.hint")
+
     if not stats:
-        return i18n.t(language, "user_stats.missing")
+        return menu.panel(title, hint, [i18n.t(language, "user_stats.missing")])
 
     if int(stats["wins"]) == 0:
-        return i18n.t(language, "user_stats.empty", user=_html(stats["user_name"]))
+        return menu.panel(
+            title, hint, [i18n.t(language, "user_stats.empty", user=_html(stats["user_name"]))]
+        )
 
-    text = (
-        f"{i18n.t(language, 'user_stats.title')}\n\n"
-        f"{i18n.t(language, 'user_stats.user', user=_html(stats['user_name']))}\n"
-        f"{i18n.t(language, 'user_stats.wins', count=stats['wins'])}\n"
-        f"{i18n.t(language, 'user_stats.avg_score', score=stats['avg_score'] * 10)}\n"
-        f"{i18n.t(language, 'user_stats.rank', rank=stats['rank'], total=stats['total_participants'])}"
-    )
+    lines = [
+        i18n.t(language, "user_stats.user", user=_html(stats["user_name"])),
+        i18n.t(language, "user_stats.wins", count=stats["wins"]),
+        i18n.t(language, "user_stats.avg_score", score=stats["avg_score"] * 10),
+        i18n.t(language, "user_stats.rank", rank=stats["rank"], total=stats["total_participants"]),
+    ]
 
     if stats.get("best_quote"):
         bq = stats["best_quote"]
         quote_text = bq["text"][:80] + ("…" if len(bq["text"]) > 80 else "")
-        text += (
-            f"\n\n{i18n.t(language, 'user_stats.best_quote')}\n"
-            f"<blockquote><i>«{_html(quote_text)}»</i> · {bq['score'] * 10:.1f}/10</blockquote>"
+        lines.extend(
+            [
+                "",
+                i18n.t(language, "user_stats.best_quote"),
+                f"<i>«{_html(quote_text)}»</i> · {bq['score'] * 10:.1f}/10",
+            ]
         )
 
-    return text
+    return menu.panel(title, hint, lines)
 
 
 def _decision_status_label(language: str, status: str) -> str:
@@ -520,7 +533,7 @@ async def private_handler(
             safe_model_short = _html(model_short)
 
             created = detail["created_at"]
-            date_str = f"{created.day} {i18n.month_name(language, created.month)} {created.year}"
+            date_str = i18n.format_date(language, created, with_year=True)
 
             link_chat_id = None
             if detail.get("message_id") and detail.get("chat_id"):
@@ -676,8 +689,14 @@ async def start_menu_callback(callback: types.CallbackQuery, bot: Bot):
 
         if parsed.action == menu.ACTION_AUTO_PRIVATE_LANGUAGE:
             await core.clear_user_language(user.id)
-            language = i18n.language_or_default(getattr(user, "language_code", None))
-            language_source = None
+            # Ask core what answers now rather than assuming the Telegram hint.
+            # clear_language withdraws quoto's claim and nobody else's, so a
+            # sibling bot's manual choice survives it and then wins -- and this
+            # screen has to redraw in the language the reader is about to get,
+            # with the source line saying where it came from.
+            language, language_source = await core.user_language_state(
+                user.id, getattr(user, "language_code", None)
+            )
             await _show_private(menu.SECTION_LANGUAGE, i18n.t(language, "settings.updated"))
             return
 

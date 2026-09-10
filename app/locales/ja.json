@@ -1,0 +1,257 @@
+{
+  "language_name": "日本語",
+  "months": [
+    "1月",
+    "2月",
+    "3月",
+    "4月",
+    "5月",
+    "6月",
+    "7月",
+    "8月",
+    "9月",
+    "10月",
+    "11月",
+    "12月"
+  ],
+  "common": {
+    "anonymous": "匿名",
+    "original": "元メッセージ",
+    "details": "詳細"
+  },
+  "command": {
+    "start_private": "Quoto を開く",
+    "start_group": "Quoto パネルを開く"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "自分の統計",
+      "chat_stats": "チャットの統計",
+      "stats": "統計",
+      "back": "戻る",
+      "about": "情報",
+      "agreement": "利用規約",
+      "close": "閉じる"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "グループチャットで今日の名言を選びます。グループに追加して、そこで /start を開いてください。",
+      "language": "表示言語: <b>{language_name}</b>"
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "チャットを見ていて、一日の終わりにいちばんいい一言を投稿します。統計と設定は下にあります。",
+      "user_body": "チャットを見ていて、一日の終わりにいちばんいい一言を投稿します。",
+      "language_line": "言語: <b>{language_name}</b>",
+      "schedule_line": "その日のまとめは <b>{time}</b> · <b>{min_messages}</b> 件のメッセージから"
+    },
+    "language": {
+      "title": "グループの言語",
+      "hint": "このグループで私が話す言語を選んでください。",
+      "source_auto": "自動で判定",
+      "source_manual": "手動で設定",
+      "source_default": "デフォルト · English",
+      "updated": "言語を {language_name} に変更しました。",
+      "invalid": "その言語は分かりません。"
+    },
+    "other_user": "自分のメニューは /start で開いてください。",
+    "group_context_required": "グループチャットで開いてください。"
+  },
+  "settings": {
+    "updated": "完了。",
+    "invalid": "それはできません。",
+    "button": {
+      "language": "言語",
+      "quote_day": "今日の名言",
+      "publication": "投稿",
+      "context": "文脈",
+      "boring_notice": "退屈な日",
+      "pin": "ピン留め",
+      "timezone": "タイムゾーン",
+      "media": "メディア"
+    },
+    "private": {
+      "language_title": "表示言語",
+      "language_hint": "Telegram の言語のままにするか、手動で選んでください。",
+      "telegram_language": "Telegram の言語",
+      "language_source_manual": "手動で設定",
+      "language_source_telegram": "Telegram の言語"
+    },
+    "group": {
+      "language_auto": "自動で判定する",
+      "language_auto_updated": "次の評価のときに私が言語を判定します。",
+      "context": {
+        "short": "文脈",
+        "explain": "文脈とは、AI が選んだ勝者の一言の前後のメッセージです。五件を超える場合は、名言そのものの周りだけに絞ります。"
+      },
+      "boring_notice": {
+        "short": "退屈な日"
+      },
+      "pin": {
+        "short": "ピン留め"
+      },
+      "media": {
+        "short": "メディア"
+      },
+      "quote_day": {
+        "title": "今日の名言",
+        "hint": "一日を締める時刻と、評価に必要なメッセージ数です。"
+      },
+      "publication": {
+        "title": "投稿",
+        "hint": "結果をグループでどう見せるかです。"
+      },
+      "time": {
+        "line": "その日のまとめ: <b>{time}</b>",
+        "timezone": "タイムゾーン: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "line": "最低: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "タイムゾーン",
+        "hint": "このタイムゾーンで一日の区切りと締め時刻を計算します。"
+      }
+    }
+  },
+  "status": {
+    "published": "✅ 投稿しました",
+    "skipped_boring": "😴 退屈な日",
+    "publish_failed": "⚠️ 投稿できませんでした",
+    "boring_notice_failed": "⚠️ お知らせを送れませんでした",
+    "publish_unknown": "⚠️ 投稿は未確認です",
+    "boring_notice_unknown": "⚠️ お知らせは未確認です"
+  },
+  "admin": {
+    "admin_only": "これを変えられるのは管理者だけです。"
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\n<b>{chat_title}</b> に参加できてうれしいです。毎日 <b>{time}</b> にいちばん輝いた一言を選んで、今日の名言を投稿します。\n\n/start を開いてください。統計と設定はそこにあります。",
+    "need_admin": "⚠️ メッセージを<i>ピン留め</i>できる<b>管理者</b>にしてください。そうすれば結果を投稿できます。",
+    "admin_granted": "ありがとうございます！これで今日の名言を投稿できます。"
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ 名言のリンクが正しくありません。",
+    "quote_not_found": "⚠️ 名言が見つかりません。",
+    "add_to_group": "グループに追加",
+    "hello": "<b>Quoto</b>\n\nグループチャットで今日の名言を選びます。一日のメッセージを集めて、決まった時刻にいちばんいい一言を投稿します。\n\nグループに追加して、そこで /start を開いてください。"
+  },
+  "details": {
+    "title": "<b>{id} 日目</b>",
+    "total": "合計",
+    "reactions": "反応",
+    "length": "長さ",
+    "decision_reason": "判断の理由",
+    "operation_error": "技術的なエラー",
+    "ai_choice": "AI の選択"
+  },
+  "start": {
+    "group": "<b>Quoto — 今日の名言</b>\n\n一日のメッセージを集めて、一日の終わりにいちばんいい一言を選びます。\n\n/start を開くとコントロールパネルが出ます。"
+  },
+  "stats": {
+    "missing": "統計はまだありません。このグループは登録されていません。",
+    "empty": "このチャットにはまだ投稿された名言がありません。",
+    "title": "チャットの統計",
+    "hint": "チャット全体がこれまでに集めたものです。",
+    "total_quotes": "名言の総数: <b>{count}</b>",
+    "unique_authors": "作者: <b>{count}</b>",
+    "avg_score": "平均点: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>作者ランキング</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>ベスト名言</b>"
+  },
+  "user_stats": {
+    "missing": "統計はまだありません。",
+    "empty": "<b>{user}</b> さん、このチャットではまだ名言が選ばれていません。\n書き続けてください。きっと出番が来ます。",
+    "title": "あなたの統計",
+    "hint": "このチャットでのあなたの今日の名言です。",
+    "user": "<b>{user}</b>",
+    "wins": "受賞: <b>{count}</b>",
+    "avg_score": "平均点: <b>{score:.1f}/10</b>",
+    "rank": "順位: <b>{rank}</b> / {total}",
+    "best_quote": "<b>ベスト名言</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>今日の名言</b>",
+      "photo": "🏆 <b>今日の一枚</b>",
+      "video": "🏆 <b>今日の一本</b>",
+      "voice": "🏆 <b>今日のボイス</b>",
+      "audio": "🏆 <b>今日のオーディオ</b>"
+    },
+    "context_truncated": "ℹ️ {total} 件のうち最後の {shown} 件を数えました — 量が多いので文脈を短くしています。"
+  },
+  "boring": {
+    "title": "😴 <b>今日は名言なしです</b>",
+    "body": "その日にふさわしい一言が見つかりませんでした。また明日！"
+  },
+  "about": {
+    "tagline": "チャットに書かれたものから選ぶ、今日の名言。",
+    "eval": "評価",
+    "sources": "ソース",
+    "admin": "管理者"
+  },
+  "agreement": {
+    "title": "Quoto — 利用規約とプライバシー",
+    "summary": "このグループで Quoto を使うと、以下の条件に同意したことになります。",
+    "sections": [
+      {
+        "heading": "Quoto がすること",
+        "text": "日中はこのグループに送られたメッセージを読み、決まった時刻に「今日の名言」を一つ投稿します。"
+      },
+      {
+        "heading": "処理する内容",
+        "text": "今日の名言を選ぶために、次のものを処理します:",
+        "items": [
+          "メッセージの本文とキャプション",
+          "メッセージへのリアクション",
+          "メディア: 写真、動画、ボイスメッセージ、音声",
+          "作者の名前と Telegram ID",
+          "グループの ID と名前"
+        ]
+      },
+      {
+        "heading": "AI による処理",
+        "text": "名言を選ぶため、メッセージの本文とメディアは分析のために AI プロバイダーの OpenRouter とそのモデル提供元に送信されます。",
+        "note": "Quoto が動いているチャットでは、パスワードや機密情報を書かないでください。"
+      },
+      {
+        "heading": "保存",
+        "text": "その日の主なデータは処理後に消去します。信頼性の確保、品質チェック、統計のために、一部の運用記録と処理結果はより長く保管されることがあります。投稿された名言と基本的な識別子はサービスの履歴に残ります。"
+      },
+      {
+        "heading": "あなたのデータ",
+        "text": "あなたのデータを販売することはありません。削除を希望する場合は {contact} まで連絡してください。"
+      },
+      {
+        "heading": "管理者の責任",
+        "text": "同意することで、グループ管理者はこのボットを追加する権限があり、メンバーがチャットは Quoto に処理されると知っていることを確認します。"
+      },
+      {
+        "heading": "現状のまま",
+        "text": "本サービスは「現状のまま」保証なしで提供され、条件は変更されることがあります。使い続けることは同意を意味します。"
+      }
+    ],
+    "signature": {
+      "title": "文書の署名",
+      "version_label": "規約のバージョン",
+      "effective_label": "発効日",
+      "operator_label": "運営者",
+      "contact_label": "連絡先"
+    },
+    "accept_hint": "今日の名言を有効にするには、グループ管理者が「同意する」を押します。",
+    "welcome_note": "<i>何かを投稿する前に、グループ管理者が利用規約に同意する必要があります。</i>",
+    "view_button": "利用規約",
+    "accept_button": "同意する",
+    "accepted": "✅ <b>利用規約に同意しました。</b>ありがとうございます！",
+    "accepted_admin_hint": "<i>今日の名言を投稿できるよう、メッセージをピン留めできる管理者にしてください。</i>",
+    "accepted_toast": "同意しました。ありがとうございます！",
+    "already": "✅ このグループはすでに規約に同意しています。",
+    "admin_only": "規約に同意できるのはグループ管理者だけです。",
+    "reminder": "今日の名言を投稿するには、グループ管理者が Quoto の利用規約に同意する必要があります。"
+  },
+  "date": {
+    "day_month": "{month}{day}日",
+    "day_month_year": "{year}年{month}{day}日"
+  }
+}

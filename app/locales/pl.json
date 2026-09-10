@@ -1,0 +1,257 @@
+{
+  "language_name": "Polski",
+  "months": [
+    "stycznia",
+    "lutego",
+    "marca",
+    "kwietnia",
+    "maja",
+    "czerwca",
+    "lipca",
+    "sierpnia",
+    "września",
+    "października",
+    "listopada",
+    "grudnia"
+  ],
+  "common": {
+    "anonymous": "Anonim",
+    "original": "Oryginał",
+    "details": "Szczegóły"
+  },
+  "command": {
+    "start_private": "Otwórz Quoto",
+    "start_group": "Otwórz panel Quoto"
+  },
+  "menu": {
+    "button": {
+      "user_stats": "Moje statystyki",
+      "chat_stats": "Statystyki czatu",
+      "stats": "Statystyki",
+      "back": "Wstecz",
+      "about": "O bocie",
+      "agreement": "Regulamin",
+      "close": "Zamknij"
+    },
+    "private": {
+      "title": "Quoto",
+      "body": "Wybieram cytat dnia na czatach grupowych. Dodaj mnie do grupy i otwórz tam /start.",
+      "language": "Język interfejsu: <b>{language_name}</b>"
+    },
+    "group": {
+      "title": "Quoto",
+      "admin_body": "Obserwuję czat i pod koniec dnia publikuję najlepsze zdanie. Statystyki i ustawienia poniżej.",
+      "user_body": "Obserwuję czat i pod koniec dnia publikuję najlepsze zdanie.",
+      "language_line": "Język: <b>{language_name}</b>",
+      "schedule_line": "Podsumowanie dnia o <b>{time}</b> · od <b>{min_messages}</b> wiadomości"
+    },
+    "language": {
+      "title": "Język grupy",
+      "hint": "Wybierz język, w którym mówię w tej grupie.",
+      "source_auto": "Wykryty automatycznie",
+      "source_manual": "Wybrany ręcznie",
+      "source_default": "Domyślnie · English",
+      "updated": "Nowy język: {language_name}.",
+      "invalid": "Nie znam takiego języka."
+    },
+    "other_user": "Otwórz własne menu przez /start.",
+    "group_context_required": "Otwórz to na czacie grupowym."
+  },
+  "settings": {
+    "updated": "Gotowe.",
+    "invalid": "Tak się nie da.",
+    "button": {
+      "language": "Język",
+      "quote_day": "Cytat dnia",
+      "publication": "Publikacja",
+      "context": "Kontekst",
+      "boring_notice": "Nudny dzień",
+      "pin": "Przypinaj",
+      "timezone": "Strefa czasowa",
+      "media": "Media"
+    },
+    "private": {
+      "language_title": "Język interfejsu",
+      "language_hint": "Zostaw język Telegrama albo wybierz ręcznie.",
+      "telegram_language": "Język Telegrama",
+      "language_source_manual": "Wybrany ręcznie",
+      "language_source_telegram": "Język Telegrama"
+    },
+    "group": {
+      "language_auto": "Wykrywaj automatycznie",
+      "language_auto_updated": "Sam wykryję język przy następnej ocenie.",
+      "context": {
+        "short": "Kontekst",
+        "explain": "Kontekst to wiadomości, które AI wybrała wokół zwycięskiego zdania. Jeśli jest ich więcej niż pięć, zawężam blok do samego cytatu."
+      },
+      "boring_notice": {
+        "short": "Nudny dzień"
+      },
+      "pin": {
+        "short": "Przypinaj"
+      },
+      "media": {
+        "short": "Media"
+      },
+      "quote_day": {
+        "title": "Cytat dnia",
+        "hint": "Kiedy zamykam dzień i ile wiadomości potrzeba do oceny."
+      },
+      "publication": {
+        "title": "Publikacja",
+        "hint": "Jak podaję wynik na grupie."
+      },
+      "time": {
+        "line": "Podsumowanie dnia: <b>{time}</b>",
+        "timezone": "Strefa czasowa: <b>{timezone}</b>"
+      },
+      "min_messages": {
+        "line": "Minimum: <b>{count}</b>"
+      },
+      "tz": {
+        "title": "Strefa czasowa",
+        "hint": "W tej strefie liczę okno dnia i moment podsumowania."
+      }
+    }
+  },
+  "status": {
+    "published": "✅ Opublikowano",
+    "skipped_boring": "😴 Nudny dzień",
+    "publish_failed": "⚠️ Publikacja się nie udała",
+    "boring_notice_failed": "⚠️ Powiadomienie niewysłane",
+    "publish_unknown": "⚠️ Publikacja niepotwierdzona",
+    "boring_notice_unknown": "⚠️ Powiadomienie niepotwierdzone"
+  },
+  "admin": {
+    "admin_only": "To mogą zmieniać tylko administratorzy."
+  },
+  "chat_member": {
+    "added": "<b>Quoto</b>\n\nMiło być w <b>{chat_title}</b>. Codziennie o <b>{time}</b> wybieram najlepsze zdanie i publikuję cytat dnia.\n\nOtwórz /start — tam są statystyki i ustawienia.",
+    "need_admin": "⚠️ Zrób mnie <b>administratorem</b> z prawem do <i>przypinania</i> wiadomości — wtedy opublikuję wynik.",
+    "admin_granted": "Dzięki! Teraz mogę publikować cytat dnia."
+  },
+  "private": {
+    "invalid_quote_link": "⚠️ Nieprawidłowy link do cytatu.",
+    "quote_not_found": "⚠️ Nie znaleziono cytatu.",
+    "add_to_group": "Dodaj do grupy",
+    "hello": "<b>Quoto</b>\n\nWybieram cytat dnia na czatach grupowych: zbieram wiadomości z całego dnia i o ustalonej godzinie publikuję najlepsze zdanie.\n\nDodaj mnie do grupy i otwórz tam /start."
+  },
+  "details": {
+    "title": "<b>Dzień #{id}</b>",
+    "total": "Razem",
+    "reactions": "Reakcje",
+    "length": "Długość",
+    "decision_reason": "Powód decyzji",
+    "operation_error": "Błąd techniczny",
+    "ai_choice": "Wybór AI"
+  },
+  "start": {
+    "group": "<b>Quoto — Cytat dnia</b>\n\nZbieram wiadomości z całego dnia i pod koniec wybieram najlepsze zdanie.\n\nOtwórz /start, aby otworzyć panel sterowania."
+  },
+  "stats": {
+    "missing": "Statystyk jeszcze nie ma — ta grupa nie jest zarejestrowana.",
+    "empty": "Ten czat nie ma jeszcze opublikowanych cytatów.",
+    "title": "Statystyki czatu",
+    "hint": "Co cały czat uzbierał do tej pory.",
+    "total_quotes": "Cytatów łącznie: <b>{count}</b>",
+    "unique_authors": "Autorów: <b>{count}</b>",
+    "avg_score": "Średnia ocena: <b>{score:.1f}/10</b>",
+    "top_authors": "<b>Najlepsi autorzy</b>",
+    "author_row": "{medal} <b>{name}</b> — {wins} · {score:.1f}/10",
+    "best_quote": "<b>Najlepszy cytat</b>"
+  },
+  "user_stats": {
+    "missing": "Statystyk jeszcze nie ma.",
+    "empty": "<b>{user}</b>, nie masz jeszcze opublikowanych cytatów na tym czacie.\nPisz dalej — przyjdzie twój czas.",
+    "title": "Twoje statystyki",
+    "hint": "Twoje cytaty dnia na tym czacie.",
+    "user": "<b>{user}</b>",
+    "wins": "Zwycięstw: <b>{count}</b>",
+    "avg_score": "Średnia ocena: <b>{score:.1f}/10</b>",
+    "rank": "Miejsce: <b>{rank}</b> z {total}",
+    "best_quote": "<b>Najlepszy cytat</b>"
+  },
+  "quote_post": {
+    "titles": {
+      "text": "🏆 <b>Cytat dnia</b>",
+      "photo": "🏆 <b>Zdjęcie dnia</b>",
+      "video": "🏆 <b>Wideo dnia</b>",
+      "voice": "🏆 <b>Głosówka dnia</b>",
+      "audio": "🏆 <b>Audio dnia</b>"
+    },
+    "context_truncated": "ℹ️ Policzyłem ostatnie {shown} z {total} wiadomości — kontekst przycięty przez objętość."
+  },
+  "boring": {
+    "title": "😴 <b>Dziś bez cytatu dnia</b>",
+    "body": "Nie znalazłem zdania godnego tego dnia. Do jutra!"
+  },
+  "about": {
+    "tagline": "Cytat dnia z tego, co napisano na czacie.",
+    "eval": "Ocena",
+    "sources": "Kod źródłowy",
+    "admin": "Admin"
+  },
+  "agreement": {
+    "title": "Quoto — Regulamin i prywatność",
+    "summary": "Korzystając z Quoto w tej grupie, akceptujesz poniższe warunki.",
+    "sections": [
+      {
+        "heading": "Co robi Quoto",
+        "text": "W ciągu dnia czytam wiadomości wysyłane w tej grupie i o ustalonej godzinie publikuję jeden „cytat dnia”."
+      },
+      {
+        "heading": "Co jest przetwarzane",
+        "text": "Aby wybrać cytat dnia, przetwarzam:",
+        "items": [
+          "treść wiadomości i podpisy",
+          "reakcje na wiadomości",
+          "media: zdjęcia, wideo, głosówki i audio",
+          "imię autora i jego ID Telegrama",
+          "ID i nazwę grupy"
+        ]
+      },
+      {
+        "heading": "Przetwarzanie przez AI",
+        "text": "Aby wybrać cytat, treść wiadomości i media trafiają do analizy do naszego dostawcy AI, OpenRouter, i jego dostawców modeli.",
+        "note": "Nie podawaj haseł ani danych wrażliwych na czatach, na których działa Quoto."
+      },
+      {
+        "heading": "Przechowywanie",
+        "text": "Podstawowe dane dnia są czyszczone po przetworzeniu. Wybrane zapisy serwisowe i wyniki przetwarzania mogą być trzymane dłużej ze względu na niezawodność, kontrolę jakości i statystyki; opublikowane cytaty i podstawowe identyfikatory zostają w historii serwisu."
+      },
+      {
+        "heading": "Twoje dane",
+        "text": "Nie sprzedaję twoich danych. Aby poprosić o usunięcie, napisz do {contact}."
+      },
+      {
+        "heading": "Odpowiedzialność administratora",
+        "text": "Akceptując, administrator grupy potwierdza, że może dodać tego bota i że członkowie wiedzą, iż czat jest przetwarzany przez Quoto."
+      },
+      {
+        "heading": "Tak jak jest",
+        "text": "Usługa działa „tak jak jest”, bez gwarancji, a warunki mogą się zmieniać; dalsze korzystanie oznacza ich akceptację."
+      }
+    ],
+    "signature": {
+      "title": "Podpis dokumentu",
+      "version_label": "Wersja regulaminu",
+      "effective_label": "Obowiązuje od",
+      "operator_label": "Operator",
+      "contact_label": "Kontakt"
+    },
+    "accept_hint": "Aby włączyć cytat dnia, administrator grupy klika „Akceptuję”.",
+    "welcome_note": "<i>Zanim cokolwiek opublikuję, administrator grupy musi zaakceptować regulamin.</i>",
+    "view_button": "Regulamin",
+    "accept_button": "Akceptuję",
+    "accepted": "✅ <b>Regulamin zaakceptowany.</b> Dziękuję!",
+    "accepted_admin_hint": "<i>Teraz zrób mnie administratorem z prawem do przypinania wiadomości, żebym mógł publikować cytat dnia.</i>",
+    "accepted_toast": "Zaakceptowano — dzięki!",
+    "already": "✅ Ta grupa już zaakceptowała regulamin.",
+    "admin_only": "Regulamin może zaakceptować tylko administrator grupy.",
+    "reminder": "Aby publikować cytat dnia, administrator grupy musi zaakceptować regulamin Quoto."
+  },
+  "date": {
+    "day_month": "{day} {month}",
+    "day_month_year": "{day} {month} {year}"
+  }
+}

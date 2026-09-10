@@ -226,7 +226,7 @@ class AIRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("language", language_schema["required"])
         self.assertEqual(
             language_schema["properties"]["language"]["properties"]["interface_language"]["enum"],
-            ["ru", "uk", "en", "de"],
+            list(ai.i18n.SUPPORTED_LANGUAGES),
         )
 
     async def test_eval_max_tokens_is_high_guardrail(self) -> None:

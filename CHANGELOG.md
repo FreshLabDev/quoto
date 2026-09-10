@@ -13,6 +13,57 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+## v0.10.7 - 2026-09-10
+
+Quoto speaks sixteen languages instead of four, and each of them writes a date
+the way that language writes one.
+
+Twelve new locales landed, and they broke a date that four languages had hidden:
+Spanish needed a preposition that was baked into the month name, Chinese and
+Japanese write the year first, German and Czech want a period after the day.
+The order now lives in the locale beside the month names.
+
+Every screen is also built by one helper, so the group panel stops printing the
+bot's name above its own title, and no screen repeats in the message what its
+buttons already say.
+
+### Changed
+
+- `docs/releases.md` names the real cause of the `403` a digest pull used to
+  answer: the account running the deploy could not read the private package,
+  not anything about the digest. Pulling the tag first was a workaround for
+  that, and is no longer required.
+
+## v0.10.7-alpha.1 - 2026-09-09
+
+### Changed
+
+- The panel now follows the Asterfield family contract, so a person who learns
+  one of the bots reads all of them. Every screen — both homes, language,
+  quote day, timezone, publishing, stats, About and the user agreement — is
+  built by one helper as title, hint, quote, and no screen repeats the bot's
+  name above its own title any more.
+- The language picker shows flag and native name in the family order
+  (`en, ru, uk, de`), two to a row, in the panel and in the agreement alike.
+  The list and its labels live in `app/i18n.py`; quoto renders the languages it
+  has, so a new locale is a JSON file plus a code and its button appears in the
+  right place by itself.
+- Buttons carry colour where Telegram can show it: Close is destructive, the
+  current language, the chosen timezone and the open stats tab are marked as
+  the state you are in, and each screen with one obvious next step has exactly
+  one highlighted button — "Add to group" in a direct chat, "Stats" in a group,
+  "Accept" on the agreement. Screens that lead nowhere have none.
+- The timezone, language and publishing screens no longer list in the message
+  what their own buttons already say. The state lives on the buttons; the text
+  says only what a button cannot — where a language came from, and what
+  "context" means.
+
+### Fixed
+
+- The quote-day time nudges said "ч" and "м" on every locale's panel, Russian
+  units on the English and German ones included. They now read `−1:00` and
+  `+0:15`, which is the same in every language and needs no translation.
+
 ## v0.10.6 - 2026-09-09
 
 Quoto is GPL-3.0. The About card and the agreement signature said Apache-2.0.
@@ -25,8 +76,6 @@ Quoto is GPL-3.0. The About card and the agreement signature said Apache-2.0.
   into two places a reader is meant to be able to rely on, one of them a
   document people accept.
 
-
-Use this section for changes that are merged but not released yet.
 
 ## v0.10.5 - 2026-09-09
 
@@ -41,8 +90,6 @@ A one-line fix for something v0.10.4 shipped: it reported the wrong version.
   told every group the same thing. An unstamped build now says `dev` instead of
   naming a release it is not.
 
-
-Use this section for changes that are merged but not released yet.
 
 ## v0.10.4 - 2026-09-09
 

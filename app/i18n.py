@@ -6,9 +6,38 @@ from typing import Any
 
 
 DEFAULT_LANGUAGE = "en"
-SUPPORTED_LANGUAGES = ("ru", "uk", "en", "de")
+SUPPORTED_LANGUAGES = (
+    "ru", "uk", "en", "de", "es", "fr", "it", "pl",
+    "cs", "tr", "sv", "be", "ca", "zh", "ja", "ar",
+)
 LANGUAGE_SOURCE_AUTO = "auto"
 LANGUAGE_SOURCE_MANUAL = "manual"
+
+# The family's language set, in the family's order, labelled the way every
+# sibling bot labels it: flag plus native name. The order is the contract's, not
+# quoto's, so a person who learns the grid in one bot reads it in all of them.
+# Every code the family has is listed here even where quoto has no locale yet:
+# `language_options` intersects this with SUPPORTED_LANGUAGES, so a new locale
+# is one JSON file plus one code in SUPPORTED_LANGUAGES and its button appears
+# in the right place with the right label on its own.
+LANGUAGE_LABELS: dict[str, str] = {
+    "en": "🇬🇧 English",
+    "ru": "🇷🇺 Русский",
+    "uk": "🇺🇦 Українська",
+    "es": "🇪🇸 Español",
+    "fr": "🇫🇷 Français",
+    "de": "🇩🇪 Deutsch",
+    "it": "🇮🇹 Italiano",
+    "pl": "🇵🇱 Polski",
+    "cs": "🇨🇿 Čeština",
+    "tr": "🇹🇷 Türkçe",
+    "sv": "🇸🇪 Svenska",
+    "be": "🇧🇾 Беларуская",
+    "ca": "🇦🇩 Català",
+    "zh": "🇨🇳 中文",
+    "ja": "🇯🇵 日本語",
+    "ar": "🇦🇪 العربية",
+}
 
 _LOCALE_DIR = Path(__file__).resolve().parent / "locales"
 _ALIASES = {
@@ -55,8 +84,22 @@ def group_language_is_set(group: object | None) -> bool:
 
 
 def language_name(code: object | None) -> str:
+    """The bare native name, for running text — "Interface language: Deutsch"."""
     lang = language_or_default(code)
     return str(_load(lang).get("language_name") or lang)
+
+
+def language_label(code: object | None) -> str:
+    """The button label: flag plus native name. Text uses `language_name`; a
+    button in any picker uses this, so all of them read the same."""
+    lang = language_or_default(code)
+    return LANGUAGE_LABELS.get(lang) or language_name(lang)
+
+
+def language_options() -> tuple[str, ...]:
+    """Every language quoto can render, in the family order. One list, one
+    order, read by every picker in the bot."""
+    return tuple(code for code in LANGUAGE_LABELS if code in SUPPORTED_LANGUAGES)
 
 
 def language_options_prompt() -> str:
@@ -93,6 +136,27 @@ def month_name(language: object | None, month: int) -> str:
     if isinstance(months, list) and 1 <= month <= len(months):
         return str(months[month - 1])
     return str(month)
+
+
+def format_date(language: object | None, value, *, with_year: bool = False) -> str:
+    """Render a date the way the language writes one.
+
+    Gluing "{day} {month}" together at the call site only works for the
+    languages that happen to write a date that way. Spanish needs a preposition
+    before the month and another before the year, German and Czech put a period
+    after the day, and Chinese and Japanese start with the year and end with a
+    character. So the order lives in the locale beside the month names, not in
+    the code.
+    """
+    lang = language_or_default(language)
+    key = "date.day_month_year" if with_year else "date.day_month"
+    return t(
+        lang,
+        key,
+        day=value.day,
+        month=month_name(lang, value.month),
+        year=value.year,
+    )
 
 
 def _load(language: str) -> dict[str, Any]:

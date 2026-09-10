@@ -15,16 +15,16 @@ from html import escape
 from typing import Any, NamedTuple
 
 from aiogram import types
+from aiogram.enums import ButtonStyle
 
 from . import i18n
+from .menu import language_rows, panel
 from .version import CONTACT, OPERATOR
 
 
 CALLBACK_PREFIX = "agree"
 ACTION_VIEW = "v"
 ACTION_ACCEPT = "a"
-
-_LANGUAGE_ORDER = ("uk", "ru", "en", "de")
 
 # When this text last changed and when it started applying. The operator and the
 # contact come from the project's identity, and the contact is substituted into
@@ -77,24 +77,19 @@ def parse_callback(data: str | None) -> AgreementCallback | None:
     return AgreementCallback(parts[1], parts[2], parts[3], owner_id)
 
 
-def _language_row(
+def _language_rows(
     action: str,
     current_language: str,
     *,
     scope: str | None,
     owner_id: int | None,
-) -> list[types.InlineKeyboardButton]:
-    row: list[types.InlineKeyboardButton] = []
-    for code in _LANGUAGE_ORDER:
-        name = i18n.language_name(code)
-        text = f"· {name} ·" if code == current_language else name
-        row.append(
-            types.InlineKeyboardButton(
-                text=text,
-                callback_data=callback_data(action, code, scope=scope, owner_id=owner_id),
-            )
-        )
-    return row
+) -> list[list[types.InlineKeyboardButton]]:
+    """The document's language switcher is a language picker like any other, so
+    it is drawn by the panel's grid rather than by a second format of its own."""
+    return language_rows(
+        current_language,
+        lambda code: callback_data(action, code, scope=scope, owner_id=owner_id),
+    )
 
 
 def build_welcome_keyboard(language: str) -> types.InlineKeyboardMarkup:
@@ -102,9 +97,12 @@ def build_welcome_keyboard(language: str) -> types.InlineKeyboardMarkup:
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                # Until somebody reads and accepts this, quoto publishes
+                # nothing — there is no other thing to do from here.
                 types.InlineKeyboardButton(
                     text=i18n.t(language, "agreement.view_button"),
                     callback_data=callback_data(ACTION_VIEW, language),
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         ]
@@ -128,17 +126,20 @@ def build_document(
     markdown = _render_markdown(language, can_accept=can_accept, accepted=accepted)
     html = _render_html(language, can_accept=can_accept, accepted=accepted)
 
-    rows: list[list[types.InlineKeyboardButton]] = [
-        _language_row(ACTION_VIEW, language, scope=scope, owner_id=owner_id)
-    ]
+    rows: list[list[types.InlineKeyboardButton]] = _language_rows(
+        ACTION_VIEW, language, scope=scope, owner_id=owner_id
+    )
     if can_accept and not accepted:
         rows.append(
             [
+                # An admin who opened this screen came to accept; everything
+                # else on it is reading material.
                 types.InlineKeyboardButton(
                     text=i18n.t(language, "agreement.accept_button"),
                     callback_data=callback_data(
                         ACTION_ACCEPT, language, scope=scope, owner_id=owner_id
                     ),
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         )
@@ -231,10 +232,16 @@ def _render_html(language: str, *, can_accept: bool, accepted: bool) -> str:
     signature = "\n".join(
         f"{escape(label)} · {escape(value)}" for label, value in _signature_rows(language)
     )
+    # The document's head is a panel like every other screen: title, one line
+    # saying what it is, then the substance quoted. Only the substance is long
+    # enough that Telegram should fold it.
     parts = [
-        f"<b>{escape(i18n.t(language, 'agreement.title'))}</b>",
-        f"<i>{escape(i18n.t(language, 'agreement.summary'))}</i>",
-        "<blockquote expandable>" + "\n\n".join(body) + "</blockquote>",
+        panel(
+            escape(i18n.t(language, "agreement.title")),
+            escape(i18n.t(language, "agreement.summary")),
+            ["\n\n".join(body)],
+            expandable=True,
+        )
     ]
     if accepted:
         parts.append(f"<i>{escape(i18n.t(language, 'agreement.already'))}</i>")

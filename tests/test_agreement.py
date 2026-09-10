@@ -1,9 +1,12 @@
+from html import escape
 import os
 import unittest
 
 os.environ.setdefault("BOT_TOKEN", "123456:TESTTOKEN1234567890")
 os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
+
+from aiogram.enums import ButtonStyle
 
 from app import agreement, i18n, menu
 
@@ -78,6 +81,39 @@ class AgreementDocumentTests(unittest.TestCase):
         document = agreement.build_document("en", can_accept=True, accepted=False)
         self.assertNotIn("# ", document.html)
         self.assertIn("<blockquote expandable>", document.html)
+
+    def test_html_opens_with_the_same_panel_shape_as_every_screen(self) -> None:
+        for language in i18n.SUPPORTED_LANGUAGES:
+            document = agreement.build_document(language, can_accept=False, accepted=False)
+            head, _, rest = document.html.partition("\n\n")
+            self.assertEqual(
+                head,
+                f"<b>{escape(i18n.t(language, 'agreement.title'))}</b>\n"
+                f"<i>{escape(i18n.t(language, 'agreement.summary'))}</i>",
+            )
+            self.assertTrue(rest.startswith("<blockquote expandable>"), rest[:60])
+
+    def test_accept_is_the_one_thing_the_document_leads_to(self) -> None:
+        document = agreement.build_document("en", can_accept=True, accepted=False)
+        primary = [
+            button.text
+            for row in document.keyboard.inline_keyboard
+            for button in row
+            if button.style == ButtonStyle.PRIMARY
+        ]
+        self.assertEqual(primary, [i18n.t("en", "agreement.accept_button")])
+
+    def test_the_language_switcher_is_the_family_grid(self) -> None:
+        document = agreement.build_document("de", can_accept=False, accepted=False)
+        codes = i18n.language_options()
+        grid = document.keyboard.inline_keyboard[: (len(codes) + 1) // 2]
+        self.assertEqual(
+            [button.text for row in grid for button in row],
+            [
+                f"{menu.TOGGLE_ON if code == 'de' else menu.TOGGLE_OFF} {i18n.language_label(code)}"
+                for code in codes
+            ],
+        )
 
     def test_document_is_signed_in_every_language(self) -> None:
         for language in i18n.SUPPORTED_LANGUAGES:
