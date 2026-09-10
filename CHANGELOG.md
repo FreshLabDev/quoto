@@ -13,6 +13,27 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+## v0.10.7 - 2026-09-10
+
+Quoto speaks sixteen languages instead of four, and each of them writes a date
+the way that language writes one.
+
+Twelve new locales landed, and they broke a date that four languages had hidden:
+Spanish needed a preposition that was baked into the month name, Chinese and
+Japanese write the year first, German and Czech want a period after the day.
+The order now lives in the locale beside the month names.
+
+Every screen is also built by one helper, so the group panel stops printing the
+bot's name above its own title, and no screen repeats in the message what its
+buttons already say.
+
+### Changed
+
+- `docs/releases.md` names the real cause of the `403` a digest pull used to
+  answer: the account running the deploy could not read the private package,
+  not anything about the digest. Pulling the tag first was a workaround for
+  that, and is no longer required.
+
 ## v0.10.7-alpha.1 - 2026-09-09
 
 ### Changed
