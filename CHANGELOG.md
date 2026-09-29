@@ -13,6 +13,20 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+### Changed
+
+- **A release waits for CI.** `release.yml` runs `ci.yml` on the tagged commit
+  and publishes nothing unless it passed. When CI cannot run, `release.yml` can
+  be started by hand with the tag and a reason; that run skips CI and prints the
+  reason at the top of the release notes. See `docs/releases.md`.
+- The release notes end with the image digest to pin, which `docs/releases.md`
+  already said they did.
+- CI audits `requirements.txt` against known advisories. It reports on every run
+  and fails only the weekly one, so an advisory does not hold a release of
+  unrelated code. At the time of writing it reports pillow, pydantic-settings,
+  pygments, pytest and python-dotenv.
+- Dependabot opens grouped version updates against `dev`.
+
 ## v0.10.7 - 2026-09-10
 
 Quoto speaks sixteen languages instead of four, and each of them writes a date
