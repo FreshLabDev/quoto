@@ -89,7 +89,8 @@ _LANGUAGE_DETECTION_PROMPT = (
     f"{i18n.language_options_prompt()}. "
     "Prefer the dominant chat language when it is supported; otherwise choose the closest comfortable interface language. "
     "Add a `language` object to the JSON response: "
-    "{\"chat_language\": \"short language name\", \"interface_language\": \"ru|uk|en|de\"}."
+    "{\"chat_language\": \"short language name\", "
+    f"\"interface_language\": \"{'|'.join(i18n.SUPPORTED_LANGUAGES)}\"}}."
 )
 
 _INJECTION_GUARD = (
@@ -535,6 +536,7 @@ async def _evaluate_with_model(
         "response_format": response_format,
         # Makes OpenRouter return token counts and the dollar cost of this call.
         "usage": {"include": True},
+        "provider": _openrouter_provider(),
     }
     if max_tokens > 0:
         body["max_tokens"] = max_tokens
@@ -933,6 +935,7 @@ async def describe_media_file(
                     ],
                 }
             ],
+            "provider": _openrouter_provider(),
         }
         if settings.OPENROUTER_MEDIA_REASONING_EFFORT:
             body["reasoning"] = {
@@ -1005,6 +1008,14 @@ def _openrouter_headers() -> dict[str, str]:
     if settings.OPENROUTER_APP_TITLE:
         headers["X-OpenRouter-Title"] = settings.OPENROUTER_APP_TITLE
     return headers
+
+
+def _openrouter_provider() -> dict[str, Any]:
+    """Provider routing for every OpenRouter request; see OPENROUTER_DATA_COLLECTION."""
+    provider: dict[str, Any] = {"data_collection": settings.OPENROUTER_DATA_COLLECTION}
+    if settings.OPENROUTER_ZDR:
+        provider["zdr"] = True
+    return provider
 
 
 def _media_content_part(*, path: Path, mime_type: str, media_kind: str) -> dict[str, Any]:

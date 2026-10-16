@@ -212,7 +212,7 @@
       },
       {
         "heading": "AI-behandling",
-        "text": "För att välja ett citat skickas meddelandetext och media för analys till vår AI-leverantör OpenRouter och dess modelleverantörer.",
+        "text": "För att välja ett citat skickas meddelandetext och media för analys till vår AI-leverantör OpenRouter och dess modelleverantörer. OpenRouter skickar dem bara vidare till leverantörer som varken sparar uppgifterna eller tränar modeller på dem.",
         "note": "Dela inte lösenord eller känsliga uppgifter i chattar där Quoto är aktiv."
       },
       {

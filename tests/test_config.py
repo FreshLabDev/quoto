@@ -50,3 +50,26 @@ class ConfigTests(unittest.TestCase):
             any("OPENROUTER_MODEL" in line and "OPENROUTER_EVAL_MODEL" in line for line in captured.output),
             captured.output,
         )
+
+    def test_validate_runtime_warns_when_data_collection_is_allowed(self) -> None:
+        with (
+            patch.object(config, "_configured_env_keys", return_value=set()),
+            patch.object(config.settings, "OPENROUTER_DATA_COLLECTION", "allow"),
+        ):
+            with self.assertLogs(config.__name__, level="WARNING") as captured:
+                config.validate_runtime()
+
+        self.assertTrue(
+            any("OPENROUTER_DATA_COLLECTION" in line for line in captured.output),
+            captured.output,
+        )
+
+    def test_validate_runtime_warns_when_zdr_is_off(self) -> None:
+        with (
+            patch.object(config, "_configured_env_keys", return_value=set()),
+            patch.object(config.settings, "OPENROUTER_ZDR", False),
+        ):
+            with self.assertLogs(config.__name__, level="WARNING") as captured:
+                config.validate_runtime()
+
+        self.assertTrue(any("OPENROUTER_ZDR" in line for line in captured.output), captured.output)

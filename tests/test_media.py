@@ -627,6 +627,7 @@ class AIMediaRequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("дословно", prompt)
         self.assertIn("1-4 предложения", prompt)
         self.assertEqual(captured_body["messages"][0]["content"][1]["type"], "input_audio")
+        self.assertEqual(captured_body["provider"], {"data_collection": "deny", "zdr": True})
 
     async def test_describe_media_file_falls_back_to_secondary_model_after_primary_failure(self) -> None:
         primary_attempts = 0

@@ -30,9 +30,9 @@ ACTION_ACCEPT = "a"
 # contact come from the project's identity, and the contact is substituted into
 # the section that mentions it mid-sentence, so the whole document has one
 # source for it rather than four locale copies.
-DOCUMENT_VERSION = "1.0"
+DOCUMENT_VERSION = "1.1"
 # ISO 8601: an effective date has to read the same in every locale.
-EFFECTIVE_DATE = "2026-09-09"
+EFFECTIVE_DATE = "2026-10-16"
 
 
 class AgreementCallback(NamedTuple):

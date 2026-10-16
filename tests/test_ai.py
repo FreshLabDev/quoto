@@ -133,6 +133,7 @@ class AIUsageTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(captured_body["usage"], {"include": True})
+        self.assertEqual(captured_body["provider"], {"data_collection": "deny", "zdr": True})
         self.assertEqual(result.usage.prompt_tokens, 1200)
         self.assertEqual(result.usage.completion_tokens, 450)
         self.assertEqual(result.usage.reasoning_tokens, 300)

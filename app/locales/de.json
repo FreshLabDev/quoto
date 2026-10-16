@@ -212,7 +212,7 @@
       },
       {
         "heading": "KI-Verarbeitung",
-        "text": "Zur Auswahl eines Zitats werden Nachrichtentext und Medien zur Analyse an unseren KI-Anbieter OpenRouter und dessen Modellanbieter gesendet.",
+        "text": "Zur Auswahl eines Zitats werden Nachrichtentext und Medien zur Analyse an unseren KI-Anbieter OpenRouter und dessen Modellanbieter gesendet. OpenRouter gibt sie nur an Anbieter weiter, die diese Daten weder speichern noch Modelle damit trainieren.",
         "note": "Teile keine Passwörter oder sensiblen Daten in Chats, in denen Quoto aktiv ist."
       },
       {

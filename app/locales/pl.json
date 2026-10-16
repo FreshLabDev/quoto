@@ -212,7 +212,7 @@
       },
       {
         "heading": "Przetwarzanie przez AI",
-        "text": "Aby wybrać cytat, treść wiadomości i media trafiają do analizy do naszego dostawcy AI, OpenRouter, i jego dostawców modeli.",
+        "text": "Aby wybrać cytat, treść wiadomości i media trafiają do analizy do naszego dostawcy AI, OpenRouter, i jego dostawców modeli. OpenRouter przekazuje je tylko dostawcom, którzy nie przechowują tych danych i nie trenują na nich modeli.",
         "note": "Nie podawaj haseł ani danych wrażliwych na czatach, na których działa Quoto."
       },
       {
