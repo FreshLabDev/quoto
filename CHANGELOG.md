@@ -13,8 +13,46 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+### Security
+
+- **Chat text only reaches endpoints that keep nothing and train on nothing.**
+  Quoto sends a whole day of a group's messages, with author names, to a model.
+  The built-in defaults were free endpoints, and production scored the day with
+  `meta/muse-spark-1.3-contributor`, a discounted tier whose prompts and outputs
+  may be used to improve Meta's products. Every OpenRouter request now carries
+  `provider: {"data_collection": "deny", "zdr": true}`, so OpenRouter routes it
+  only to endpoints with a zero-data-retention policy. A model without such an
+  endpoint fails over to the fallback model instead of reaching one that keeps
+  the data. The bench scripts, which replay real audited days, send the same.
+- aiogram 3.25.0 → 3.31.0, which lets aiohttp go from 3.13.3 to 3.14.5, and
+  pillow 12.2.0 → 12.3.0, with anyio, click, idna, mako, multidict,
+  pydantic-settings, pygments, pytest and python-dotenv moved to fixed
+  releases. `pip-audit` went from 87 known advisories in ten packages to none.
+  aiohttp carries all of Quoto's Telegram traffic, and Pillow decodes the
+  images people send to the chat.
+
 ### Changed
 
+- **New default models**, each with zero-retention endpoints on OpenRouter.
+  Evaluation: `openai/gpt-6-luna`, falling back to
+  `google/gemini-3.1-flash-lite`. Media: `google/gemini-2.5-flash-lite`,
+  falling back to `google/gemini-3.1-flash-lite`. At last month's volume the
+  evaluation costs about $0.003 a day per group, the same as before.
+- **Operators: two new variables, one env change.** `OPENROUTER_DATA_COLLECTION`
+  (default `deny`) and `OPENROUTER_ZDR` (default `true`); the bot warns at
+  startup when either is relaxed. A deployment that pins
+  `OPENROUTER_EVAL_MODEL` or the media models to a model without a
+  zero-retention endpoint keeps working through the fallback, but every
+  request first fails against that model: remove the override or point it at
+  a model with a zero-retention endpoint.
+- The user agreement says that OpenRouter passes messages only to providers
+  that neither store them nor train models on them, in all sixteen languages.
+  Its version is 1.1; groups that accepted 1.0 are not asked again.
+- The language prompt listed four interface codes while the response schema
+  allowed sixteen. It now lists all sixteen.
+- README and README.ru are rewritten in the family's shape: what Quoto does,
+  how to use it, a privacy section, and the sixteen languages and GPL-3.0
+  licence it actually has. AGENTS.md said Apache-2.0 and four languages; fixed.
 - **A release waits for CI.** `release.yml` runs `ci.yml` on the tagged commit
   and publishes nothing unless it passed. When CI cannot run, `release.yml` can
   be started by hand with the tag and a reason; that run skips CI and prints the
@@ -23,8 +61,8 @@ Use this section for changes that are merged but not released yet.
   already said they did.
 - CI audits `requirements.txt` against known advisories. It reports on every run
   and fails only the weekly one, so an advisory does not hold a release of
-  unrelated code. At the time of writing it reports pillow, pydantic-settings,
-  pygments, pytest and python-dotenv.
+  unrelated code. When it was added it found 87 advisories in ten packages,
+  most of them in aiohttp and pillow; the Security entries above clear them.
 - Dependabot opens grouped version updates against `dev`.
 
 ## v0.10.7 - 2026-09-10

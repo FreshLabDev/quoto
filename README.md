@@ -1,244 +1,208 @@
-<h1 align="center">🏆 Quoto — Quote of the Day</h1>
-<div align="center">
+<h1 align="center">Quoto</h1>
 
-English | [Русский](./README.ru.md)
+<p align="center"><strong>The quote of the day, out of whatever the chat wrote.</strong><br/>A Telegram group bot that reads the day and publishes one line worth keeping, or says the day had none.</p>
 
-A Telegram bot that tracks quote days and only publishes a **quote of the day** when the conversation was actually worth quoting.
+<p align="center">
+  <a href="https://github.com/FreshLabDev/quoto/releases"><img src="https://img.shields.io/github/v/release/FreshLabDev/quoto?include_prereleases&sort=semver&style=for-the-badge&label=latest&labelColor=0f172a&color=3F3160" alt="latest version"></a>
+  <a href="Dockerfile"><img src="https://img.shields.io/badge/python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white&labelColor=0f172a" alt="python version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-334155?style=for-the-badge&labelColor=0f172a" alt="license"></a>
+  <a href="https://t.me/quototbot"><img src="https://img.shields.io/badge/telegram-%40quototbot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white&labelColor=0f172a" alt="telegram bot"></a>
+</p>
 
-[![GitHub Stars](https://img.shields.io/github/stars/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=f59e0b&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZjU5ZTBiIiBzdHJva2U9Im5vbmUiPjxwb2x5Z29uIHBvaW50cz0iMTIgMiAxNS4wOSA4LjI2IDIyIDkuMjcgMTcgMTQuMTQgMTguMTggMjEuMDIgMTIgMTcuNzcgNS44MiAyMS4wMiA3IDE0LjE0IDIgOS4yNyA4LjkxIDguMjYgMTIgMiIvPjwvc3ZnPg==)](https://github.com/FreshLabDev/quoto/stargazers)
-![GitHub Repo Size](https://img.shields.io/github/repo-size/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=a6da95&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM3ODcxNmMiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTIyIDE5YTIgMiAwIDAgMS0yIDJINGEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg1bDIgM2g5YTIgMiAwIDAgMSAyIDJ6Ii8+PC9zdmc+)
-[![GitHub License](https://img.shields.io/github/license/FreshLabDev/quoto?style=for-the-badge&labelColor=1c1917&color=7dc4e4&logo=data:image/svg%2bxml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48IS0tIFVwbG9hZGVkIHRvOiBTVkcgUmVwbywgd3d3LnN2Z3JlcG8uY29tLCBHZW5lcmF0b3I6IFNWRyBSZXBvIE1peGVyIFRvb2xzIC0tPg0KPHN2ZyB3aWR0aD0iODAwcHgiIGhlaWdodD0iODAwcHgiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4NCjxwYXRoIGQ9Ik0xOSAzSDlWM0M3LjExNDM4IDMgNi4xNzE1NyAzIDUuNTg1NzkgMy41ODU3OUM1IDQuMTcxNTcgNSA1LjExNDM4IDUgN1YxMC41VjE3IiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+DQo8cGF0aCBkPSJNMTQgMTdWMTlDMTQgMjAuMTA0NiAxNC44OTU0IDIxIDE2IDIxVjIxQzE3LjEwNDYgMjEgMTggMjAuMTA0NiAxOCAxOVY5VjQuNUMxOCAzLjY3MTU3IDE4LjY3MTYgMyAxOS41IDNWM0MyMC4zMjg0IDMgMjEgMy42NzE1NyAyMSA0LjVWNC41QzIxIDUuMzI4NDMgMjAuMzI4NCA2IDE5LjUgNkgxOC41IiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+DQo8cGF0aCBkPSJNMTYgMjFINUMzLjg5NTQzIDIxIDMgMjAuMTA0NiAzIDE5VjE5QzMgMTcuODk1NCAzLjg5NTQzIDE3IDUgMTdIMTQiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4NCjxwYXRoIGQ9Ik01IDdIMTQiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4NCjxwYXRoIGQ9Ik05IDExSDE0IiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+DQo8L3N2Zz4=)](LICENSE)
+<p align="center">
+  English | <a href="README.ru.md">Русский</a>
+</p>
 
-</div>
+<p align="center">
+  <a href="#using-quoto">Using Quoto</a> ·
+  <a href="#how-it-works">How It Works</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#running-it">Running It</a> ·
+  <a href="#docs">Docs</a>
+</p>
 
-## ✨ Features
+---
 
-- 🏆 **Quote of the Day Flow** — scores messages between two daily cutoff points
-- 🤖 **AI Scoring** — evaluates messages for humor, wit, depth, and memorability via OpenRouter API
-- 🧵 **Optional Quote Context** — adds up to 5 consecutive or reply-linked messages only when needed
-- 😴 **Boring-Day Detection** — if the day feels flat, the bot says so instead of forcing a weak quote
-- ❤️ **Reaction Context** — sends emoji reactions to AI as context for each message
-- 🧾 **AI Audit Log** — writes the exact OpenRouter request body and raw response to `logs/ai_audit.jsonl` for 7 days
-- 🌐 **Localized Interface** — supports Russian, Ukrainian, English, and German UI text
-- 🧭 **One-Time Language Detection** — if a group has no saved language, the next daily AI run chooses the best interface language and stores it
-- 📏 **Text Context** — stores message length signals for transparent details
-- 🧭 **Single `/start` Control Panel** — stats, group language, the user agreement, and About live behind inline buttons
-- 📄 **Rich Markdown Agreement** — on a self-hosted Bot API 10.3 server the user agreement is sent with `sendRichMessage`, so Telegram renders real headings, lists and quotes; it falls back to HTML elsewhere
-- 📌 **Auto-Pin** — pins the winning quote in the chat
-- 📊 **Statistics** — chat stats, personal stats, top authors, and rating breakdown
-- ⏰ **Scheduler** — configurable daily time for quote selection
-- 🐳 **Docker Support** — easy deployment with Docker Compose
+## What It Does
 
-## ⚙️ How It Works
+A group chat says something memorable a few times a week, and by the next
+morning it is buried under everything else. Quoto reads the day, picks the one
+message worth keeping, posts it as the quote of the day and pins it.
 
-1. Add the bot to your Telegram group and grant admin rights
-2. Members chat as usual — the bot silently collects messages and reactions
-3. The bot collects messages for the day from the previous cutoff to the next one
-4. At the scheduled time (default `21:00`), the bot evaluates the closed day
-5. If there are fewer than `10` messages, the day is skipped silently
-6. If there are `10+` messages, AI both scores messages and decides whether the whole day is quote-worthy
-7. The best message is selected by the **AI score**; reactions and length are only context:
+Quoto is deliberately narrow:
 
-| Component     | Weight | Description                                    |
-| :------------ | :----- | :--------------------------------------------- |
-| **AI Score**  | 100%   | LLM-based evaluation with reaction context     |
-| **Reactions** | Context | Emoji reactions sent to AI when present       |
-| **Length**    | Context | Stored for transparent quote details          |
+| Need | Quoto approach |
+|:--|:--|
+| One result a day | At most one quote per group per day, at a time the group sets |
+| No forced quotes | A flat day gets a short "boring day" notice instead of a weak quote |
+| Quiet days stay quiet | Fewer than 10 messages and the day is skipped without a word |
+| Context when it matters | Up to five surrounding messages when the quote needs setup |
+| Photos, videos, voice | Media is described for the AI, so a voice note or a video can win too |
+| One door | `/start` is the only command; everything else is inline buttons |
 
-8. If the quote needs setup, AI may attach a validated consecutive/reply-linked context block of up to `5` messages
-9. If the group has no saved interface language yet, the same AI run selects one of `ru`, `uk`, `en`, or `de` and the bot stores it for future UI messages
-10. If the day is boring, the bot posts a boring-day notice with a `Details` link instead of a weak quote
+---
 
-## 📌 Commands
+## Status
 
-| Command    | Description                      |
-| :--------- | :------------------------------- |
-| `/start`   | Opens the context-aware control panel |
+| Channel | Version | Meaning |
+|:--|:--|:--|
+| Stable | `v0.10.7` | Sixteen interface languages, each writing dates its own way |
+| Next | `Unreleased` | Zero-retention model routing, a newer evaluation model, dependency updates |
 
-## 🚀 Quick Start
+The bot is public as [@quototbot](https://t.me/quototbot). Until `v1.0.0` the
+operator contract (environment, schema, `core` contract) may still change
+between minor versions; see [`docs/versioning.md`](docs/versioning.md).
 
-### Prerequisites
+---
 
-- Python 3.10+
-- PostgreSQL 16+ (in production Quoto runs on a shared `core` database — see the Database section below)
-- Docker (optional)
+## Using Quoto
 
-### Local Installation
+1. Add [@quototbot](https://t.me/quototbot) to a group.
+2. A group admin opens the user agreement from the welcome message and accepts
+   it. Until then Quoto publishes nothing.
+3. Make Quoto an admin with the right to pin messages. Telegram only shows a
+   bot every message in a group once it is an admin.
+4. Chat as usual. At the end of the day the quote arrives on its own.
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/FreshLabDev/quoto.git
-cd quoto
+`/start` in the group opens the panel. Everyone gets chat and personal stats
+and the top authors. Admins also get the settings: group language, quote time,
+time zone, minimum message count, and the publishing switches for pinning,
+context, the boring-day notice and media.
 
-# 2. Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-. venv\Scripts\activate  # Windows
+---
 
-# 3. Install dependencies
-pip install -r requirements.txt
+## How It Works
 
-# 4. Apply database migrations
-alembic upgrade head
+Quoto is one Python service. It stores messages and reactions as they arrive,
+and once a minute checks whether any group's day has closed.
+
+```text
+messages + reactions -> day window (cutoff to cutoff, group time zone)
+  -> media described by a vision model, cached by perceptual hash
+  -> one evaluation call: score every message, judge the whole day
+  -> publish and pin the quote, or post the boring-day notice, or stay silent
+  -> delete the day's messages
 ```
 
-### Configuration
+The quote is chosen by the AI score. Reactions are sent along as context, and
+message length is kept only for the "Details" view. A group with no saved
+language gets one picked once by the same evaluation call, from the language
+the chat actually writes in. Messages that contain `#quoto`, Quoto's own posts
+among them, are left out of the day.
 
-Create a `.env` file in the root directory (see `.env.example`):
+If the evaluation call fails, Quoto retries every minute for two hours after
+the cutoff and then gives up on that day.
 
-```env
-BOT_TOKEN=your_telegram_bot_token
-BOT_USERNAME=your_bot_username
-# Self-hosted Bot API server. Empty means api.telegram.org, which has no
-# sendRichMessage (Bot API 10.3) and drops the user agreement to plain HTML.
-TELEGRAM_BOT_API_BASE_URL=
-# Production points DB_URL at the shared core-postgres as the quoto_core role
-# (postgresql+asyncpg://quoto_core:***@core-postgres:5432/core). For local dev
-# docker-compose builds it from the POSTGRES_* vars — see Database below.
-DB_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
-OPENROUTER_EVAL_MODEL=poolside/laguna-s-2.1:free
-# Used only if the primary eval model errors out after retries.
-OPENROUTER_EVAL_FALLBACK_MODEL=poolside/laguna-s-2.1
-OPENROUTER_EVAL_REASONING_EFFORT=medium
-OPENROUTER_EVAL_MAX_TOKENS=32000
-OPENROUTER_MEDIA_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
-# Per-kind primary media models. Empty = use OPENROUTER_MEDIA_MODEL.
-# Chain: specific -> common (OPENROUTER_MEDIA_MODEL) -> fallback below.
-OPENROUTER_MEDIA_IMAGE_MODEL=
-OPENROUTER_MEDIA_VIDEO_MODEL=
-OPENROUTER_MEDIA_AUDIO_MODEL=
-# Used only if the primary media model errors out after retries.
-OPENROUTER_MEDIA_FALLBACK_MODEL=google/gemini-2.5-flash-lite
-OPENROUTER_MEDIA_REASONING_EFFORT=medium
-OPENROUTER_HTTP_REFERER=https://t.me/quototbot
-OPENROUTER_APP_TITLE=Quoto
-MEDIA_ANALYSIS_ENABLED=True
-MEDIA_PHASH_DISTANCE=5
-MEDIA_CACHE_PROMPT_VERSION=v2
-MEDIA_IMAGE_MAX_SIDE=1280
-MEDIA_IMAGE_QUALITY=82
-MEDIA_VIDEO_MAX_SECONDS=3600
-MEDIA_VIDEO_LOW_RES_MAX_SECONDS=10800
-MEDIA_VIDEO_MAX_HEIGHT=720
-MEDIA_VIDEO_CRF=30
-MEDIA_VIDEO_FPS=12
-MEDIA_AUDIO_BITRATE=64k
-MEDIA_AUDIO_SAMPLE_RATE=24000
-MEDIA_COMMAND_TIMEOUT_SECONDS=300
-MEDIA_PENDING_RETRY_INTERVAL_SECONDS=300
-MEDIA_PENDING_RETRY_BATCH_SIZE=10
-MEDIA_RETRY_MAX_ATTEMPTS=5
-MEDIA_RETRY_BASE_DELAY_SECONDS=300
-MEDIA_RETRY_MAX_DELAY_SECONDS=3600
-MEDIA_PROVIDER_COOLDOWN_SECONDS=900
-MEDIA_PENDING_ITEM_TIMEOUT_SECONDS=600
-DEVELOPER_IDS=[1234567890]
-QUOTE_HOUR=21
-QUOTE_MINUTE=0
-TIMEZONE=Europe/Kyiv
-MIN_MESSAGES_FOR_AUTO_REVIEW=10
-WEIGHT_REACTIONS=0.0
-WEIGHT_AI=1.0
-WEIGHT_LENGTH=0.0
+---
+
+## Privacy
+
+Quoto reads a whole group chat, so this part matters most.
+
+- Message text, captions, media and author names for the day are sent to
+  [OpenRouter](https://openrouter.ai) to pick the quote. Every request carries
+  `data_collection: "deny"` and `zdr: true`, so OpenRouter sends it only to
+  endpoints with a zero-data-retention policy that do not train on it. A model
+  with no such endpoint fails over to the fallback model instead of reaching
+  one that keeps the data.
+- After a day is processed its messages are deleted. The published quote, its
+  context and the scores stay, because the stats and the "Details" view are
+  built from them.
+- Every evaluation request and raw response is written to
+  `logs/ai_audit.jsonl` on the server for seven days, for debugging. It holds
+  real message text and is readable only by the operator.
+- Bot token, OpenRouter key and database password are never logged.
+
+The user agreement shown in the bot says the same in all sixteen languages.
+
+---
+
+## Configuration
+
+The full list with comments is in [`.env.example`](.env.example). The ones you
+will touch:
+
+| Variable | Required | Default | Description |
+|:--|:--:|:--|:--|
+| `BOT_TOKEN` | yes | — | Bot token from BotFather |
+| `BOT_USERNAME` | yes | — | The bot's public username, used in the links the bot builds |
+| `DB_URL` | yes | — | `postgresql+asyncpg://` URL; in production the shared `core` database as `quoto_core` |
+| `TELEGRAM_BOT_API_BASE_URL` | no | empty | Self-hosted Bot API server; empty means api.telegram.org, where the agreement renders as HTML instead of rich Markdown |
+| `OPENROUTER_API_KEY` | yes | — | OpenRouter key |
+| `OPENROUTER_EVAL_MODEL` | no | `openai/gpt-6-luna` | Model that scores the day |
+| `OPENROUTER_EVAL_FALLBACK_MODEL` | no | `google/gemini-3.1-flash-lite` | Used when the evaluation model fails |
+| `OPENROUTER_MEDIA_MODEL` | no | `google/gemini-2.5-flash-lite` | Model that describes photos, video and audio |
+| `OPENROUTER_MEDIA_FALLBACK_MODEL` | no | `google/gemini-3.1-flash-lite` | Used when the media model fails |
+| `OPENROUTER_DATA_COLLECTION` | no | `deny` | `deny` keeps every request away from providers that train on it |
+| `OPENROUTER_ZDR` | no | `true` | Only endpoints with zero data retention; turning this off or setting `allow` above breaks the promise in the agreement and logs a warning at startup |
+| `MEDIA_ANALYSIS_ENABLED` | no | `true` | Global switch for media description |
+| `QUOTE_HOUR`, `QUOTE_MINUTE` | no | `21`, `0` | Default cutoff for a new group |
+| `TIMEZONE` | no | `Europe/Kyiv` | Default time zone for a new group |
+| `MIN_MESSAGES_FOR_AUTO_REVIEW` | no | `10` | Default minimum messages for a day to be judged |
+| `MAX_MESSAGES_PER_DAILY_EVAL` | no | `1500` | Newest messages sent to the AI per day |
+| `DEVELOPER_IDS`, `ENABLE_DEVELOPERS_NOTIFY` | no | `[]`, `false` | Telegram ids that receive operational alerts, and the switch that sends them |
+
+---
+
+## Running It
+
+Local development with Docker starts a bundled PostgreSQL seeded with a copy of
+the shared `core` schema (`deploy/core-init.sql`), so the foreign keys into
+`core.person` and `core.chat` resolve:
+
+```sh
+cp .env.example .env
+$EDITOR .env
+docker compose up --build
 ```
 
-### Running
+The container applies `alembic upgrade head` before starting the bot. Without
+Docker, use Python 3.12:
 
-Use `/start` in a private chat or group. In groups, regular users see stats buttons, while admins also get group language controls.
-
-```bash
-python main.py
+```sh
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/alembic upgrade head
+.venv/bin/python main.py
 ```
 
-## 🐳 Docker Support
+Production runs from `/opt/stacks/quoto` against the shared `core-postgres`.
+Nothing is built on the host; see the Deploying section of
+[`docs/releases.md`](docs/releases.md).
 
-You can easily run the bot using Docker Compose:
+---
 
-```bash
-docker-compose up -d --build
+## Testing
+
+```sh
+python -m pytest -q tests
+docker build -t quoto:ci .
+docker compose config
 ```
 
-## 🗄️ Database
+The suite mocks the database. CI also applies the migrations to a real
+PostgreSQL 17, audits `requirements.txt` with `pip-audit`, and checks that every
+package in `requirements.in` is pinned.
 
-Quoto stores its data in **PostgreSQL** and shares one database with the other
-Asterfield bots (`vido`, `branchy`, `searchy`, `voicy`, `makeitmd`):
+---
 
-- **In production** it connects to the shared **`core`** database as the
-  least-privilege role `quoto_core`. Quoto's own tables live in the **`quoto`**
-  schema; shared identity, chats and language live in the **`core`** schema
-  (`core.person`, `core.chat`, and the `core.set_language` /
-  `core.effective_language` functions). Quoto's tables reference `core.person`
-  and `core.chat` by the Telegram natural keys (user id, chat id) — there is no
-  separate per-bot users/groups identity table.
-- **For local development** `docker-compose up` starts a bundled Postgres seeded
-  with a copy of the `core` schema (`deploy/core-init.sql`) so the foreign keys
-  into `core.person` / `core.chat` resolve; the app's `DB_URL` is built from the
-  `POSTGRES_*` variables in `.env`.
+## Docs
 
-Apply migrations with `alembic upgrade head` (the Alembic version table lives in
-the `quoto` schema).
+| Document | Purpose |
+|:--|:--|
+| [Versioning](docs/versioning.md) | What the version numbers mean |
+| [Release process](docs/releases.md) | Changelog, GitHub Release, deploying and rolling back |
+| [Changelog](CHANGELOG.md) | What changed in each release |
 
-## 🛠️ Tech Stack
+---
 
-| Layer           | Technology                      |
-| :-------------- | :------------------------------ |
-| **Framework**   | Aiogram 3                       |
-| **Database**    | Shared PostgreSQL `core` (schema `quoto`) + SQLAlchemy (Async) |
-| **Validation**  | Pydantic                        |
-| **AI**          | OpenRouter API (any LLM)        |
-| **Scheduler**   | APScheduler                     |
-| **HTTP Client** | HTTPX                           |
+<p align="center">
+  <a href="https://github.com/FreshLabDev/quoto/releases">Releases</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="LICENSE">GPL-3.0</a>
+</p>
 
-## 📂 Project Structure
-
-```
-quoto/
-├── app/
-│   ├── ai.py           # OpenRouter AI integration & message evaluation
-│   ├── config.py       # Settings, logging, environment variables
-│   ├── core.py         # Core business logic (people, groups, messages)
-│   ├── core_client.py  # Helpers over the shared core.* functions (touch, language)
-│   ├── db.py           # Database session & initialization
-│   ├── handlers.py     # Telegram bot handlers & commands
-│   ├── menu.py         # /start control panel rendering
-│   ├── models.py       # SQLAlchemy models (GroupSettings, Message, Quote, …) — FK into core.person/core.chat
-│   ├── scheduler.py    # APScheduler jobs & quote of the day pipeline
-│   ├── scoring.py      # Scoring engine & best quote selection
-│   └── utils.py        # Utility functions
-├── scripts/
-│   ├── bench_web.py           # Local web hub: replay a day, stream models, compare picks; media tab for own files
-│   ├── compare_eval_models.py  # Replay audited days against several eval models
-│   └── try_media_model.py      # Test one media model against a local file
-├── docker-compose.yml
-├── Dockerfile
-├── main.py             # Entry point
-├── requirements.in
-├── requirements.txt
-└── .env.example
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## ©️ License
-
-GNUv3 License — see [LICENSE](./LICENSE) file for details
-
-<div align="center">
-
-## 👤 Author
-
-Created with ❤️ by [FreshLabDev](https://github.com/FreshLabDev)
-
-<b>⭐ Add a star to my project!</b> <br>
-![star](https://github.com/user-attachments/assets/cc66e612-3b0f-4232-9467-e246d2d30f90)<br>
-
-</div>
+<p align="center">
+  Quoto is open source software by Asterfield.
+</p>

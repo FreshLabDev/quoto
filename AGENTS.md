@@ -17,6 +17,13 @@ default, and production-minded.
   apply cleanly on the shared database before the bot boots.
 - AI scoring goes through OpenRouter. Every request body and raw response is
   written to `logs/ai_audit.jsonl` and kept for seven days.
+- Every OpenRouter request carries `provider` routing built by
+  `ai._openrouter_provider()`: `data_collection: deny` and `zdr: true` by default
+  (`OPENROUTER_DATA_COLLECTION`, `OPENROUTER_ZDR`), so chat text only reaches
+  endpoints that neither keep it nor train on it. The user agreement promises
+  exactly that. A new model must have a ZDR endpoint on OpenRouter
+  (`/api/v1/endpoints/zdr`), and a new request, the bench scripts included,
+  must carry the same field.
 - `TELEGRAM_BOT_API_BASE_URL` points the bot at our own Bot API server. Empty
   means api.telegram.org, and then the Bot API 10.3 methods do not exist: the
   user agreement drops from rich Markdown to HTML. `app/richmd.py` probes
@@ -30,8 +37,8 @@ default, and production-minded.
 - Fewer than ten messages in a day is skipped silently, never announced.
 - A day the AI judges unremarkable gets a boring-day notice, not a weak quote.
   Do not add a fallback that forces a quote out of a flat day.
-- Interface languages are `ru`, `uk`, `en`, `de`. A group with no saved language
-  gets one chosen once by the daily AI run.
+- Interface languages are the sixteen in `app/i18n.py` `SUPPORTED_LANGUAGES`.
+  A group with no saved language gets one chosen once by the daily AI run.
 
 ## Data And Security
 
@@ -84,11 +91,15 @@ history, and checks that every package in `requirements.in` is pinned into
 - One full daily quote run against a live group, including the boring-day path.
 - Media description works for an image, a video and an audio file, and the
   fallback chain is exercised at least once.
-- Statistics and language switching still render in all four locales.
+- Statistics and language switching still render in all sixteen locales.
+- The audit log shows `"provider": {"data_collection": "deny", "zdr": true}` in
+  the evaluation request body.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+GPL-3.0, unlike the rest of the family, which is Apache-2.0. See
+[LICENSE](LICENSE). `app/version.py` holds the name the About card and the
+agreement show.
 
 ## Deploying
 
