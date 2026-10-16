@@ -212,7 +212,7 @@
       },
       {
         "heading": "Procesamiento con IA",
-        "text": "Para elegir una cita, el texto de los mensajes y el contenido multimedia se envían para su análisis a nuestro proveedor de IA, OpenRouter, y a sus proveedores de modelos.",
+        "text": "Para elegir una cita, el texto de los mensajes y el contenido multimedia se envían para su análisis a nuestro proveedor de IA, OpenRouter, y a sus proveedores de modelos. OpenRouter solo los transmite a proveedores que no los almacenan ni entrenan modelos con ellos.",
         "note": "No compartas contraseñas ni datos sensibles en chats donde Quoto esté activo."
       },
       {

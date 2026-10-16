@@ -148,6 +148,7 @@ def build_body(day: AuditDay, model: str, args: argparse.Namespace) -> dict[str,
         "model": model,
         "messages": day.body["messages"],
         "usage": {"include": True},
+        "provider": ai._openrouter_provider(),
     }
     if day.body.get("response_format"):
         body["response_format"] = day.body["response_format"]

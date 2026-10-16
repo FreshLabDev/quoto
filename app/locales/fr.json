@@ -212,7 +212,7 @@
       },
       {
         "heading": "Traitement par l’IA",
-        "text": "Pour choisir une citation, le texte des messages et les médias sont envoyés pour analyse à notre fournisseur d’IA OpenRouter et à ses fournisseurs de modèles.",
+        "text": "Pour choisir une citation, le texte des messages et les médias sont envoyés pour analyse à notre fournisseur d’IA OpenRouter et à ses fournisseurs de modèles. OpenRouter ne les transmet qu’aux fournisseurs qui ne les conservent pas et ne s’en servent pas pour entraîner des modèles.",
         "note": "Ne partage pas de mots de passe ni de données sensibles dans les chats où Quoto est actif."
       },
       {

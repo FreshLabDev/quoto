@@ -212,7 +212,7 @@
       },
       {
         "heading": "Yapay zekâ ile işleme",
-        "text": "Bir söz seçmek için mesaj metinleri ve medya, analiz edilmek üzere yapay zekâ sağlayıcımız OpenRouter’a ve onun model sağlayıcılarına gönderilir.",
+        "text": "Bir söz seçmek için mesaj metinleri ve medya, analiz edilmek üzere yapay zekâ sağlayıcımız OpenRouter’a ve onun model sağlayıcılarına gönderilir. OpenRouter bunları yalnızca bu verileri saklamayan ve onlarla model eğitmeyen sağlayıcılara iletir.",
         "note": "Quoto’nun açık olduğu sohbetlerde parola veya hassas veri paylaşma."
       },
       {

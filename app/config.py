@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Literal
 from zoneinfo import ZoneInfo
 from logging.handlers import RotatingFileHandler
 
@@ -10,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # === НАСТРОЙКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ===
 
-DEFAULT_EVAL_MODEL = "poolside/laguna-s-2.1:free"
+DEFAULT_EVAL_MODEL = "openai/gpt-6-luna"
 
 
 class Settings(BaseSettings):
@@ -41,8 +42,8 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_EVAL_MODEL: str = DEFAULT_EVAL_MODEL
     # Used only if the primary eval model errors out after retries.
-    OPENROUTER_EVAL_FALLBACK_MODEL: str = "poolside/laguna-s-2.1"
-    OPENROUTER_MEDIA_MODEL: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    OPENROUTER_EVAL_FALLBACK_MODEL: str = "google/gemini-3.1-flash-lite"
+    OPENROUTER_MEDIA_MODEL: str = "google/gemini-2.5-flash-lite"
     # Per-kind primary media models. Empty value means "use OPENROUTER_MEDIA_MODEL".
     # Chain per kind: specific model (if set) -> OPENROUTER_MEDIA_MODEL ->
     # OPENROUTER_MEDIA_FALLBACK_MODEL.
@@ -50,7 +51,14 @@ class Settings(BaseSettings):
     OPENROUTER_MEDIA_VIDEO_MODEL: str = ""
     OPENROUTER_MEDIA_AUDIO_MODEL: str = ""
     # Used only if the primary media model errors out after retries.
-    OPENROUTER_MEDIA_FALLBACK_MODEL: str = "google/gemini-2.5-flash-lite"
+    OPENROUTER_MEDIA_FALLBACK_MODEL: str = "google/gemini-3.1-flash-lite"
+    # OpenRouter provider routing for every request. "deny" keeps chat text and
+    # media away from providers that train on it, and ZDR narrows that to
+    # endpoints that keep nothing at all: together they are what the user
+    # agreement promises. A model with no such endpoint (Meta's "contributor"
+    # tier, for one) fails over to the fallback model instead.
+    OPENROUTER_DATA_COLLECTION: Literal["allow", "deny"] = "deny"
+    OPENROUTER_ZDR: bool = True
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
     OPENROUTER_HTTP_REFERER: str = "https://t.me/quototbot"
     OPENROUTER_APP_TITLE: str = "Quoto"
@@ -293,6 +301,12 @@ def validate_runtime() -> None:
     for stale, replacement in RENAMED_ENV_KEYS.items():
         if stale in configured:
             log.warning(f"⚠️ {stale} is no longer read — rename it to {replacement}.")
+    if settings.OPENROUTER_DATA_COLLECTION != "deny" or not settings.OPENROUTER_ZDR:
+        log.warning(
+            "⚠️ OPENROUTER_DATA_COLLECTION is not 'deny' or OPENROUTER_ZDR is off — chat text "
+            "may reach providers that store or train on it, which the user agreement says "
+            "does not happen."
+        )
     if not settings.OPENROUTER_API_KEY:
         log.critical("⚠️ OPENROUTER_API_KEY is empty — AI scoring and media analysis will fail. Set it in .env.")
     try:

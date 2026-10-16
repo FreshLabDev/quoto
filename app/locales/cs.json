@@ -212,7 +212,7 @@
       },
       {
         "heading": "Zpracování AI",
-        "text": "Pro výběr citátu se text zpráv a média posílají k analýze našemu poskytovateli AI OpenRouter a jeho poskytovatelům modelů.",
+        "text": "Pro výběr citátu se text zpráv a média posílají k analýze našemu poskytovateli AI OpenRouter a jeho poskytovatelům modelů. OpenRouter je předává jen poskytovatelům, kteří tato data neukládají a netrénují na nich modely.",
         "note": "Nesdílej hesla ani citlivé údaje v chatech, kde Quoto běží."
       },
       {

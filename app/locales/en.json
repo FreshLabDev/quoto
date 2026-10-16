@@ -212,7 +212,7 @@
       },
       {
         "heading": "AI processing",
-        "text": "To choose a quote, message text and media are sent to our AI provider OpenRouter and its model providers for analysis.",
+        "text": "To choose a quote, message text and media are sent to our AI provider OpenRouter and its model providers for analysis. OpenRouter passes them only to providers that neither store them nor train models on them.",
         "note": "Don't share passwords or sensitive data in chats where Quoto is active."
       },
       {

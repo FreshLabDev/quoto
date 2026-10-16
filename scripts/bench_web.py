@@ -339,6 +339,7 @@ async def stream_media_model(
         ],
         "stream": True,
         "usage": {"include": True},
+        "provider": ai._openrouter_provider(),
     }
     if options.get("max_tokens"):
         body["max_tokens"] = int(options["max_tokens"])
@@ -428,6 +429,7 @@ def build_body(day: AuditDay, model: str, options: dict[str, Any]) -> dict[str, 
         "messages": day.body["messages"],
         "stream": True,
         "usage": {"include": True},
+        "provider": ai._openrouter_provider(),
     }
     if day.body.get("response_format"):
         body["response_format"] = day.body["response_format"]
