@@ -47,8 +47,8 @@ Quoto is deliberately narrow:
 
 | Channel | Version | Meaning |
 |:--|:--|:--|
-| Stable | `v0.10.7` | Sixteen interface languages, each writing dates its own way |
-| Next | `Unreleased` | Zero-retention model routing, a newer evaluation model, dependency updates |
+| Stable | `v0.11.0` | Chat text reaches only zero-retention model endpoints |
+| Next | `Unreleased` | Compatible fixes and improvements land on `dev` |
 
 The bot is public as [@quototbot](https://t.me/quototbot). Until `v1.0.0` the
 operator contract (environment, schema, `core` contract) may still change

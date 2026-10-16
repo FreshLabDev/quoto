@@ -13,6 +13,23 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Use this section for changes that are merged but not released yet.
 
+## v0.11.0 - 2026-10-16
+
+A group's messages now reach only model endpoints that keep nothing and train
+on nothing.
+
+Until now production scored the day with a discounted Meta tier whose prompts
+and outputs may be used to improve Meta's products, and the built-in defaults
+were free endpoints. Every request now asks OpenRouter for zero-retention
+endpoints only, the default models are ones that have them, and the user
+agreement says so. The dependency lock moves too: 87 known advisories in ten
+packages, most of them in aiohttp and pillow, are down to none.
+
+There was no pre-release. Every day this waited on an alpha was another day of
+chat text going to a provider allowed to keep it. The request changes by one
+field, covered by tests, and each new model was checked against OpenRouter's
+zero-retention list before the tag.
+
 ### Security
 
 - **Chat text only reaches endpoints that keep nothing and train on nothing.**
