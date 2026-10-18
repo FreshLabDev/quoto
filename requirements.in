@@ -1,5 +1,6 @@
 pip-tools
 alembic
+anthropic
 aiogram
 pydantic-settings
 python-dotenv

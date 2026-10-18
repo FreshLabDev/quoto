@@ -212,7 +212,7 @@
       },
       {
         "heading": "AI 处理",
-        "text": "为了挑出金句，消息文本和媒体会发送给我们的 AI 服务商 OpenRouter 及其模型提供方进行分析。OpenRouter 只会把它们交给既不保存这些数据、也不用它们训练模型的提供方。",
+        "text": "为了挑出金句，消息文本、图片和贴纸会发送给 Anthropic 的 Claude 进行分析。Anthropic 不会用它们训练模型，并在 30 天内删除；只有被其安全系统标记为违规的内容才会保存更久。视频、圆形视频消息、语音消息和音频，以及 Claude 不可用时的其他所有内容，会通过 OpenRouter 只交给既不保存这些数据、也不用它们训练模型的提供方。",
         "note": "在有 Quoto 的群里，不要发送密码或敏感信息。"
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "已接受，谢谢！",
     "already": "✅ 这个群已经接受过协议了。",
     "admin_only": "只有群管理员才能接受协议。",
-    "reminder": "要发布每日金句，需要群管理员接受 Quoto 用户协议。"
+    "reminder": "要发布每日金句，需要群管理员接受 Quoto 用户协议。",
+    "updated_reminder": "Quoto 用户协议已更新：消息文本和图片现在由 Anthropic 的 Claude 分析。在群管理员接受新版本之前，不会发布每日金句。"
   },
   "date": {
     "day_month": "{month}{day}日",

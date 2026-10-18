@@ -212,7 +212,7 @@
       },
       {
         "heading": "Procesamiento con IA",
-        "text": "Para elegir una cita, el texto de los mensajes y el contenido multimedia se envían para su análisis a nuestro proveedor de IA, OpenRouter, y a sus proveedores de modelos. OpenRouter solo los transmite a proveedores que no los almacenan ni entrenan modelos con ellos.",
+        "text": "Para elegir una cita, el texto de los mensajes, las imágenes y los stickers se envían para su análisis a Claude, de Anthropic. Anthropic no entrena modelos con ellos y los borra en un plazo de 30 días; solo conserva más tiempo lo que sus sistemas de seguridad marquen como infracción de las normas. Los vídeos, los videomensajes, las notas de voz y el audio, y todo lo demás cuando Claude no está disponible, pasan por OpenRouter solo hacia proveedores que no los almacenan ni entrenan modelos con ellos.",
         "note": "No compartas contraseñas ni datos sensibles en chats donde Quoto esté activo."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Aceptado, ¡gracias!",
     "already": "✅ Este grupo ya ha aceptado el acuerdo.",
     "admin_only": "Solo un administrador del grupo puede aceptar el acuerdo.",
-    "reminder": "Para publicar la cita del día, un administrador del grupo tiene que aceptar el acuerdo de uso de Quoto."
+    "reminder": "Para publicar la cita del día, un administrador del grupo tiene que aceptar el acuerdo de uso de Quoto.",
+    "updated_reminder": "El acuerdo de uso de Quoto ha cambiado: ahora el texto de los mensajes y las imágenes los analiza Claude, de Anthropic. Hasta que un administrador del grupo acepte la nueva versión, no se publica la cita del día."
   },
   "date": {
     "day_month": "{day} de {month}",

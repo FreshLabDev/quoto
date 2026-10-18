@@ -79,8 +79,8 @@ and once a minute checks whether any group's day has closed.
 
 ```text
 messages + reactions -> day window (cutoff to cutoff, group time zone)
-  -> media described by a vision model, cached by perceptual hash
-  -> one evaluation call: score every message, judge the whole day
+  -> images described by Claude, video and audio by OpenRouter, cached by perceptual hash
+  -> one evaluation call to Claude: score every message, judge the whole day
   -> publish and pin the quote, or post the boring-day notice, or stay silent
   -> delete the day's messages
 ```
@@ -91,8 +91,14 @@ language gets one picked once by the same evaluation call, from the language
 the chat actually writes in. Messages that contain `#quoto`, Quoto's own posts
 among them, are left out of the day.
 
-If the evaluation call fails, Quoto retries every minute for two hours after
-the cutoff and then gives up on that day.
+Claude's safety classifiers now and then decline a day of ordinary banter, so
+every request opts into Anthropic's server-side fallback: the API re-runs a
+declined day in the same call on the model Anthropic picks for that kind of
+refusal. For a cyber decline on Opus 5.5 that is Claude Opus 4.8. If that model
+refuses too, Claude runs out of credit, is down or answers with something that
+does not parse, the same day goes to OpenRouter's evaluation model and then to
+its fallback. If the whole chain fails, Quoto retries every minute for two
+hours after the cutoff and then gives up on that day.
 
 ---
 
@@ -100,19 +106,28 @@ the cutoff and then gives up on that day.
 
 Quoto reads a whole group chat, so this part matters most.
 
-- Message text, captions, media and author names for the day are sent to
-  [OpenRouter](https://openrouter.ai) to pick the quote. Every request carries
+- Message text, captions, media descriptions and author names for the day go
+  to Claude through the Anthropic API to pick the quote, and photos, images
+  and stickers go there to be described. Anthropic does not train on API data
+  and deletes it within 30 days; it keeps longer only what its safety systems
+  flag as a policy violation.
+- Video, video messages, voice messages and audio go to
+  [OpenRouter](https://openrouter.ai), which Claude cannot take, and so does
+  anything Claude fails on. Every OpenRouter request carries
   `data_collection: "deny"` and `zdr: true`, so OpenRouter sends it only to
   endpoints with a zero-data-retention policy that do not train on it. A model
   with no such endpoint fails over to the fallback model instead of reaching
   one that keeps the data.
+- Nothing of a group reaches Anthropic before an admin accepts version 1.2 of
+  the agreement, the first that names it. A group that accepted 1.1 publishes
+  nothing until then, and its images keep going to OpenRouter only.
 - After a day is processed its messages are deleted. The published quote, its
   context and the scores stay, because the stats and the "Details" view are
   built from them.
 - Every evaluation request and raw response is written to
   `logs/ai_audit.jsonl` on the server for seven days, for debugging. It holds
   real message text and is readable only by the operator.
-- Bot token, OpenRouter key and database password are never logged.
+- Bot token, Anthropic and OpenRouter keys and database password are never logged.
 
 The user agreement shown in the bot says the same in all sixteen languages.
 
@@ -129,10 +144,15 @@ will touch:
 | `BOT_USERNAME` | yes | — | The bot's public username, used in the links the bot builds |
 | `DB_URL` | yes | — | `postgresql+asyncpg://` URL; in production the shared `core` database as `quoto_core` |
 | `TELEGRAM_BOT_API_BASE_URL` | no | empty | Self-hosted Bot API server; empty means api.telegram.org, where the agreement renders as HTML instead of rich Markdown |
-| `OPENROUTER_API_KEY` | yes | — | OpenRouter key |
-| `OPENROUTER_EVAL_MODEL` | no | `openai/gpt-6-luna` | Model that scores the day |
+| `ANTHROPIC_API_KEY` | one of the two keys | empty | Anthropic API key; empty sends scoring and images to OpenRouter only |
+| `ANTHROPIC_EVAL_MODEL` | no | `claude-opus-5-5` | Model that scores the day; empty skips Claude |
+| `ANTHROPIC_EVAL_EFFORT` | no | `medium` | `low` to `max`: how much the model thinks before it answers |
+| `ANTHROPIC_MEDIA_MODEL` | no | `claude-sonnet-5-5` | Model that describes photos, images and stickers; empty skips Claude |
+| `ANTHROPIC_MEDIA_EFFORT` | no | `medium` | The same, for image descriptions |
+| `OPENROUTER_API_KEY` | one of the two keys | — | OpenRouter key: video, audio, and the fallback for everything else |
+| `OPENROUTER_EVAL_MODEL` | no | `openai/gpt-6-luna` | Scores the day when Claude fails |
 | `OPENROUTER_EVAL_FALLBACK_MODEL` | no | `google/gemini-3.1-flash-lite` | Used when the evaluation model fails |
-| `OPENROUTER_MEDIA_MODEL` | no | `google/gemini-2.5-flash-lite` | Model that describes photos, video and audio |
+| `OPENROUTER_MEDIA_MODEL` | no | `google/gemini-2.5-flash-lite` | Describes video and audio, and images when Claude fails |
 | `OPENROUTER_MEDIA_FALLBACK_MODEL` | no | `google/gemini-3.1-flash-lite` | Used when the media model fails |
 | `OPENROUTER_DATA_COLLECTION` | no | `deny` | `deny` keeps every request away from providers that train on it |
 | `OPENROUTER_ZDR` | no | `true` | Only endpoints with zero data retention; turning this off or setting `allow` above breaks the promise in the agreement and logs a warning at startup |

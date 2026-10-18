@@ -212,7 +212,7 @@
       },
       {
         "heading": "AI-behandling",
-        "text": "För att välja ett citat skickas meddelandetext och media för analys till vår AI-leverantör OpenRouter och dess modelleverantörer. OpenRouter skickar dem bara vidare till leverantörer som varken sparar uppgifterna eller tränar modeller på dem.",
+        "text": "För att välja ett citat skickas meddelandetext, bilder och klistermärken för analys till Claude från Anthropic. Anthropic tränar inte modeller på dem och raderar dem inom 30 dagar; längre sparas bara det som dess säkerhetssystem flaggar som ett regelbrott. Video, videomeddelanden, röstmeddelanden och ljud, och allt annat när Claude inte är tillgängligt, går via OpenRouter bara till leverantörer som varken sparar uppgifterna eller tränar modeller på dem.",
         "note": "Dela inte lösenord eller känsliga uppgifter i chattar där Quoto är aktiv."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Godkänt — tack!",
     "already": "✅ Den här gruppen har redan godkänt villkoren.",
     "admin_only": "Bara en gruppadmin kan godkänna villkoren.",
-    "reminder": "För att dagens citat ska publiceras måste en gruppadmin godkänna Quotos användarvillkor."
+    "reminder": "För att dagens citat ska publiceras måste en gruppadmin godkänna Quotos användarvillkor.",
+    "updated_reminder": "Quotos användarvillkor har ändrats: meddelandetext och bilder analyseras nu av Claude från Anthropic. Tills en gruppadmin godkänner den nya versionen publiceras inget dagens citat."
   },
   "date": {
     "day_month": "{day} {month}",

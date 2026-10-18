@@ -78,6 +78,8 @@ class GroupSettings(Base):
     agreement_accepted_at = Column(DateTime(timezone=True), nullable=True)
     agreement_accepted_by = Column(BigInteger, nullable=True)
     agreement_language = Column(String, nullable=True)
+    # The version that admin accepted; NULL means one from before 1.2.
+    agreement_version = Column(String, nullable=True)
 
 
 class Message(Base):

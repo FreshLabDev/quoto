@@ -39,6 +39,18 @@ class Settings(BaseSettings):
     DB_URL: str
 
     # -- AI SETTINGS --
+    # Claude through the Anthropic API scores the day and describes images and
+    # stickers. OpenRouter is the fallback for both, and the only route for
+    # video and audio, which Claude does not take. An empty key or an empty
+    # model skips Claude for that job.
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_EVAL_MODEL: str = "claude-opus-5-5"
+    ANTHROPIC_EVAL_EFFORT: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    ANTHROPIC_EVAL_MAX_TOKENS: int = 32000
+    ANTHROPIC_MEDIA_MODEL: str = "claude-sonnet-5-5"
+    ANTHROPIC_MEDIA_EFFORT: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    ANTHROPIC_MEDIA_MAX_TOKENS: int = 8000
+
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_EVAL_MODEL: str = DEFAULT_EVAL_MODEL
     # Used only if the primary eval model errors out after retries.
@@ -307,8 +319,18 @@ def validate_runtime() -> None:
             "may reach providers that store or train on it, which the user agreement says "
             "does not happen."
         )
-    if not settings.OPENROUTER_API_KEY:
-        log.critical("⚠️ OPENROUTER_API_KEY is empty — AI scoring and media analysis will fail. Set it in .env.")
+    if not settings.ANTHROPIC_API_KEY and not settings.OPENROUTER_API_KEY:
+        log.critical(
+            "⚠️ ANTHROPIC_API_KEY and OPENROUTER_API_KEY are both empty — AI scoring and media "
+            "analysis will fail. Set at least one in .env."
+        )
+    elif not settings.ANTHROPIC_API_KEY:
+        log.warning("⚠️ ANTHROPIC_API_KEY is empty — scoring and images go to OpenRouter only.")
+    elif not settings.OPENROUTER_API_KEY:
+        log.warning(
+            "⚠️ OPENROUTER_API_KEY is empty — video and audio will not be described, and "
+            "nothing backs Claude up when it fails."
+        )
     try:
         ZoneInfo(settings.TIMEZONE)
     except Exception:

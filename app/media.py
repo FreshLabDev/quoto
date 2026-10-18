@@ -17,7 +17,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
-from . import ai, models
+from . import agreement, ai, models
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .utils import scrub_secrets
@@ -326,6 +326,7 @@ async def _process_media_source(
                 path=normalized.path,
                 mime_type=normalized.mime_type,
                 media_kind=_analysis_kind(source),
+                allow_claude=await _group_allows_claude(db_message_id),
             )
             cache = await _create_cache(source, normalized, description_result)
             await _store_media_result(
@@ -393,6 +394,31 @@ async def _group_media_analysis_enabled(db_message_id: int) -> bool:
         except Exception as exc:
             log.error(f"Cannot verify media setting for db message {db_message_id}: {exc}")
             return False
+
+
+async def _group_allows_claude(db_message_id: int) -> bool:
+    """Whether the file's group accepted an agreement version that names Anthropic.
+
+    Until it does, its files go only where the version it accepted says.
+    """
+    async with SessionLocal() as session:
+        try:
+            result = await session.execute(
+                select(
+                    models.GroupSettings.agreement_accepted_at,
+                    models.GroupSettings.agreement_version,
+                )
+                .join(models.Message, models.GroupSettings.chat_id == models.Message.chat_id)
+                .where(models.Message.id == db_message_id)
+            )
+            row = result.first()
+        except Exception as exc:
+            log.error(f"Cannot verify the agreement for db message {db_message_id}: {exc}")
+            return False
+    if row is None:
+        return False
+    accepted_at, version = row[0], row[1]
+    return accepted_at is not None and agreement.version_counts(version)
 
 
 async def _claim_media_item(

@@ -212,7 +212,7 @@
       },
       {
         "heading": "Yapay zekâ ile işleme",
-        "text": "Bir söz seçmek için mesaj metinleri ve medya, analiz edilmek üzere yapay zekâ sağlayıcımız OpenRouter’a ve onun model sağlayıcılarına gönderilir. OpenRouter bunları yalnızca bu verileri saklamayan ve onlarla model eğitmeyen sağlayıcılara iletir.",
+        "text": "Bir söz seçmek için mesaj metinleri, görseller ve çıkartmalar analiz edilmek üzere Anthropic’in Claude modeline gönderilir. Anthropic bunlarla model eğitmez ve 30 gün içinde siler; daha uzun süre yalnızca güvenlik sistemlerinin kural ihlali olarak işaretlediği içerikleri saklar. Videolar, görüntülü mesajlar, sesli mesajlar ve ses kayıtları ile Claude kullanılamadığında geri kalan her şey, OpenRouter üzerinden yalnızca bu verileri saklamayan ve onlarla model eğitmeyen sağlayıcılara iletilir.",
         "note": "Quoto’nun açık olduğu sohbetlerde parola veya hassas veri paylaşma."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Kabul edildi — teşekkürler!",
     "already": "✅ Bu grup koşulları zaten kabul etti.",
     "admin_only": "Koşulları yalnızca bir grup yöneticisi kabul edebilir.",
-    "reminder": "Günün sözünü yayınlamak için bir grup yöneticisinin Quoto kullanım koşullarını kabul etmesi gerekiyor."
+    "reminder": "Günün sözünü yayınlamak için bir grup yöneticisinin Quoto kullanım koşullarını kabul etmesi gerekiyor.",
+    "updated_reminder": "Quoto kullanım koşulları değişti: mesaj metinlerini ve görselleri artık Anthropic’in Claude modeli analiz ediyor. Bir grup yöneticisi yeni sürümü kabul edene kadar günün sözü yayınlanmaz."
   },
   "date": {
     "day_month": "{day} {month}",

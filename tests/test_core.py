@@ -313,12 +313,31 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         session.commit.assert_awaited_once()
 
     def test_group_agreement_accepted_flag(self) -> None:
+        now = datetime.now(timezone.utc)
         self.assertFalse(core.group_agreement_accepted(SimpleNamespace(agreement_accepted_at=None)))
         self.assertTrue(
             core.group_agreement_accepted(
-                SimpleNamespace(agreement_accepted_at=datetime.now(timezone.utc))
+                SimpleNamespace(agreement_accepted_at=now, agreement_version="1.2")
             )
         )
+        # Accepted before the version was recorded: 1.0 or 1.1, both too old.
+        old = SimpleNamespace(agreement_accepted_at=now, agreement_version=None)
+        self.assertFalse(core.group_agreement_accepted(old))
+        self.assertTrue(core.group_agreement_outdated(old))
+        self.assertFalse(
+            core.group_agreement_accepted(
+                SimpleNamespace(agreement_accepted_at=now, agreement_version="1.1")
+            )
+        )
+        self.assertFalse(core.group_agreement_outdated(SimpleNamespace(agreement_accepted_at=None)))
+
+    def test_agreement_version_counts_from_the_minimum(self) -> None:
+        self.assertTrue(core.agreement.version_counts("1.2"))
+        self.assertTrue(core.agreement.version_counts("1.10"))
+        self.assertTrue(core.agreement.version_counts("2.0"))
+        self.assertFalse(core.agreement.version_counts("1.1"))
+        self.assertFalse(core.agreement.version_counts(None))
+        self.assertFalse(core.agreement.version_counts("garbage"))
 
     async def test_accept_group_agreement_sets_fields(self) -> None:
         group = SimpleNamespace(
@@ -336,6 +355,26 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(result.agreement_accepted_at)
         self.assertEqual(result.agreement_accepted_by, 42)
         self.assertEqual(result.agreement_language, "ru")
+        self.assertEqual(result.agreement_version, core.agreement.DOCUMENT_VERSION)
+        session.commit.assert_awaited_once()
+
+    async def test_accept_group_agreement_replaces_an_outdated_acceptance(self) -> None:
+        group = SimpleNamespace(
+            agreement_accepted_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            agreement_accepted_by=7,
+            agreement_language="en",
+            agreement_version=None,
+        )
+        session = _UpdateSession(group)
+        with (
+            patch.object(core, "SessionLocal", return_value=session),
+            patch.object(core, "hydrate_group", new=AsyncMock(side_effect=lambda session, group: group)),
+        ):
+            result = await core.accept_group_agreement(1, 42, "ru")
+
+        self.assertEqual(result.agreement_accepted_by, 42)
+        self.assertEqual(result.agreement_version, core.agreement.DOCUMENT_VERSION)
+        self.assertGreater(result.agreement_accepted_at, datetime(2026, 6, 1, tzinfo=timezone.utc))
         session.commit.assert_awaited_once()
 
     async def test_accept_group_agreement_is_idempotent(self) -> None:
@@ -344,6 +383,7 @@ class CoreTests(unittest.IsolatedAsyncioTestCase):
             agreement_accepted_at=existing,
             agreement_accepted_by=7,
             agreement_language="en",
+            agreement_version=core.agreement.DOCUMENT_VERSION,
         )
         session = _UpdateSession(group)
         with (

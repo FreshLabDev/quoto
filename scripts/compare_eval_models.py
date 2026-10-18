@@ -5,13 +5,17 @@ payload — system prompt plus the whole day of messages, media already describe
 This script takes those saved days, sends the identical payload to several
 models in parallel, and shows which quote each one picked, at what cost.
 
+A model id starting with `claude-` goes to the Anthropic API with
+ANTHROPIC_API_KEY, everything else to OpenRouter. A model can carry its own
+effort after `@`, so one run compares levels side by side.
+
 Nothing is written to the database: this is a read-only experiment.
 
     python scripts/compare_eval_models.py --days 2 \\
         --models z-ai/glm-5.3-flash,poolside/laguna-s-2.1
 
-    python scripts/compare_eval_models.py --date 2026-09-04 --effort medium \\
-        --models z-ai/glm-5.3-flash,minimax/minimax-m3:free --json out.json
+    python scripts/compare_eval_models.py --days 6 --runs 2 \\
+        --models claude-sonnet-5-5@low,claude-sonnet-5-5@medium,claude-sonnet-5-5@high
 """
 
 import argparse
@@ -24,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import anthropic
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -43,6 +48,11 @@ class AuditDay:
     include_day_verdict: bool
     message_count: int
     messages_by_id: dict[int, dict[str, Any]]
+    # The same day in provider-neutral form, so it replays on either API
+    # whichever one wrote the record.
+    system_prompt: str = ""
+    user_payload: str = ""
+    schema: dict[str, Any] | None = None
     # Filled from whichever attempt that day actually produced a quote.
     production_model: str = "—"
     production_primary_id: int | None = None
@@ -65,6 +75,7 @@ class ModelRun:
     reasoning_tokens: int | None = None
     cost_usd: float | None = None
     elapsed_seconds: float = 0.0
+    served_by: str = ""
 
 
 def load_audit_days(path: Path, days: int | None, dates: list[str]) -> list[AuditDay]:
@@ -81,9 +92,10 @@ def load_audit_days(path: Path, days: int | None, dates: list[str]) -> list[Audi
         except json.JSONDecodeError:
             continue
         body = (record.get("request") or {}).get("body") or {}
-        messages = body.get("messages") or []
-        if len(messages) < 2:
+        payload = _payload_from_body(body)
+        if payload is None:
             continue
+        system_prompt, user_payload, schema = payload
         day = str(record.get("created_at", ""))[:10]
         if not day:
             continue
@@ -95,7 +107,10 @@ def load_audit_days(path: Path, days: int | None, dates: list[str]) -> list[Audi
                 body=body,
                 include_day_verdict=bool(record.get("include_day_verdict")),
                 message_count=int(record.get("message_count") or 0),
-                messages_by_id=_index_payload_messages(messages[1].get("content") or ""),
+                messages_by_id=_index_payload_messages(user_payload),
+                system_prompt=system_prompt,
+                user_payload=user_payload,
+                schema=schema,
             )
         result = record.get("result") or {}
         quote_choice = result.get("quote_choice") or {}
@@ -113,6 +128,23 @@ def load_audit_days(path: Path, days: int | None, dates: list[str]) -> list[Audi
             )
         return [by_day[d] for d in dates]
     return available[-days:] if days else available
+
+
+def _payload_from_body(body: dict[str, Any]) -> tuple[str, str, dict[str, Any] | None] | None:
+    """System prompt, user payload and schema from either API's request body."""
+    messages = body.get("messages") or []
+    if isinstance(body.get("system"), str) and len(messages) == 1:
+        # Anthropic: the system prompt is top-level and the schema sits in output_config.
+        schema = ((body.get("output_config") or {}).get("format") or {}).get("schema")
+        return body["system"], str(messages[0].get("content") or ""), schema
+    if len(messages) >= 2:
+        schema = ((body.get("response_format") or {}).get("json_schema") or {}).get("schema")
+        return (
+            str(messages[0].get("content") or ""),
+            str(messages[1].get("content") or ""),
+            schema,
+        )
+    return None
 
 
 def _index_payload_messages(user_content: str) -> dict[int, dict[str, Any]]:
@@ -143,19 +175,54 @@ def describe_message(item: dict[str, Any] | None, limit: int) -> str:
     return f"{author}: {text}" if text else author
 
 
-def build_body(day: AuditDay, model: str, args: argparse.Namespace) -> dict[str, Any]:
+def split_model(spec: str) -> tuple[str, str]:
+    """`claude-sonnet-5-5@high` -> (`claude-sonnet-5-5`, `high`); no `@` keeps --effort."""
+    model, _sep, effort = spec.partition("@")
+    return model, effort
+
+
+def is_claude(model: str) -> bool:
+    return model.startswith("claude-")
+
+
+CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+
+def build_claude_body(day: AuditDay, model: str, effort: str, args: argparse.Namespace) -> dict[str, Any]:
+    if not day.schema:
+        raise ValueError("this audit record carries no response schema")
+    effort = effort or args.effort or settings.ANTHROPIC_EVAL_EFFORT
+    if effort not in CLAUDE_EFFORTS:
+        raise ValueError(f"effort {effort!r} is not a Claude level: {', '.join(CLAUDE_EFFORTS)}")
+    return ai._claude_eval_body(
+        model=model,
+        system_prompt=day.system_prompt,
+        user_payload=day.user_payload,
+        schema=day.schema,
+        effort=effort,
+        max_tokens=args.max_tokens or settings.ANTHROPIC_EVAL_MAX_TOKENS,
+    )
+
+
+def build_body(day: AuditDay, model: str, args: argparse.Namespace, effort: str = "") -> dict[str, Any]:
     body = {
         "model": model,
-        "messages": day.body["messages"],
+        "messages": [
+            {"role": "system", "content": day.system_prompt},
+            {"role": "user", "content": day.user_payload},
+        ],
         "usage": {"include": True},
         "provider": ai._openrouter_provider(),
     }
-    if day.body.get("response_format"):
-        body["response_format"] = day.body["response_format"]
+    if day.schema:
+        body["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {"name": "quoto_replay", "strict": True, "schema": day.schema},
+        }
     max_tokens = args.max_tokens if args.max_tokens is not None else day.body.get("max_tokens")
     if max_tokens:
         body["max_tokens"] = max_tokens
-    effort = args.effort
+    effort = effort or args.effort
     if effort == "off":
         pass
     elif effort:
@@ -165,45 +232,86 @@ def build_body(day: AuditDay, model: str, args: argparse.Namespace) -> dict[str,
     return body
 
 
-async def run_model(
-    client: httpx.AsyncClient,
-    day: AuditDay,
-    model: str,
-    args: argparse.Namespace,
-    semaphore: asyncio.Semaphore,
-    attempt: int = 1,
-) -> ModelRun:
-    run = ModelRun(day=day.day, model=model, attempt=attempt)
-    body = build_body(day, model, args)
-    started = time.monotonic()
-    async with semaphore:
-        try:
-            response = await client.post(
-                settings.OPENROUTER_BASE_URL,
-                json=body,
-                headers=ai._openrouter_headers(),
-            )
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPStatusError as exc:
-            run.status = f"http_{exc.response.status_code}"
-            run.error = ai._redact(exc.response.text)[:200]
-            run.elapsed_seconds = time.monotonic() - started
-            return run
-        except Exception as exc:  # noqa: BLE001 — a comparison run must not abort the batch
-            run.status = type(exc).__name__
-            run.error = ai._redact(str(exc))[:200]
-            run.elapsed_seconds = time.monotonic() - started
-            return run
-
-    run.elapsed_seconds = time.monotonic() - started
+async def _call_openrouter(
+    client: httpx.AsyncClient, day: AuditDay, model: str, effort: str, args: argparse.Namespace, run: ModelRun
+) -> str | None:
+    try:
+        response = await client.post(
+            settings.OPENROUTER_BASE_URL,
+            json=build_body(day, model, args, effort),
+            headers=ai._openrouter_headers(),
+        )
+        response.raise_for_status()
+        data = response.json()
+    except httpx.HTTPStatusError as exc:
+        run.status = f"http_{exc.response.status_code}"
+        run.error = ai._redact(exc.response.text)[:200]
+        return None
+    except Exception as exc:  # noqa: BLE001 — a comparison run must not abort the batch
+        run.status = type(exc).__name__
+        run.error = ai._redact(str(exc))[:200]
+        return None
     usage = ai._extract_usage(data)
     run.prompt_tokens = usage.prompt_tokens
     run.completion_tokens = usage.completion_tokens
     run.reasoning_tokens = usage.reasoning_tokens
     run.cost_usd = usage.cost_usd
+    return ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
 
-    content = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+
+async def _call_claude(day: AuditDay, model: str, effort: str, args: argparse.Namespace, run: ModelRun) -> str | None:
+    try:
+        body = build_claude_body(day, model, effort, args)
+        if args.no_fallbacks:
+            body.pop("fallbacks", None)
+            async with ai._anthropic_client().messages.stream(**body) as stream:
+                message = await stream.get_final_message()
+        else:
+            message = await ai._claude_message(body)
+    except anthropic.APIStatusError as exc:
+        run.status = f"http_{exc.status_code}"
+        run.error = ai._redact(str(exc))[:200]
+        return None
+    except Exception as exc:  # noqa: BLE001 — a comparison run must not abort the batch
+        run.status = type(exc).__name__
+        run.error = ai._redact(str(exc))[:200]
+        return None
+    usage = ai._claude_usage(model, message.usage)
+    run.prompt_tokens = usage.prompt_tokens
+    run.completion_tokens = usage.completion_tokens
+    run.reasoning_tokens = usage.reasoning_tokens
+    run.cost_usd = usage.cost_usd
+    if message.model and message.model != model:
+        run.served_by = message.model
+    if message.stop_reason == "refusal":
+        run.status = "refusal"
+        run.error = str((ai._claude_stop_details(message) or {}).get("category") or "")
+        return None
+    if message.stop_reason == "max_tokens":
+        run.error = "stop_reason=max_tokens"
+    return ai._claude_text(message)
+
+
+async def run_model(
+    client: httpx.AsyncClient,
+    day: AuditDay,
+    spec: str,
+    args: argparse.Namespace,
+    semaphore: asyncio.Semaphore,
+    attempt: int = 1,
+) -> ModelRun:
+    run = ModelRun(day=day.day, model=spec, attempt=attempt)
+    model, effort = split_model(spec)
+    started = time.monotonic()
+    async with semaphore:
+        if is_claude(model):
+            content = await _call_claude(day, model, effort, args, run)
+        else:
+            content = await _call_openrouter(client, day, model, effort, args, run)
+    run.elapsed_seconds = time.monotonic() - started
+    if content is None:
+        return run
+
     content = content.strip()
     if not content:
         run.status = "empty_response"
@@ -277,11 +385,15 @@ def print_day(day: AuditDay, runs: list[ModelRun], args: argparse.Namespace) -> 
         for run in model_runs:
             prefix = f"    #{run.attempt}" if len(model_runs) > 1 else "   "
             if run.status != "ok":
-                print(f"{prefix} ✖ {run.status}: {run.error or '—'}  ({run.elapsed_seconds:.1f}s)")
+                print(
+                    f"{prefix} ✖ {run.status}: {run.error or '—'}"
+                    f" · {format_cost(run.cost_usd)} ({run.elapsed_seconds:.1f}s)"
+                )
                 continue
             quote = describe_message(day.messages_by_id.get(run.primary_id), args.quote_chars)
             agree = " ⭑" if run.primary_id == day.production_primary_id else ""
-            print(f"{prefix} «{quote}»{agree}")
+            served = f"  [ответил {run.served_by}]" if run.served_by else ""
+            print(f"{prefix} «{quote}»{agree}{served}")
             verdict = ""
             if run.should_publish is not None:
                 verdict = " · публиковать: да" if run.should_publish else f" · публиковать: нет ({run.reason_code})"
@@ -328,15 +440,16 @@ def print_summary(days: list[AuditDay], runs: list[ModelRun]) -> None:
 
 
 async def main_async(args: argparse.Namespace) -> None:
-    if not settings.OPENROUTER_API_KEY:
-        raise SystemExit("OPENROUTER_API_KEY is empty — set it in .env first.")
-
     days = load_audit_days(Path(args.audit), args.days if not args.date else None, args.date)
     if not days:
         raise SystemExit("No replayable days found in the audit log.")
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     if not models:
         raise SystemExit("Pass at least one model via --models.")
+    if any(is_claude(split_model(m)[0]) for m in models) and not settings.ANTHROPIC_API_KEY:
+        raise SystemExit("ANTHROPIC_API_KEY is empty — set it in .env first.")
+    if any(not is_claude(split_model(m)[0]) for m in models) and not settings.OPENROUTER_API_KEY:
+        raise SystemExit("OPENROUTER_API_KEY is empty — set it in .env first.")
 
     print(f"Дни: {', '.join(d.day for d in days)}")
     print(f"Модели: {', '.join(models)}")
@@ -372,7 +485,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--audit", default=str(Path(settings.LOGS_PATH) / "ai_audit.jsonl"))
     parser.add_argument("--days", type=int, default=2, help="How many most recent audited days to replay.")
     parser.add_argument("--date", action="append", default=[], help="Replay a specific YYYY-MM-DD; repeatable.")
-    parser.add_argument("--models", required=True, help="Comma-separated OpenRouter model ids.")
+    parser.add_argument(
+        "--models",
+        required=True,
+        help="Comma-separated model ids; claude-* go to Anthropic. Append @effort to set it per model.",
+    )
     parser.add_argument(
         "--effort",
         default="",
@@ -388,6 +505,11 @@ def parse_args() -> argparse.Namespace:
         help="Repeat each model on each day N times to see how stable its pick is.",
     )
     parser.add_argument("--quote-chars", type=int, default=140)
+    parser.add_argument(
+        "--no-fallbacks",
+        action="store_true",
+        help="Claude only: drop the server-side fallback the bot sends, to see the bare model refuse.",
+    )
     parser.add_argument("--json", default="", help="Also dump raw results to this file.")
     return parser.parse_args()
 

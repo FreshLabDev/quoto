@@ -13,6 +13,7 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
+import anthropic
 import httpx
 
 from . import i18n
@@ -22,12 +23,63 @@ from .quote_status import REASON_BORING_DAY, REASON_WORTHY
 log = setup_logging(logging.getLogger(__name__))
 _AUDIT_LOG_NAME = "ai_audit.jsonl"
 _AUDIT_RETENTION = timedelta(days=7)
+# Where the SDK sends Claude requests; written into the audit log beside the body.
+_ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 _audit_log_lock = Lock()
 
 # Cap untrusted per-message fields fed to the model (cost + abuse safety).
 _MAX_MESSAGE_TEXT = 2000
 _MAX_AUTHOR_NAME = 128
 _MAX_MEDIA_DESC = 1500
+# The schemas cap these too, but Claude's structured outputs take no length
+# bounds, so the parsers clip them as well.
+_MAX_REASON_TEXT = 200
+_MAX_CHAT_LANGUAGE = 80
+
+# Claude through the Anthropic API. The API reports tokens, not dollars, so the
+# cost stored with a run is computed here from the list prices, per million
+# tokens. A model missing from the table stores no cost.
+_CLAUDE_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
+    "claude-opus-5-5": (4.0, 20.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
+    # Where the server-side fallback can send a declined request.
+    "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-sonnet-5": (2.0, 10.0),
+}
+# Cache writes (five-minute TTL) and cache reads, as multiples of the input price.
+# Opus 5.5 reads its cache at half the usual share.
+_CLAUDE_CACHE_WRITE_MULTIPLIER = 1.25
+_CLAUDE_CACHE_READ_MULTIPLIER = 0.1
+_CLAUDE_CACHE_READ_MULTIPLIERS = {"claude-opus-5-5": 0.05}
+# Our own attempts per Claude call. The SDK already retries connection errors,
+# 429 and 5xx before raising; this covers an error that arrives mid-stream,
+# which the SDK does not retry.
+_CLAUDE_ATTEMPTS = 2
+# `fallbacks: "default"` in a request body: when Claude's safety classifiers
+# decline it, the API re-runs it inside the same call on the model Anthropic
+# recommends for that refusal category (Claude Opus 4.8 for a cyber decline on
+# Opus 5.5, Claude Sonnet 5 on Sonnet 5.5). Group banter trips them now and
+# then, and without this the day would go to OpenRouter or get no quote at all.
+_CLAUDE_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_CLAUDE_RETRYABLE_ERROR_TYPES = frozenset(
+    {"api_error", "overloaded_error", "rate_limit_error", "timeout_error"}
+)
+# Structured outputs on the Anthropic API reject numeric bounds, string lengths
+# and maxItems. The parsers clamp scores and clip strings anyway, so Claude gets
+# a copy of each schema without these keywords and the rest unchanged.
+_CLAUDE_UNSUPPORTED_SCHEMA_KEYS = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "maxItems",
+    }
+)
 
 _SCORE_PROMPT = (
     "You are a live Telegram group quote curator, not a literary critic. "
@@ -221,7 +273,8 @@ class InterfaceLanguageChoice:
 
 @dataclass(frozen=True)
 class TokenUsage:
-    """What one OpenRouter call actually consumed, as reported by the API."""
+    """What one model call consumed. OpenRouter reports the dollar cost; for
+    Claude it is computed from `_CLAUDE_PRICES_PER_MTOK`."""
 
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -315,7 +368,7 @@ class MediaModelsExhaustedError(RuntimeError):
         self.retry_after_seconds = retry_after_seconds
         self.counts_as_attempt = True
         details = "; ".join(
-            f"{model}: {type(exc).__name__}: {exc}" for model, exc in errors
+            f"{model}: {type(exc).__name__}: {_redact(str(exc))}" for model, exc in errors
         )
         super().__init__("All media models failed — " + details)
 
@@ -335,8 +388,11 @@ def is_retryable_media_error(exc: Exception) -> bool:
         return exc.retryable
     if isinstance(exc, MediaRetryableError):
         return True
-    if isinstance(exc, httpx.RequestError):
+    if isinstance(exc, (httpx.RequestError, anthropic.APIConnectionError)):
         return True
+    if isinstance(exc, anthropic.APIStatusError):
+        # 402 is an empty balance: the file waits for a top-up, as on OpenRouter.
+        return exc.status_code == 402 or _is_retryable_claude_error(exc)
     status = _media_http_status(exc)
     if status is not None:
         return status in {402, 408, 409, 425, 429} or status >= 500
@@ -405,8 +461,10 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
 
 
 def _redact(text: str) -> str:
-    if settings.OPENROUTER_API_KEY:
-        text = text.replace(settings.OPENROUTER_API_KEY, "***")
+    for key in (settings.OPENROUTER_API_KEY, settings.ANTHROPIC_API_KEY):
+        if key:
+            text = text.replace(key, "***")
+    text = re.sub(r"sk-ant-[A-Za-z0-9._\-]+", "sk-ant-***", text)
     return re.sub(r"(?i)bearer\s+[A-Za-z0-9._\-]+", "Bearer ***", text)
 
 
@@ -417,25 +475,197 @@ def _model_candidates(primary: str, fallback: str) -> list[str]:
     return models
 
 
+PROVIDER_ANTHROPIC = "anthropic"
+PROVIDER_OPENROUTER = "openrouter"
+
+
+def _eval_candidates() -> list[tuple[str, str]]:
+    """The scoring chain, in order: Claude, then OpenRouter's primary and fallback."""
+    candidates: list[tuple[str, str]] = []
+    if settings.ANTHROPIC_API_KEY and settings.ANTHROPIC_EVAL_MODEL:
+        candidates.append((PROVIDER_ANTHROPIC, settings.ANTHROPIC_EVAL_MODEL))
+    if settings.OPENROUTER_API_KEY:
+        candidates.extend(
+            (PROVIDER_OPENROUTER, model)
+            for model in _model_candidates(
+                settings.OPENROUTER_EVAL_MODEL, settings.OPENROUTER_EVAL_FALLBACK_MODEL
+            )
+        )
+    return candidates
+
+
+_claude_client: anthropic.AsyncAnthropic | None = None
+
+
+def _anthropic_client() -> anthropic.AsyncAnthropic:
+    global _claude_client
+    if _claude_client is None:
+        _claude_client = anthropic.AsyncAnthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            max_retries=2,
+            # Per network operation, not for the whole call: a long streamed
+            # answer keeps the connection busy and never trips it.
+            timeout=300.0,
+        )
+    return _claude_client
+
+
+def _claude_schema(schema: Any) -> Any:
+    """A copy of a JSON schema that Claude's structured outputs accept."""
+    if isinstance(schema, list):
+        return [_claude_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    cleaned: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key == "properties" and isinstance(value, dict):
+            # Property names are data, not keywords: keep every one of them.
+            cleaned[key] = {name: _claude_schema(sub) for name, sub in value.items()}
+        elif key not in _CLAUDE_UNSUPPORTED_SCHEMA_KEYS:
+            cleaned[key] = _claude_schema(value)
+    return cleaned
+
+
+def _claude_eval_body(
+    *,
+    model: str,
+    system_prompt: str,
+    user_payload: str,
+    schema: dict[str, Any],
+    effort: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    return {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_payload}],
+        # Adaptive thinking is already the default; it is spelled out so the
+        # body says that the model thinks and that effort sets how much.
+        "thinking": {"type": "adaptive"},
+        "output_config": {
+            "effort": effort,
+            "format": {"type": "json_schema", "schema": _claude_schema(schema)},
+        },
+        "fallbacks": "default",
+    }
+
+
+async def _claude_message(body: dict[str, Any]) -> Any:
+    """One streamed Claude call. Streaming keeps a long day, with thinking on
+    top of the answer, from sitting on one idle connection until it drops."""
+    async with _anthropic_client().beta.messages.stream(**body, betas=[_CLAUDE_FALLBACK_BETA]) as stream:
+        return await stream.get_final_message()
+
+
+def _claude_text(message: Any) -> str:
+    """The answer text. With thinking on, the reply opens with a thinking block
+    whose text is empty by default, so blocks are picked by type, not position."""
+    return "".join(
+        str(getattr(block, "text", "") or "")
+        for block in (getattr(message, "content", None) or [])
+        if getattr(block, "type", None) == "text"
+    ).strip()
+
+
+def _claude_cost(model: str, usage: Any) -> float | None:
+    prices = _CLAUDE_PRICES_PER_MTOK.get(model)
+    if not prices:
+        return None
+    input_price, output_price = prices
+    read_multiplier = _CLAUDE_CACHE_READ_MULTIPLIERS.get(model, _CLAUDE_CACHE_READ_MULTIPLIER)
+    return (
+        (_optional_int(getattr(usage, "input_tokens", None)) or 0) * input_price
+        + (_optional_int(getattr(usage, "cache_creation_input_tokens", None)) or 0)
+        * input_price
+        * _CLAUDE_CACHE_WRITE_MULTIPLIER
+        + (_optional_int(getattr(usage, "cache_read_input_tokens", None)) or 0) * input_price * read_multiplier
+        + (_optional_int(getattr(usage, "output_tokens", None)) or 0) * output_price
+    ) / 1_000_000
+
+
+def _claude_usage(model: str, usage: Any) -> TokenUsage:
+    if usage is None:
+        return TokenUsage()
+    input_tokens = _optional_int(getattr(usage, "input_tokens", None)) or 0
+    output_tokens = _optional_int(getattr(usage, "output_tokens", None)) or 0
+    cache_write = _optional_int(getattr(usage, "cache_creation_input_tokens", None)) or 0
+    cache_read = _optional_int(getattr(usage, "cache_read_input_tokens", None)) or 0
+    details = getattr(usage, "output_tokens_details", None)
+    thinking = _optional_int(getattr(details, "thinking_tokens", None)) if details else None
+    prompt_tokens = input_tokens + cache_write + cache_read
+    # With a server-side fallback the top level covers only the attempt that
+    # answered; every attempt, the declined one included, is in `iterations`
+    # with the model that ran it.
+    iterations = getattr(usage, "iterations", None)
+    if isinstance(iterations, list) and iterations:
+        costs = [_claude_cost(getattr(item, "model", None) or model, item) for item in iterations]
+        cost = None if any(c is None for c in costs) else sum(costs)
+    else:
+        cost = _claude_cost(model, usage)
+    return TokenUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=output_tokens,
+        reasoning_tokens=thinking,
+        total_tokens=prompt_tokens + output_tokens,
+        cost_usd=cost,
+    )
+
+
+def _claude_error_type(exc: Exception) -> str | None:
+    error_type = getattr(exc, "type", None)
+    if isinstance(error_type, str):
+        return error_type
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict) and isinstance(error.get("type"), str):
+            return error["type"]
+    return None
+
+
+def _is_retryable_claude_error(exc: Exception) -> bool:
+    if isinstance(exc, anthropic.APIConnectionError):
+        return True
+    if isinstance(exc, anthropic.APIStatusError):
+        # An error event mid-stream arrives on a 200 response, so its type in
+        # the body is what says whether it is worth another try.
+        return _is_retryable_http_status(exc.status_code) or (
+            _claude_error_type(exc) in _CLAUDE_RETRYABLE_ERROR_TYPES
+        )
+    return False
+
+
+def _claude_stop_details(message: Any) -> dict[str, Any] | None:
+    details = getattr(message, "stop_details", None)
+    if details is None:
+        return None
+    return {
+        "category": getattr(details, "category", None),
+        "explanation": getattr(details, "explanation", None),
+    }
+
+
 async def evaluate_messages(
     messages: list[dict[str, Any]],
     include_day_verdict: bool = False,
     detect_interface_language: bool = False,
 ) -> EvaluationResult:
+    candidates = _eval_candidates()
+    default_model = candidates[0][1] if candidates else settings.OPENROUTER_EVAL_MODEL
     if not messages:
         return EvaluationResult(
             scores={},
-            actual_model=settings.OPENROUTER_EVAL_MODEL,
-            requested_model=settings.OPENROUTER_EVAL_MODEL,
+            actual_model=default_model,
+            requested_model=default_model,
             status="empty",
         )
 
     neutral_scores = {int(msg["id"]): 0.5 for msg in messages}
-    default_model = settings.OPENROUTER_EVAL_MODEL
     default_verdict = DayVerdict()
 
-    if not settings.OPENROUTER_API_KEY:
-        log.warning("⚠️ OPENROUTER_API_KEY не задан — AI-оценка пропущена")
+    if not candidates:
+        log.warning("⚠️ Не задан ни ANTHROPIC_API_KEY, ни OPENROUTER_API_KEY — AI-оценка пропущена")
         return EvaluationResult(
             scores=neutral_scores,
             actual_model=default_model,
@@ -443,14 +673,14 @@ async def evaluate_messages(
             status="ai_failed",
             day_verdict=default_verdict if not include_day_verdict else None,
             day_verdict_error=(
-                "OPENROUTER_API_KEY is not configured for automatic day verdict evaluation."
+                "No AI provider key is configured for automatic day verdict evaluation."
                 if include_day_verdict
                 else None
             ),
         )
 
     if _breaker_is_open():
-        log.warning("⚡ OpenRouter circuit breaker открыт — AI-оценка пропущена")
+        log.warning("⚡ AI circuit breaker открыт — AI-оценка пропущена")
         return EvaluationResult(
             scores=neutral_scores,
             actual_model=default_model,
@@ -458,7 +688,7 @@ async def evaluate_messages(
             status="ai_failed",
             day_verdict=default_verdict if not include_day_verdict else None,
             day_verdict_error=(
-                "OpenRouter temporarily unavailable (circuit breaker open)."
+                "AI providers temporarily unavailable (circuit breaker open)."
                 if include_day_verdict
                 else None
             ),
@@ -471,44 +701,298 @@ async def evaluate_messages(
     if detect_interface_language:
         system_prompt = system_prompt + _LANGUAGE_DETECTION_PROMPT
 
+    schema = _response_schema(include_day_verdict, detect_interface_language)
     response_format = _response_format(
         include_day_verdict,
         detect_interface_language=detect_interface_language,
     )
     max_tokens = _eval_max_tokens(len(messages), include_day_verdict=include_day_verdict)
-    headers = _openrouter_headers()
+    headers = _openrouter_headers() if settings.OPENROUTER_API_KEY else {}
 
-    models = _model_candidates(settings.OPENROUTER_EVAL_MODEL, settings.OPENROUTER_EVAL_FALLBACK_MODEL)
-    for model_index, model in enumerate(models):
-        result = await _evaluate_with_model(
-            model=model,
-            requested_model=default_model,
-            messages=messages,
-            neutral_scores=neutral_scores,
-            default_verdict=default_verdict,
-            include_day_verdict=include_day_verdict,
-            detect_interface_language=detect_interface_language,
-            request_id=request_id,
-            system_prompt=system_prompt,
-            user_payload=user_payload,
-            response_format=response_format,
-            max_tokens=max_tokens,
-            headers=headers,
-        )
+    for index, (provider, model) in enumerate(candidates):
+        if provider == PROVIDER_ANTHROPIC:
+            result = await _evaluate_with_claude(
+                model=model,
+                requested_model=default_model,
+                messages=messages,
+                neutral_scores=neutral_scores,
+                default_verdict=default_verdict,
+                include_day_verdict=include_day_verdict,
+                detect_interface_language=detect_interface_language,
+                request_id=request_id,
+                system_prompt=system_prompt,
+                user_payload=user_payload,
+                schema=schema,
+            )
+        else:
+            result = await _evaluate_with_model(
+                model=model,
+                requested_model=default_model,
+                messages=messages,
+                neutral_scores=neutral_scores,
+                default_verdict=default_verdict,
+                include_day_verdict=include_day_verdict,
+                detect_interface_language=detect_interface_language,
+                request_id=request_id,
+                system_prompt=system_prompt,
+                user_payload=user_payload,
+                response_format=response_format,
+                max_tokens=max_tokens,
+                headers=headers,
+            )
         if result.status == "parsed":
             _breaker_record_success()
             return result
 
-        is_last_model = model_index == len(models) - 1
-        if not is_last_model:
+        if index < len(candidates) - 1:
             log.warning(
                 f"⚠️ Eval model {model} failed (status={result.status}); "
-                f"falling back to {models[model_index + 1]}"
+                f"falling back to {candidates[index + 1][1]}"
             )
-            continue
 
     _breaker_record_failure()
     return result
+
+
+def _failed_evaluation(
+    *,
+    status: str,
+    neutral_scores: dict[int, float],
+    actual_model: str,
+    requested_model: str,
+    usage: TokenUsage,
+    request_id: str,
+    include_day_verdict: bool,
+    default_verdict: DayVerdict,
+    error: str,
+) -> EvaluationResult:
+    return EvaluationResult(
+        scores=neutral_scores,
+        actual_model=actual_model,
+        requested_model=requested_model,
+        status=status,
+        usage=usage,
+        request_id=request_id,
+        day_verdict=default_verdict if not include_day_verdict else None,
+        day_verdict_error=error if include_day_verdict else None,
+    )
+
+
+def _parse_evaluation(
+    content: str,
+    *,
+    messages: list[dict[str, Any]],
+    include_day_verdict: bool,
+    actual_model: str,
+    requested_model: str,
+    usage: TokenUsage,
+    request_id: str,
+) -> tuple[EvaluationResult, dict[str, Any]]:
+    """A model's JSON answer as a result, plus its summary for the audit log.
+
+    Raises what the callers turn into `parse_failed`: JSONDecodeError,
+    KeyError, IndexError or ValueError.
+    """
+    if include_day_verdict:
+        entries, verdict, quote_choice, language_choice, verdict_error = _parse_day_payload_safely(
+            content,
+            require_language=False,
+        )
+    else:
+        entries, quote_choice = _parse_score_payload(content)
+        verdict = None
+        language_choice = None
+        verdict_error = None
+
+    scores = _normalize_scores(messages, entries)
+    audit_result = {
+        "status": "parsed",
+        "actual_model": actual_model,
+        "score_count": len(scores),
+        "quote_choice": _quote_choice_audit_payload(quote_choice),
+        "day_verdict": _day_verdict_audit_payload(verdict),
+        "language_choice": _language_choice_audit_payload(language_choice),
+        "day_verdict_error": verdict_error,
+    }
+    result = EvaluationResult(
+        scores=scores,
+        actual_model=actual_model,
+        requested_model=requested_model,
+        status="parsed",
+        usage=usage,
+        request_id=request_id,
+        day_verdict=verdict,
+        day_verdict_error=verdict_error,
+        quote_choice=quote_choice,
+        language_choice=language_choice,
+    )
+    return result, audit_result
+
+
+async def _evaluate_with_claude(
+    *,
+    model: str,
+    requested_model: str,
+    messages: list[dict[str, Any]],
+    neutral_scores: dict[int, float],
+    default_verdict: DayVerdict,
+    include_day_verdict: bool,
+    detect_interface_language: bool,
+    request_id: str,
+    system_prompt: str,
+    user_payload: str,
+    schema: dict[str, Any],
+) -> EvaluationResult:
+    body = _claude_eval_body(
+        model=model,
+        system_prompt=system_prompt,
+        user_payload=user_payload,
+        schema=schema,
+        effort=settings.ANTHROPIC_EVAL_EFFORT,
+        max_tokens=settings.ANTHROPIC_EVAL_MAX_TOKENS,
+    )
+    usage = TokenUsage()
+    actual_model = model
+    failure = "AI evaluation failed before a valid automatic day verdict was produced."
+
+    for attempt in range(_CLAUDE_ATTEMPTS):
+        audit_record: dict[str, Any] = {
+            "request_id": request_id,
+            "attempt": attempt + 1,
+            "provider": PROVIDER_ANTHROPIC,
+            "include_day_verdict": include_day_verdict,
+            "detect_interface_language": detect_interface_language,
+            "message_count": len(messages),
+            "request": {"url": _ANTHROPIC_MESSAGES_URL, "body": body},
+        }
+        try:
+            message = await _claude_message(body)
+        except (anthropic.APIStatusError, anthropic.APIConnectionError) as exc:
+            status_code = getattr(exc, "status_code", None)
+            audit_record["error"] = {
+                "type": type(exc).__name__,
+                "message": _redact(str(exc)),
+                "status_code": status_code,
+                "error_type": _claude_error_type(exc),
+            }
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
+            label = f"HTTP {status_code}" if status_code is not None else type(exc).__name__
+            if _is_retryable_claude_error(exc) and attempt < _CLAUDE_ATTEMPTS - 1:
+                delay = _compute_backoff(attempt)
+                log.warning(
+                    f"⏳ Anthropic {label}, повтор через {delay:.0f}с "
+                    f"(попытка {attempt + 1}/{_CLAUDE_ATTEMPTS})"
+                )
+                await asyncio.sleep(delay)
+                continue
+            log.error(f"Anthropic {label}: {_redact(str(exc))[:300]}")
+            break
+        except Exception as exc:
+            audit_record["error"] = {"type": type(exc).__name__, "message": _redact(str(exc))}
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
+            log.error(f"Ошибка при запросе к Anthropic: {_redact(str(exc))}")
+            break
+
+        usage = _claude_usage(model, getattr(message, "usage", None))
+        actual_model = getattr(message, "model", None) or model
+        content = _claude_text(message)
+        stop_reason = getattr(message, "stop_reason", None)
+        stop_details = _claude_stop_details(message)
+        if actual_model != model and stop_reason != "refusal":
+            log.info(f"↪️ {model} отказался оценивать день, ответил {actual_model}")
+        audit_record["usage"] = asdict(usage)
+        audit_record["response"] = {
+            "status_code": 200,
+            "id": getattr(message, "id", None),
+            "model": actual_model,
+            "stop_reason": stop_reason,
+            "stop_details": stop_details,
+            "content": content,
+        }
+
+        if stop_reason == "refusal":
+            category = (stop_details or {}).get("category")
+            audit_record["result"] = {
+                "status": "refused",
+                "actual_model": actual_model,
+                "category": category,
+            }
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
+            # The same day would be refused again, so it goes down the chain.
+            log.warning(f"⚠️ {actual_model} отказался оценивать день (категория: {category})")
+            return _failed_evaluation(
+                status="ai_failed",
+                neutral_scores=neutral_scores,
+                actual_model=actual_model,
+                requested_model=requested_model,
+                usage=usage,
+                request_id=request_id,
+                include_day_verdict=include_day_verdict,
+                default_verdict=default_verdict,
+                error=f"The model declined to evaluate the day ({category or 'no category'}).",
+            )
+        if stop_reason == "max_tokens":
+            log.warning(
+                f"⚠️ {actual_model} ответ обрезан (stop_reason=max_tokens); "
+                "увеличьте ANTHROPIC_EVAL_MAX_TOKENS"
+            )
+        if not content:
+            audit_record["result"] = {"status": "empty_response", "actual_model": actual_model}
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
+            log.warning(f"⚠️ {actual_model} вернул пустой ответ")
+            return _failed_evaluation(
+                status="ai_failed",
+                neutral_scores=neutral_scores,
+                actual_model=actual_model,
+                requested_model=requested_model,
+                usage=usage,
+                request_id=request_id,
+                include_day_verdict=include_day_verdict,
+                default_verdict=default_verdict,
+                error="AI returned an empty response for automatic day verdict evaluation.",
+            )
+
+        try:
+            result, audit_result = _parse_evaluation(
+                content,
+                messages=messages,
+                include_day_verdict=include_day_verdict,
+                actual_model=actual_model,
+                requested_model=requested_model,
+                usage=usage,
+                request_id=request_id,
+            )
+        except (json.JSONDecodeError, KeyError, IndexError, ValueError) as exc:
+            audit_record["error"] = {"type": type(exc).__name__, "message": str(exc)}
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
+            log.error(f"Ошибка парсинга ответа {actual_model}: {exc}")
+            return _failed_evaluation(
+                status="parse_failed",
+                neutral_scores=neutral_scores,
+                actual_model=actual_model,
+                requested_model=requested_model,
+                usage=usage,
+                request_id=request_id,
+                include_day_verdict=include_day_verdict,
+                default_verdict=default_verdict,
+                error=failure,
+            )
+        audit_record["result"] = audit_result
+        await asyncio.to_thread(_write_ai_audit_record, audit_record)
+        log.debug(f"🤖 {actual_model} оценил {len(result.scores)} сообщений")
+        return result
+
+    return _failed_evaluation(
+        status="ai_failed",
+        neutral_scores=neutral_scores,
+        actual_model=actual_model,
+        requested_model=requested_model,
+        usage=usage,
+        request_id=request_id,
+        include_day_verdict=include_day_verdict,
+        default_verdict=default_verdict,
+        error=failure,
+    )
 
 
 async def _evaluate_with_model(
@@ -554,6 +1038,7 @@ async def _evaluate_with_model(
         audit_record: dict[str, Any] = {
             "request_id": request_id,
             "attempt": attempt + 1,
+            "provider": PROVIDER_OPENROUTER,
             "include_day_verdict": include_day_verdict,
             "detect_interface_language": detect_interface_language,
             "message_count": len(messages),
@@ -621,41 +1106,18 @@ async def _evaluate_with_model(
                     ),
                 )
 
-            if include_day_verdict:
-                entries, verdict, quote_choice, language_choice, verdict_error = _parse_day_payload_safely(
-                    content,
-                    require_language=False,
-                )
-            else:
-                entries, quote_choice = _parse_score_payload(content)
-                verdict = None
-                language_choice = None
-                verdict_error = None
-
-            scores = _normalize_scores(messages, entries)
-            audit_record["result"] = {
-                "status": "parsed",
-                "actual_model": actual_model,
-                "score_count": len(scores),
-                "quote_choice": _quote_choice_audit_payload(quote_choice),
-                "day_verdict": _day_verdict_audit_payload(verdict),
-                "language_choice": _language_choice_audit_payload(language_choice),
-                "day_verdict_error": verdict_error,
-            }
-            await asyncio.to_thread(_write_ai_audit_record, audit_record)
-            log.debug(f"🤖 {actual_model} оценил {len(scores)} сообщений")
-            return EvaluationResult(
-                scores=scores,
+            result, audit_record["result"] = _parse_evaluation(
+                content,
+                messages=messages,
+                include_day_verdict=include_day_verdict,
                 actual_model=actual_model,
                 requested_model=requested_model,
-                status="parsed",
                 usage=usage,
                 request_id=request_id,
-                day_verdict=verdict,
-                day_verdict_error=verdict_error,
-                quote_choice=quote_choice,
-                language_choice=language_choice,
             )
+            await asyncio.to_thread(_write_ai_audit_record, audit_record)
+            log.debug(f"🤖 {actual_model} оценил {len(result.scores)} сообщений")
+            return result
 
         except httpx.HTTPStatusError as e:
             audit_record["error"] = {
@@ -833,13 +1295,20 @@ def _language_choice_audit_payload(choice: InterfaceLanguageChoice | None) -> di
     }
 
 
+def _response_schema(
+    include_day_verdict: bool,
+    detect_interface_language: bool = False,
+) -> dict[str, Any]:
+    if not include_day_verdict:
+        return _SCORE_RESPONSE_SCHEMA
+    return _DAY_RESPONSE_SCHEMA_WITH_LANGUAGE if detect_interface_language else _DAY_RESPONSE_SCHEMA
+
+
 def _response_format(
     include_day_verdict: bool,
     detect_interface_language: bool = False,
 ) -> dict[str, Any]:
-    schema = _SCORE_RESPONSE_SCHEMA
-    if include_day_verdict:
-        schema = _DAY_RESPONSE_SCHEMA_WITH_LANGUAGE if detect_interface_language else _DAY_RESPONSE_SCHEMA
+    schema = _response_schema(include_day_verdict, detect_interface_language)
     return {
         "type": "json_schema",
         "json_schema": {
@@ -900,17 +1369,117 @@ def _media_model_candidates(media_kind: str) -> list[str]:
     return models
 
 
+_CLAUDE_IMAGE_KINDS = frozenset({"photo", "image", "sticker"})
+# What the Messages API takes as a base64 image.
+_CLAUDE_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
+
+
+def _claude_media_model(media_kind: str, mime_type: str) -> str | None:
+    """Claude for images and stickers when configured; it takes no video or audio."""
+    if not settings.ANTHROPIC_API_KEY or not settings.ANTHROPIC_MEDIA_MODEL:
+        return None
+    if media_kind not in _CLAUDE_IMAGE_KINDS or mime_type not in _CLAUDE_IMAGE_MIME_TYPES:
+        return None
+    return settings.ANTHROPIC_MEDIA_MODEL
+
+
+async def _describe_with_claude(
+    *,
+    model: str,
+    path: Path,
+    mime_type: str,
+    media_kind: str,
+) -> MediaDescriptionResult:
+    raw = await asyncio.to_thread(path.read_bytes)
+    body: dict[str, Any] = {
+        "model": model,
+        "max_tokens": settings.ANTHROPIC_MEDIA_MAX_TOKENS,
+        "thinking": {"type": "adaptive"},
+        "output_config": {"effort": settings.ANTHROPIC_MEDIA_EFFORT},
+        "fallbacks": "default",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": base64.standard_b64encode(raw).decode("ascii"),
+                        },
+                    },
+                    {"type": "text", "text": _media_description_prompt(media_kind)},
+                ],
+            }
+        ],
+    }
+    message = await _claude_message(body)
+    if getattr(message, "stop_reason", None) == "refusal":
+        category = (_claude_stop_details(message) or {}).get("category")
+        raise _MediaModelResponseError(
+            f"Media model {model} declined the image ({category or 'no category'})."
+        )
+    description = _claude_text(message)
+    if not description:
+        raise _MediaModelResponseError(f"Media model {model} returned an empty description.")
+    usage = _claude_usage(model, getattr(message, "usage", None))
+    return MediaDescriptionResult(
+        description=description,
+        actual_model=getattr(message, "model", None) or model,
+        prompt_tokens=usage.prompt_tokens,
+        completion_tokens=usage.completion_tokens,
+        total_tokens=usage.total_tokens,
+    )
+
+
 async def describe_media_file(
     *,
     path: Path,
     mime_type: str,
     media_kind: str,
+    allow_claude: bool = True,
 ) -> MediaDescriptionResult:
-    if not settings.OPENROUTER_API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY is not configured for media analysis.")
+    """Describe one normalized file: Claude first for images, then OpenRouter.
 
+    `allow_claude` is False for a group that has not accepted the agreement
+    version naming Anthropic; its files keep going to OpenRouter only.
+    """
+    claude_model = _claude_media_model(media_kind, mime_type) if allow_claude else None
+    if not claude_model and not settings.OPENROUTER_API_KEY:
+        raise RuntimeError("No AI provider key is configured for media analysis.")
+
+    attempt_errors: list[tuple[str, Exception]] = []
+    if claude_model:
+        try:
+            return await _describe_with_claude(
+                model=claude_model,
+                path=path,
+                mime_type=mime_type,
+                media_kind=media_kind,
+            )
+        except (anthropic.APIStatusError, anthropic.APIConnectionError, _MediaModelResponseError) as exc:
+            attempt_errors.append((claude_model, exc))
+            if not settings.OPENROUTER_API_KEY:
+                raise MediaModelsExhaustedError(
+                    attempt_errors,
+                    retryable=is_retryable_media_error(exc),
+                ) from exc
+            log.warning(
+                f"⚠️ Media model {claude_model} failed ({type(exc).__name__}: "
+                f"{_redact(str(exc))[:200]}); falling back to OpenRouter"
+            )
+
+    # The cooldown is OpenRouter's: it opens on OpenRouter's 402 and never
+    # stood in Claude's way above.
     cooldown_remaining = _media_breaker_remaining()
     if cooldown_remaining > 0:
+        if attempt_errors:
+            raise MediaModelsExhaustedError(
+                attempt_errors,
+                retryable=True,
+                retry_after_seconds=cooldown_remaining,
+            )
         raise MediaProviderCooldownError(cooldown_remaining)
 
     media_part = await asyncio.to_thread(
@@ -921,7 +1490,7 @@ async def describe_media_file(
     )
     headers = _openrouter_headers()
     models = _media_model_candidates(media_kind)
-    attempt_errors: list[tuple[str, Exception]] = []
+    openrouter_errors: list[tuple[str, Exception]] = []
 
     for model_index, model in enumerate(models):
         body: dict[str, Any] = {
@@ -967,10 +1536,11 @@ async def describe_media_file(
                 total_tokens=_optional_int(usage.get("total_tokens")),
             )
         except (httpx.HTTPStatusError, httpx.RequestError, _MediaModelResponseError) as exc:
+            openrouter_errors.append((model, exc))
             attempt_errors.append((model, exc))
             if is_last_model:
-                all_payment_required = bool(attempt_errors) and all(
-                    _media_http_status(error) == 402 for _name, error in attempt_errors
+                all_payment_required = all(
+                    _media_http_status(error) == 402 for _name, error in openrouter_errors
                 )
                 retry_after = _media_breaker_open() if all_payment_required else None
                 raise MediaModelsExhaustedError(
@@ -1157,7 +1727,7 @@ def _parse_day_payload(
     reason_code = str(
         day.get("reason_code") or (REASON_WORTHY if should_publish else REASON_BORING_DAY)
     )
-    reason_text = str(day.get("reason_text") or "").strip()
+    reason_text = _clip(str(day.get("reason_text") or "").strip(), _MAX_REASON_TEXT)
 
     language_choice = _parse_language_choice(parsed)
     if require_language and language_choice is None:
@@ -1243,7 +1813,7 @@ def _parse_language_choice(payload: dict[str, Any]) -> InterfaceLanguageChoice |
         return None
 
     return InterfaceLanguageChoice(
-        chat_language=str(language.get("chat_language") or "").strip(),
+        chat_language=_clip(str(language.get("chat_language") or "").strip(), _MAX_CHAT_LANGUAGE),
         interface_language=interface_language,
     )
 

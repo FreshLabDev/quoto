@@ -212,7 +212,7 @@
       },
       {
         "heading": "Processament amb IA",
-        "text": "Per triar una cita, el text dels missatges i els mitjans s’envien per a l’anàlisi al nostre proveïdor d’IA OpenRouter i als seus proveïdors de models. OpenRouter només els fa arribar a proveïdors que no els conserven ni els fan servir per entrenar models.",
+        "text": "Per triar una cita, el text dels missatges, les imatges i els adhesius s’envien per a l’anàlisi a Claude, d’Anthropic. Anthropic no els fa servir per entrenar models i els esborra en un termini de 30 dies; només conserva més temps el que els seus sistemes de seguretat marquin com a infracció de les normes. Els vídeos, els vídeos circulars, les notes de veu i l’àudio, i tota la resta quan Claude no està disponible, passen per OpenRouter només cap a proveïdors que no els conserven ni els fan servir per entrenar models.",
         "note": "No comparteixis contrasenyes ni dades sensibles als xats on Quoto està actiu."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Acceptades — gràcies!",
     "already": "✅ Aquest grup ja ha acceptat les condicions.",
     "admin_only": "Només un administrador del grup pot acceptar les condicions.",
-    "reminder": "Per publicar la cita del dia, un administrador del grup ha d’acceptar les condicions d’ús de Quoto."
+    "reminder": "Per publicar la cita del dia, un administrador del grup ha d’acceptar les condicions d’ús de Quoto.",
+    "updated_reminder": "Les condicions d’ús de Quoto han canviat: ara és Claude, d’Anthropic, qui analitza el text dels missatges i les imatges. Fins que un administrador del grup no accepti la nova versió, no es publica la cita del dia."
   },
   "date": {
     "day_month": "{day} de {month}",

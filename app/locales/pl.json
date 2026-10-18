@@ -212,7 +212,7 @@
       },
       {
         "heading": "Przetwarzanie przez AI",
-        "text": "Aby wybrać cytat, treść wiadomości i media trafiają do analizy do naszego dostawcy AI, OpenRouter, i jego dostawców modeli. OpenRouter przekazuje je tylko dostawcom, którzy nie przechowują tych danych i nie trenują na nich modeli.",
+        "text": "Aby wybrać cytat, treść wiadomości, obrazy i naklejki trafiają do analizy do Claude od Anthropic. Anthropic nie trenuje na nich modeli i usuwa je w ciągu 30 dni; dłużej przechowuje tylko to, co jego systemy bezpieczeństwa oznaczą jako naruszenie zasad. Wideo, wiadomości wideo, wiadomości głosowe i audio, a gdy Claude jest niedostępny, także cała reszta, trafiają przez OpenRouter tylko do dostawców, którzy nie przechowują tych danych i nie trenują na nich modeli.",
         "note": "Nie podawaj haseł ani danych wrażliwych na czatach, na których działa Quoto."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Zaakceptowano — dzięki!",
     "already": "✅ Ta grupa już zaakceptowała regulamin.",
     "admin_only": "Regulamin może zaakceptować tylko administrator grupy.",
-    "reminder": "Aby publikować cytat dnia, administrator grupy musi zaakceptować regulamin Quoto."
+    "reminder": "Aby publikować cytat dnia, administrator grupy musi zaakceptować regulamin Quoto.",
+    "updated_reminder": "Regulamin Quoto się zmienił: treść wiadomości i obrazy analizuje teraz Claude od Anthropic. Dopóki administrator grupy nie zaakceptuje nowej wersji, cytat dnia nie jest publikowany."
   },
   "date": {
     "day_month": "{day} {month}",
