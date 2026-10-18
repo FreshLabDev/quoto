@@ -11,8 +11,13 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+## v0.11.1-alpha.1 - 2026-10-18
+
 Claude now picks the quote and describes images, and the user agreement moves
 to 1.2 so that every group agrees to that first.
+
+Quoto has no test bot, so this alpha runs on the production bot. It either
+becomes 0.11.1 after a few real days or gets rolled back to 0.11.0.
 
 ### Changed
 
