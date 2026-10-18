@@ -11,6 +11,11 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+## v0.11.1-alpha.2 - 2026-10-18
+
+One fix found on the first real days of alpha.1. Nothing changes for
+operators: no new variables, no migration.
+
 ### Fixed
 
 - **A day recomputed after a failed publish keeps the report of the run that
