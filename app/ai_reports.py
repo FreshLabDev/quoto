@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Any
 
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from .config import settings, setup_logging
@@ -76,6 +77,34 @@ async def save_evaluation_report(
 
     async with SessionLocal() as session:
         try:
+            # A day recomputed after publish_failed finds the failed attempt's row.
+            # Replace it, scores included, in this same transaction; a parsed
+            # report is the day's record and stays as it is.
+            existing = (
+                await session.execute(
+                    select(models.AIEvaluationRun.id, models.AIEvaluationRun.status)
+                    .where(
+                        models.AIEvaluationRun.group_id == group_id,
+                        models.AIEvaluationRun.quote_day == window.quote_day,
+                    )
+                    .with_for_update()
+                )
+            ).first()
+            if existing is not None:
+                if existing.status == "parsed":
+                    log.info(f"{chat_id} | ⏭️ AI evaluation report for {window.quote_day} already exists")
+                    return
+                log.info(
+                    f"{chat_id} | ♻️ Заменяю AI evaluation report за {window.quote_day}: "
+                    f"прошлый прогон закончился как {existing.status}"
+                )
+                await session.execute(
+                    delete(models.MessageAIScore).where(models.MessageAIScore.run_id == existing.id)
+                )
+                await session.execute(
+                    delete(models.AIEvaluationRun).where(models.AIEvaluationRun.id == existing.id)
+                )
+
             session.add(run)
             await session.flush()
 

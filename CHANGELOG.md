@@ -11,6 +11,18 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+### Fixed
+
+- **A day recomputed after a failed publish keeps the report of the run that
+  succeeded.** `ai_evaluation_runs` holds one row per chat and day. When the
+  first attempt ended as `ai_failed` and a later one picked the quote, the
+  insert hit `uq_ai_evaluation_run_group_day`, the error was logged as "already
+  exists", and the table kept the failed row: 17 October's row said
+  OpenRouter had failed while Claude Opus 5.5 had published the quote, and the
+  scores, model and cost of the real run were lost. The failed row is now
+  replaced together with its `message_ai_scores` in one transaction. A report
+  that is already `parsed` is still left alone.
+
 ## v0.11.1-alpha.1 - 2026-10-18
 
 Claude now picks the quote and describes images, and the user agreement moves
