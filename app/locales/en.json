@@ -212,7 +212,7 @@
       },
       {
         "heading": "AI processing",
-        "text": "To choose a quote, message text and media are sent to our AI provider OpenRouter and its model providers for analysis. OpenRouter passes them only to providers that neither store them nor train models on them.",
+        "text": "To choose a quote, message text, images and stickers are sent to Claude by Anthropic for analysis. Anthropic does not train models on them and deletes them within 30 days; it keeps longer only what its safety systems flag as a policy violation. Videos, video messages, voice messages and audio, and everything else whenever Claude is unavailable, go through OpenRouter only to providers that neither store them nor train models on them.",
         "note": "Don't share passwords or sensitive data in chats where Quoto is active."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Accepted — thank you!",
     "already": "✅ This group has already accepted the agreement.",
     "admin_only": "Only a group admin can accept the agreement.",
-    "reminder": "To publish the quote of the day, a group admin needs to accept the Quoto user agreement."
+    "reminder": "To publish the quote of the day, a group admin needs to accept the Quoto user agreement.",
+    "updated_reminder": "The Quoto user agreement has changed: message text and images are now analysed by Claude from Anthropic. Until a group admin accepts the new version, no quote of the day is published."
   },
   "date": {
     "day_month": "{day} {month}",

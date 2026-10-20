@@ -11,7 +11,96 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
-Use this section for changes that are merged but not released yet.
+## v0.11.1 - 2026-10-20
+
+Claude Opus 5.5 picks the quote of the day and Claude Sonnet 5.5 describes
+images, with OpenRouter behind both; the user agreement is 1.2, and every group
+accepts it again before Quoto publishes there.
+
+This is `v0.11.1-alpha.2` promoted unchanged. Both alphas ran on the production
+bot from 18 October: the day was scored by Claude every evening, including
+20 October, and the report fix in alpha.2 held. The OpenRouter media fallback
+answered `402 Payment Required` on 18 October until its balance was topped
+up; Claude's own path was not affected. Operators coming from `v0.11.0`: read
+the Operators section of `v0.11.1-alpha.1` for the new variables, the
+migration and the new dependency.
+
+## v0.11.1-alpha.2 - 2026-10-18
+
+One fix found on the first real days of alpha.1. Nothing changes for
+operators: no new variables, no migration.
+
+### Fixed
+
+- **A day recomputed after a failed publish keeps the report of the run that
+  succeeded.** `ai_evaluation_runs` holds one row per chat and day. When the
+  first attempt ended as `ai_failed` and a later one picked the quote, the
+  insert hit `uq_ai_evaluation_run_group_day`, the error was logged as "already
+  exists", and the table kept the failed row: 17 October's row said
+  OpenRouter had failed while Claude Opus 5.5 had published the quote, and the
+  scores, model and cost of the real run were lost. The failed row is now
+  replaced together with its `message_ai_scores` in one transaction. A report
+  that is already `parsed` is still left alone.
+
+## v0.11.1-alpha.1 - 2026-10-18
+
+Claude now picks the quote and describes images, and the user agreement moves
+to 1.2 so that every group agrees to that first.
+
+Quoto has no test bot, so this alpha runs on the production bot. It either
+becomes 0.11.1 after a few real days or gets rolled back to 0.11.0.
+
+### Changed
+
+- **Claude Opus 5.5 scores the day** through the Anthropic API, at `medium`
+  effort with adaptive thinking and a structured answer. OpenRouter's
+  `openai/gpt-6-luna` and `google/gemini-3.1-flash-lite` stay behind it: a
+  refusal, an empty balance, an outage or an answer that does not parse moves
+  the day to the next model. Replaying 10–17 October, Opus at `medium` and
+  `high` picked the same quote on six days of seven, while Sonnet 5.5's pick
+  changed from run to run; Opus costs about $0.11 a day there, Sonnet 5.5
+  about $0.055. The API reports tokens, not dollars, so Claude's cost is
+  computed from list prices ($4 / $20 per million tokens for Opus 5.5) and
+  stored with the run like OpenRouter's.
+- **A safety refusal no longer costs the day.** Every Claude request opts into
+  Anthropic's server-side fallback (`fallbacks: "default"`): a day the
+  classifiers decline is answered in the same call by the model Anthropic
+  recommends for that refusal category. Replaying 16 October, the cyber
+  classifier declined a whole day of banter on Opus 5.5 and Sonnet 5.5 at every
+  effort level; with the fallback, Claude Opus 4.8 picked the quote. The
+  declined attempt is counted in the stored cost, so such a day costs about
+  twice as much as an ordinary day of the same size.
+- **Claude Sonnet 5.5 describes photos, images and stickers.** Video, video messages,
+  voice messages and audio stay on OpenRouter, because Claude takes none of
+  them. A failed Claude call falls back to the OpenRouter media chain, and
+  OpenRouter's cooldown after a 402 no longer holds images back from Claude.
+- **The user agreement is 1.2, and every group accepts it again.** The AI
+  section now says that text, images and stickers go to Claude, that Anthropic
+  does not train on them and deletes them within 30 days, keeping longer only
+  what its safety systems flag, and that video and audio go through OpenRouter
+  to providers that keep nothing. 1.1 promised only the latter, so a group that
+  accepted it publishes nothing until an admin accepts 1.2; it gets a daily
+  notice saying what changed, and its images keep going to OpenRouter only.
+- `scripts/compare_eval_models.py` replays audited days on Claude as well, and
+  reads records written by either provider. `claude-sonnet-5-5@low,claude-sonnet-5-5@high`
+  compares effort levels in one run. Claude replays send the same fallback as
+  the bot; `--no-fallbacks` shows the bare model's refusals.
+
+### Operators
+
+- **New variables**: `ANTHROPIC_API_KEY`; `ANTHROPIC_EVAL_MODEL`
+  (`claude-opus-5-5`) and `ANTHROPIC_MEDIA_MODEL` (`claude-sonnet-5-5`);
+  `ANTHROPIC_EVAL_EFFORT` and `ANTHROPIC_MEDIA_EFFORT`, both `medium`;
+  `ANTHROPIC_EVAL_MAX_TOKENS` (32000) and `ANTHROPIC_MEDIA_MAX_TOKENS` (8000).
+  Without `ANTHROPIC_API_KEY` the bot sends everything to OpenRouter as 0.11
+  did. `OPENROUTER_API_KEY` is no longer required on its own: one of the two
+  keys is.
+- **Migration `20261018_01`** adds `quoto.group_settings.agreement_version`.
+  Every group that accepted before has NULL there, which the bot reads as a
+  version older than 1.2.
+- **New dependency**: `anthropic` 1.15.0, which brings `httpx2`, `jiter`,
+  `docstring-parser`, `opentelemetry-api`, `sniffio` and `truststore`.
+  `pip-audit` reports nothing.
 
 ## v0.11.0 - 2026-10-16
 

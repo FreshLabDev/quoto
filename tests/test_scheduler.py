@@ -8,7 +8,7 @@ os.environ.setdefault("BOT_TOKEN", "123456:TESTTOKEN1234567890")
 os.environ.setdefault("BOT_USERNAME", "quoto_test_bot")
 os.environ.setdefault("DB_URL", "postgresql+asyncpg://quoto:quoto@localhost:5432/quoto")
 
-from app import scheduler, scoring
+from app import agreement, i18n, scheduler, scoring
 from aiogram.exceptions import TelegramNetworkError
 
 from app.quote_status import (
@@ -74,6 +74,7 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             name="Quoto Test Chat",
             timezone="Europe/Kyiv",
             agreement_accepted_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            agreement_version=agreement.DOCUMENT_VERSION,
         )
         self.window = _make_window()
 
@@ -96,6 +97,23 @@ class SchedulerFlowTests(unittest.IsolatedAsyncioTestCase):
             scheduler._completed_days[self.group.chat_id],
             self.window.quote_day,
         )
+
+    async def test_process_group_asks_again_when_accepted_version_is_outdated(self) -> None:
+        self.group.agreement_version = None
+        bot = SimpleNamespace(send_message=AsyncMock())
+
+        with (
+            patch.object(scheduler, "_recover_stale_quotes_for_chat", new=AsyncMock()) as recover,
+            patch.object(scheduler.scoring, "pick_best_quote", new=AsyncMock()) as pick_best_quote,
+        ):
+            await scheduler._process_group(bot, self.group, self.window)
+
+        recover.assert_not_awaited()
+        pick_best_quote.assert_not_awaited()
+        bot.send_message.assert_awaited_once()
+        sent_text = bot.send_message.await_args.args[1]
+        language = i18n.group_language(self.group)
+        self.assertEqual(sent_text, i18n.t(language, "agreement.updated_reminder"))
 
     async def test_agreement_reminder_deactivates_missing_chat(self) -> None:
         from aiogram.exceptions import TelegramBadRequest

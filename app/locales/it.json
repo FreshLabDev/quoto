@@ -212,7 +212,7 @@
       },
       {
         "heading": "Elaborazione con l’IA",
-        "text": "Per scegliere una citazione, il testo dei messaggi e i media vengono inviati per l’analisi al nostro fornitore di IA OpenRouter e ai suoi fornitori di modelli. OpenRouter li inoltra solo a fornitori che non li conservano e non li usano per addestrare modelli.",
+        "text": "Per scegliere una citazione, il testo dei messaggi, le immagini e gli sticker vengono inviati per l’analisi a Claude di Anthropic. Anthropic non li usa per addestrare modelli e li cancella entro 30 giorni; conserva più a lungo solo ciò che i suoi sistemi di sicurezza segnalano come violazione delle regole. Video, videomessaggi, messaggi vocali e audio, e tutto il resto quando Claude non è disponibile, passano da OpenRouter solo verso fornitori che non li conservano e non li usano per addestrare modelli.",
         "note": "Non condividere password o dati sensibili nelle chat in cui Quoto è attivo."
       },
       {
@@ -248,7 +248,8 @@
     "accepted_toast": "Accettate — grazie!",
     "already": "✅ Questo gruppo ha già accettato le condizioni.",
     "admin_only": "Solo un admin del gruppo può accettare le condizioni.",
-    "reminder": "Per pubblicare la citazione del giorno, un admin del gruppo deve accettare le condizioni d’uso di Quoto."
+    "reminder": "Per pubblicare la citazione del giorno, un admin del gruppo deve accettare le condizioni d’uso di Quoto.",
+    "updated_reminder": "Le condizioni d’uso di Quoto sono cambiate: ora il testo dei messaggi e le immagini li analizza Claude di Anthropic. Finché un admin del gruppo non accetta la nuova versione, la citazione del giorno non viene pubblicata."
   },
   "date": {
     "day_month": "{day} {month}",

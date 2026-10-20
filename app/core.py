@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from . import core_client, i18n, media, models, utils
+from . import agreement, core_client, i18n, media, models, utils
 from .config import settings, setup_logging
 from .db import SessionLocal
 from .quote_status import (
@@ -451,7 +451,15 @@ def effective_group_message_cap(group: models.GroupSettings | None) -> int | Non
 
 
 def group_agreement_accepted(group: models.GroupSettings | None) -> bool:
-    return getattr(group, "agreement_accepted_at", None) is not None
+    """An admin accepted a version of the agreement that still counts."""
+    if getattr(group, "agreement_accepted_at", None) is None:
+        return False
+    return agreement.version_counts(getattr(group, "agreement_version", None))
+
+
+def group_agreement_outdated(group: models.GroupSettings | None) -> bool:
+    """Accepted once, but a version that no longer counts: the group is asked again."""
+    return getattr(group, "agreement_accepted_at", None) is not None and not group_agreement_accepted(group)
 
 
 async def accept_group_agreement(
@@ -467,10 +475,11 @@ async def accept_group_agreement(
         group = result.scalars().first()
         if not group:
             return None
-        if group.agreement_accepted_at is None:
+        if not group_agreement_accepted(group):
             group.agreement_accepted_at = utc_now()
             group.agreement_accepted_by = int(user_id)
             group.agreement_language = normalized
+            group.agreement_version = agreement.DOCUMENT_VERSION
             await session.commit()
             await session.refresh(group)
         return await hydrate_group(session, group)

@@ -30,9 +30,29 @@ ACTION_ACCEPT = "a"
 # contact come from the project's identity, and the contact is substituted into
 # the section that mentions it mid-sentence, so the whole document has one
 # source for it rather than four locale copies.
-DOCUMENT_VERSION = "1.1"
+DOCUMENT_VERSION = "1.2"
 # ISO 8601: an effective date has to read the same in every locale.
-EFFECTIVE_DATE = "2026-10-16"
+EFFECTIVE_DATE = "2026-10-18"
+# The oldest accepted version that still counts. Raise it only for a change that
+# needs fresh consent, so a wording fix does not make every group accept again.
+# 1.2 adds Anthropic, which keeps API data for up to 30 days, where 1.1
+# promised providers that keep nothing.
+MIN_ACCEPTED_VERSION = "1.2"
+
+
+def _version_key(version: str | None) -> tuple[int, ...] | None:
+    if not version:
+        return None
+    try:
+        return tuple(int(part) for part in str(version).split("."))
+    except ValueError:
+        return None
+
+
+def version_counts(version: str | None) -> bool:
+    """True when an acceptance of `version` still lets quoto work in the group."""
+    key = _version_key(version)
+    return key is not None and key >= _version_key(MIN_ACCEPTED_VERSION)
 
 
 class AgreementCallback(NamedTuple):

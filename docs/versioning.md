@@ -158,8 +158,9 @@ scheduler, or the AI prompt chain.
 
 A change is breaking — and needs a `Breaking` changelog entry — when it affects:
 
-- required environment variables (`BOT_TOKEN`, `DB_URL`, `OPENROUTER_API_KEY`,
-  the `OPENROUTER_*` model settings, and the scheduler / limit settings)
+- required environment variables (`BOT_TOKEN`, `DB_URL`, `ANTHROPIC_API_KEY`
+  and `OPENROUTER_API_KEY`, the `ANTHROPIC_*` and `OPENROUTER_*` model
+  settings, and the scheduler / limit settings)
 - the shared `core-postgres` contract: the `quoto` schema, the `quoto_core`
   role, `search_path=quoto,core`, and the `core.person` / `core.chat` tables and
   `core.touch` / `core.set_language` functions quoto depends on

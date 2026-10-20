@@ -15,8 +15,30 @@ default, and production-minded.
   keys. There is no per-bot users or groups table.
 - Migrations are Alembic, under `alembic/versions/`. `alembic upgrade head` must
   apply cleanly on the shared database before the bot boots.
-- AI scoring goes through OpenRouter. Every request body and raw response is
-  written to `logs/ai_audit.jsonl` and kept for seven days.
+- AI scoring goes to Claude through the Anthropic API (the `anthropic` SDK),
+  then down the OpenRouter chain when Claude fails. Claude also describes
+  photos, images and stickers; video and audio go only through OpenRouter,
+  because Claude takes neither. Every eval request body and raw response, from
+  either provider, is written to `logs/ai_audit.jsonl` and kept for seven days.
+- Every Claude request goes through `ai._claude_message()` with
+  `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): a safety
+  decline is re-run in the same call on the model Anthropic recommends, and
+  `actual_model` names the one that answered. A cyber decline goes from
+  Opus 5.5 to Claude Opus 4.8 and from Sonnet 5.5 to Claude Sonnet 5, both
+  covered by the agreement; check where the fallback goes before switching
+  either model.
+- A group's data reaches Claude only once the group accepted agreement 1.2 or
+  later: `agreement.MIN_ACCEPTED_VERSION`, checked against
+  `group_settings.agreement_version`. Raise it only for a change that needs
+  fresh consent, because every group then publishes nothing until an admin
+  accepts again.
+- The agreement says Anthropic does not train on API data and deletes it
+  within 30 days, longer only for what its safety systems flag. Changing the
+  Claude setup in a way that breaks that (the Batch or Files API, a Fable or
+  Mythos model) means changing the agreement first.
+- Structured outputs on the Anthropic API reject numeric and length bounds and
+  `maxItems`. `ai._claude_schema()` strips them from Claude's copy of each
+  schema; the parsers clamp the values themselves.
 - Every OpenRouter request carries `provider` routing built by
   `ai._openrouter_provider()`: `data_collection: deny` and `zdr: true` by default
   (`OPENROUTER_DATA_COLLECTION`, `OPENROUTER_ZDR`), so chat text only reaches
@@ -42,7 +64,7 @@ default, and production-minded.
 
 ## Data And Security
 
-- Never log `BOT_TOKEN`, `OPENROUTER_API_KEY`, or a database URL with its
+- Never log `BOT_TOKEN`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, or a database URL with its
   password. Alerts redact the password before sending.
 - Quote deep links are signed; only published quote details are exposed, and
   legacy links require Telegram membership verification before they resolve.
@@ -93,7 +115,11 @@ history, and checks that every package in `requirements.in` is pinned into
   fallback chain is exercised at least once.
 - Statistics and language switching still render in all sixteen locales.
 - The audit log shows `"provider": {"data_collection": "deny", "zdr": true}` in
-  the evaluation request body.
+  every OpenRouter evaluation request body, and a Claude record with
+  `"stop_reason": "end_turn"` for the day.
+- A group that accepted an older agreement version gets the "agreement
+  changed" notice, publishes nothing, and works again right after an admin
+  accepts the current version.
 
 ## License
 

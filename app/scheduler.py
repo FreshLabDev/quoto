@@ -179,10 +179,15 @@ async def _remind_agreement(bot: Bot, group: Group, window: QuoteWindow, languag
     """Once per quote day, nudge the group to accept the user agreement."""
     if _agreement_reminded.get(group.chat_id) == window.quote_day:
         return
+    # A group that accepted an older version is told what changed, not asked
+    # as if it had never seen the document.
+    reminder_key = (
+        "agreement.updated_reminder" if core.group_agreement_outdated(group) else "agreement.reminder"
+    )
     try:
         await bot.send_message(
             group.chat_id,
-            i18n.t(language, "agreement.reminder"),
+            i18n.t(language, reminder_key),
             reply_markup=agreement.build_welcome_keyboard(language),
         )
         _agreement_reminded[group.chat_id] = window.quote_day
