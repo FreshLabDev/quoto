@@ -11,6 +11,20 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+## v0.11.1 - 2026-10-20
+
+Claude Opus 5.5 picks the quote of the day and Claude Sonnet 5.5 describes
+images, with OpenRouter behind both; the user agreement is 1.2, and every group
+accepts it again before Quoto publishes there.
+
+This is `v0.11.1-alpha.2` promoted unchanged. Both alphas ran on the production
+bot from 18 October: the day was scored by Claude every evening, including
+20 October, and the report fix in alpha.2 held. The OpenRouter media fallback
+answered `402 Payment Required` on 18 October until its balance was topped
+up; Claude's own path was not affected. Operators coming from `v0.11.0`: read
+the Operators section of `v0.11.1-alpha.1` for the new variables, the
+migration and the new dependency.
+
 ## v0.11.1-alpha.2 - 2026-10-18
 
 One fix found on the first real days of alpha.1. Nothing changes for
