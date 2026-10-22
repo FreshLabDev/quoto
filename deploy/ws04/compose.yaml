@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Quoto production stack on WS04. Runs against the shared core-postgres as
-# quoto_core (database `core`, schema `quoto`; the role's default search_path is
-# quoto,core).
+# quoto_core (database `core`, schema `quoto`; the bot sets search_path itself).
 #
 # The image is pulled, never built here. A stack that builds from a working copy
 # on the host runs whatever that copy happened to contain, which is not
@@ -15,45 +14,64 @@
 # stack directory on the host as a rollback anchor for the 0.9.0 core
 # consolidation, together with its ./postgres data directory; it is not part of
 # the deployment and must not be started by it.
+#
+# Rolling back to the Python releases takes their compose file as well as their
+# image: this manifest sets DATABASE_URL with a postgres:// scheme and a
+# /healthz check, neither of which the Python image understands.
 name: quoto
 
 services:
-  app:
+  bot:
     image: ${QUOTO_IMAGE:?QUOTO_IMAGE must be an immutable GHCR reference}
     container_name: quoto-bot
     restart: unless-stopped
+    # Longer than the bot's own 25 s shutdown grace, so Docker does not kill a
+    # publish that is already half done.
+    stop_grace_period: 30s
+    # The bot parses files that any member of a group can send (through ffmpeg),
+    # and needs no privilege of its own: no capabilities, no setuid escalation,
+    # and a cap on processes so a runaway ffmpeg cannot exhaust the host's table.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    # A 50 MB video measured 135-190 MB for the bot and ffmpeg together; the worst
+    # picture a group can send, 255-300 MB. Python needed 640 MiB. This is the
+    # ceiling, not the expectation, and it was not measured in a container yet.
+    mem_limit: 512m
     env_file:
       - path: .env
         required: true
     environment:
-      # Overrides the DB_URL carried in .env, which still points at the
-      # retired local database.
-      DB_URL: postgresql+asyncpg://quoto_core:${QUOTO_CORE_PASSWORD:?QUOTO_CORE_PASSWORD must be set}@core-postgres:5432/core
-      LOGS_PATH: /app/logs/
-      COLORS: "False"
-      TZ: ${TZ:-Europe/Kyiv}
-      # Emoji reach the logs intact only if the streams are UTF-8.
-      PYTHONIOENCODING: "utf-8"
-      PYTHONUNBUFFERED: "1"
-      LANG: C.UTF-8
-      LC_ALL: C.UTF-8
+      DATABASE_URL: postgres://quoto_core:${QUOTO_CORE_PASSWORD:?QUOTO_CORE_PASSWORD must be set}@core-postgres:5432/core
+      AUDIT_LOG_DIR: /app/logs
+      HTTP_ADDR: :8080
     volumes:
+      # Holds ai_audit.jsonl only. The host directory is owned by uid/gid 1000,
+      # which is who the image runs as.
       - ./logs:/app/logs
     # telegram_bot_api_net is joined so the option exists, but the switch --
     # TELEGRAM_BOT_API_BASE_URL in .env -- must stay empty until the server's
     # media directory is mounted here. That server runs with --local: getFile
     # answers with a path on its own disk rather than something downloadable, so
     # the file has to be readable from inside this container. Mount only quoto's
-    # own token subdirectory, as voicy does, and run as the uid the server
-    # writes with. Turned on without that, every photo, video, circle and voice
-    # note fails analysis and the day's quote quietly gets worse.
-    # See docs/releases.md for the full list, including the one-way logOut.
+    # own token subdirectory, as voicy does, set BOT_API_FILES_DIR, and run as
+    # the uid the server writes with. Turned on without that, every photo,
+    # video, circle and voice note fails analysis and the day's quote quietly
+    # gets worse. See docs/releases.md for the full list, including the one-way
+    # logOut.
     networks: [core_net, telegram_bot_api_net]
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
 
 networks:
   core_net:

@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/FreshLabDev/quoto/releases"><img src="https://img.shields.io/github/v/release/FreshLabDev/quoto?include_prereleases&sort=semver&style=for-the-badge&label=latest&labelColor=0f172a&color=3F3160" alt="latest version"></a>
-  <a href="Dockerfile"><img src="https://img.shields.io/badge/python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white&labelColor=0f172a" alt="python version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-334155?style=for-the-badge&labelColor=0f172a" alt="license"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white&labelColor=0f172a" alt="go version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-334155?style=for-the-badge&labelColor=0f172a" alt="license"></a>
   <a href="https://t.me/quototbot"><img src="https://img.shields.io/badge/telegram-%40quototbot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white&labelColor=0f172a" alt="telegram bot"></a>
 </p>
 
@@ -47,8 +47,8 @@ Quoto is deliberately narrow:
 
 | Channel | Version | Meaning |
 |:--|:--|:--|
-| Stable | `v0.11.0` | Chat text reaches only zero-retention model endpoints |
-| Next | `Unreleased` | Compatible fixes and improvements land on `dev` |
+| Stable | `v0.11.1` | Python. Claude scores the day, OpenRouter is the fallback |
+| Next | `Unreleased` | The Go rewrite: same product, one binary, a fraction of the memory |
 
 The bot is public as [@quototbot](https://t.me/quototbot). Until `v1.0.0` the
 operator contract (environment, schema, `core` contract) may still change
@@ -74,7 +74,7 @@ context, the boring-day notice and media.
 
 ## How It Works
 
-Quoto is one Python service. It stores messages and reactions as they arrive,
+Quoto is one Go service. It stores messages and reactions as they arrive,
 and once a minute checks whether any group's day has closed.
 
 ```text
@@ -118,12 +118,17 @@ Quoto reads a whole group chat, so this part matters most.
   endpoints with a zero-data-retention policy that do not train on it. A model
   with no such endpoint fails over to the fallback model instead of reaching
   one that keeps the data.
-- Nothing of a group reaches Anthropic before an admin accepts version 1.2 of
-  the agreement, the first that names it. A group that accepted 1.1 publishes
-  nothing until then, and its images keep going to OpenRouter only.
-- After a day is processed its messages are deleted. The published quote, its
-  context and the scores stay, because the stats and the "Details" view are
-  built from them.
+- Nothing of a group reaches Anthropic or OpenRouter before an admin accepts
+  version 1.2 of the agreement, the first that names them. Until then Quoto
+  publishes nothing, and a photo, video or voice message is described from its
+  metadata only. Media that arrived before the
+  agreement was accepted is not analysed afterwards.
+- After a day is processed its messages are deleted. Messages of a day that was
+  never processed (a group that did not accept the agreement, a long outage) are
+  deleted once they are 72 hours old. The published quote, its context and the
+  scores stay, because the stats and the "Details" view are built from them. The
+  copies of author names, text, captions and media descriptions that the
+  evaluation report keeps next to the scores are blanked at the same age.
 - Every evaluation request and raw response is written to
   `logs/ai_audit.jsonl` on the server for seven days, for debugging. It holds
   real message text and is readable only by the operator.
@@ -135,56 +140,58 @@ The user agreement shown in the bot says the same in all sixteen languages.
 
 ## Configuration
 
-The full list with comments is in [`.env.example`](.env.example). The ones you
-will touch:
+The full list with comments is in [`.env.example`](.env.example). The bot reads
+23 variables; everything nobody tunes (the quote time default, the media
+pipeline limits, the OpenRouter privacy settings) is a constant in the code.
+Variables from the Python version that no longer do anything are listed by name
+in a startup warning. The process stops at start on a value it cannot use.
 
 | Variable | Required | Default | Description |
 |:--|:--:|:--|:--|
-| `BOT_TOKEN` | yes | — | Bot token from BotFather |
+| `BOT_TOKEN` | yes | — | Bot token from BotFather. Also signs the quote deep links: changing it invalidates links already posted. |
 | `BOT_USERNAME` | yes | — | The bot's public username, used in the links the bot builds |
-| `DB_URL` | yes | — | `postgresql+asyncpg://` URL; in production the shared `core` database as `quoto_core` |
+| `DATABASE_URL` | yes | — | `postgres://` URL; in production the shared `core` database as `quoto_core`. The Python form `postgresql+asyncpg://` is rejected. |
 | `TELEGRAM_BOT_API_BASE_URL` | no | empty | Self-hosted Bot API server; empty means api.telegram.org, where the agreement renders as HTML instead of rich Markdown |
+| `BOT_API_FILES_DIR` | with the line above | empty | The Bot API server's data directory as this process sees it |
 | `ANTHROPIC_API_KEY` | one of the two keys | empty | Anthropic API key; empty sends scoring and images to OpenRouter only |
-| `ANTHROPIC_EVAL_MODEL` | no | `claude-opus-5-5` | Model that scores the day; empty skips Claude |
+| `ANTHROPIC_EVAL_MODEL` | no | `claude-opus-5-5` | Model that scores the day; set to an empty string to skip Claude |
 | `ANTHROPIC_EVAL_EFFORT` | no | `medium` | `low` to `max`: how much the model thinks before it answers |
 | `ANTHROPIC_MEDIA_MODEL` | no | `claude-sonnet-5-5` | Model that describes photos, images and stickers; empty skips Claude |
 | `ANTHROPIC_MEDIA_EFFORT` | no | `medium` | The same, for image descriptions |
 | `OPENROUTER_API_KEY` | one of the two keys | — | OpenRouter key: video, audio, and the fallback for everything else |
 | `OPENROUTER_EVAL_MODEL` | no | `openai/gpt-6-luna` | Scores the day when Claude fails |
 | `OPENROUTER_EVAL_FALLBACK_MODEL` | no | `google/gemini-3.1-flash-lite` | Used when the evaluation model fails |
-| `OPENROUTER_MEDIA_MODEL` | no | `google/gemini-2.5-flash-lite` | Describes video and audio, and images when Claude fails |
+| `OPENROUTER_EVAL_REASONING_EFFORT` | no | `low` | `none` to `xhigh` |
+| `OPENROUTER_MEDIA_MODEL` | no | `google/gemini-3.5-flash-lite` | Describes video and audio, and images when Claude fails. Needs a zero-data-retention endpoint on OpenRouter. |
 | `OPENROUTER_MEDIA_FALLBACK_MODEL` | no | `google/gemini-3.1-flash-lite` | Used when the media model fails |
-| `OPENROUTER_DATA_COLLECTION` | no | `deny` | `deny` keeps every request away from providers that train on it |
-| `OPENROUTER_ZDR` | no | `true` | Only endpoints with zero data retention; turning this off or setting `allow` above breaks the promise in the agreement and logs a warning at startup |
+| `OPENROUTER_MEDIA_REASONING_EFFORT` | no | `medium` | `none` to `xhigh` |
 | `MEDIA_ANALYSIS_ENABLED` | no | `true` | Global switch for media description |
-| `QUOTE_HOUR`, `QUOTE_MINUTE` | no | `21`, `0` | Default cutoff for a new group |
-| `TIMEZONE` | no | `Europe/Kyiv` | Default time zone for a new group |
-| `MIN_MESSAGES_FOR_AUTO_REVIEW` | no | `10` | Default minimum messages for a day to be judged |
-| `MAX_MESSAGES_PER_DAILY_EVAL` | no | `1500` | Newest messages sent to the AI per day |
-| `DEVELOPER_IDS`, `ENABLE_DEVELOPERS_NOTIFY` | no | `[]`, `false` | Telegram ids that receive operational alerts, and the switch that sends them |
+| `DEVELOPER_IDS` | no | empty | Telegram ids that receive operational alerts; empty turns alerts off. JSON list or comma list. |
+| `PREMIUM_CHAT_IDS` | no | empty | Groups exempt from the daily cap of 1 500 messages |
+| `AUDIT_LOG_DIR` | no | `logs` | Where `ai_audit.jsonl` goes |
+| `HTTP_ADDR` | no | `:8080` | Where `/healthz` listens |
+| `LOG_LEVEL` | no | `info` | `debug`, `info`, `warn` or `error` |
 
 ---
 
 ## Running It
 
-Local development with Docker starts a bundled PostgreSQL seeded with a copy of
-the shared `core` schema (`deploy/core-init.sql`), so the foreign keys into
-`core.person` and `core.chat` resolve:
+The test stack brings its own PostgreSQL, seeded with a copy of the shared `core`
+schema so the foreign keys into `core.person` and `core.chat` resolve. It needs a
+separate bot token and API keys, and shares nothing with production:
 
 ```sh
 cp .env.example .env
 $EDITOR .env
-docker compose up --build
+docker compose -f deploy/ws04/compose.test.yaml up --build
 ```
 
-The container applies `alembic upgrade head` before starting the bot. Without
-Docker, use Python 3.12:
+The service applies its migrations at start. Without Docker, with Go 1.26 or
+newer and a database that already has the `core` schema and a `quoto_core` role
+(`internal/db/dbtest/core_stub.sql` is a copy for development):
 
 ```sh
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/alembic upgrade head
-.venv/bin/python main.py
+go run ./cmd/bot
 ```
 
 Production runs from `/opt/stacks/quoto` against the shared `core-postgres`.
@@ -196,14 +203,23 @@ Nothing is built on the host; see the Deploying section of
 ## Testing
 
 ```sh
-python -m pytest -q tests
+gofmt -l .
+go vet ./...
+go test -race ./...
 docker build -t quoto:ci .
-docker compose config
 ```
 
-The suite mocks the database. CI also applies the migrations to a real
-PostgreSQL 17, audits `requirements.txt` with `pip-audit`, and checks that every
-package in `requirements.in` is pinned.
+The database tests carry the `integration` tag and need a PostgreSQL 17 they may
+wipe. Each test run drops and recreates schema `quoto` in it, so point the
+variable at a throwaway database and run the packages one at a time:
+
+```sh
+QUOTO_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/quoto_test \
+  go test -tags=integration -p 1 ./...
+```
+
+CI runs the same against `postgres:17-alpine`, scans for known vulnerabilities
+with `govulncheck`, builds the image and validates both compose files.
 
 ---
 
@@ -213,6 +229,7 @@ package in `requirements.in` is pinned.
 |:--|:--|
 | [Versioning](docs/versioning.md) | What the version numbers mean |
 | [Release process](docs/releases.md) | Changelog, GitHub Release, deploying and rolling back |
+| [Rewrite in Go](docs/go-rewrite.md) | Why the service was rewritten, what stayed compatible, what was removed |
 | [Changelog](CHANGELOG.md) | What changed in each release |
 
 ---
@@ -220,7 +237,7 @@ package in `requirements.in` is pinned.
 <p align="center">
   <a href="https://github.com/FreshLabDev/quoto/releases">Releases</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="LICENSE">GPL-3.0</a>
+  <a href="LICENSE">Apache-2.0</a>
 </p>
 
 <p align="center">

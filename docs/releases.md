@@ -180,13 +180,46 @@ Set `QUOTO_IMAGE` to the previous digest and deploy again. That is the whole
 rollback — the images are still on the host, and nothing is rebuilt. Then publish
 a patch that fixes what went wrong; never retag or delete the bad release.
 
+Rolling back **across the Go rewrite** takes the old compose file as well. The Go
+manifest sets `DATABASE_URL` with a `postgres://` scheme and a `/healthz` check;
+the Python image understands neither, so setting only `QUOTO_IMAGE` back would
+fail the health check and `ws04 deploy` would roll back again. Keep the last
+Python `deploy/ws04/compose.yaml` (tag `v0.11.1`) next to the digest of its image.
+The database needs nothing: the Go release only adds `schema_migrations` and two
+indexes, and leaves `alembic_version` and every column the Python version uses in
+place.
+
+### First deploy of the Go release
+
+- `QUOTO_CORE_PASSWORD` is still the only secret the manifest interpolates. The
+  database URL is built from it as before, now with the `postgres://` scheme.
+- The host `.env` keeps working. Variables the Go version no longer reads
+  (`QUOTE_HOUR`, `TIMEZONE`, `WEIGHT_*` and the like) are listed by name once at
+  start in a warning; remove them when convenient. A value the new version
+  cannot use stops the start with a message naming the variable.
+- The first start checks the tables and columns against what the Python version
+  left, then records `001_baseline` as applied without running it and creates two
+  indexes (`002_indexes`). If the schema differs it refuses to start and says
+  which table or column.
+- The first night after the deploy the media cache misses once (the description
+  prompt version moved from `v2` to `v3`), so images and videos are described
+  again at OpenRouter's and Anthropic's price.
+- The first retention run deletes every message older than 72 hours, including
+  those of days that were never processed. Going back to Python does not bring
+  them back, so take `pg_dump -n quoto` before the first start.
+- The first start needs `CREATE` on schema `quoto` (for `schema_migrations`) and
+  ownership of `messages` and `message_ai_scores` (for the two indexes). Check
+  with the catalog queries in `docs/go-rewrite.md` section 5.5. If the role lacks
+  one, the start stops with `permission denied` and names the `GRANT`; nothing is
+  changed. Later starts need neither.
+
 ### What this stack needs to exist
 
 | | |
 |:--|:--|
 | Stack | `quoto` — `/opt/stacks/quoto` |
-| Manifest | [`deploy/ws04/compose.yaml`](deploy/ws04/compose.yaml) in this repository |
-| Env file | `.app.env` on the host, never in git |
+| Manifest | [`deploy/ws04/compose.yaml`](../deploy/ws04/compose.yaml) in this repository |
+| Env file | `.env` on the host, never in git |
 | Networks | `core_net` (core-postgres), `telegram_bot_api_net` (the self-hosted Bot API server) |
 
 **Leave `TELEGRAM_BOT_API_BASE_URL` empty for now.** Quoto would benefit from the
@@ -200,19 +233,18 @@ be true before it can be switched on, and none of them is done:
   server's media directory has to be mounted into this container. Mount only
   quoto's own token subdirectory, the way voicy does: the parent holds one per
   bot, each named after that bot's full token.
-- The server writes as uid 101; quoto's image runs as 1000.
+- The server writes as uid 101; quoto's image runs as 1000, which also owns the
+  host `logs/` directory. Reading the server's files means choosing a uid for
+  the container or a group both can share, and `logs/` has to stay writable.
 - A token is logged in on exactly one server at a time. Moving quoto means
   `logOut` on api.telegram.org first, and that is a one-way step.
 
 Switched on without the mount, every photo, video, circle and voice note fails
 analysis and the day's quote quietly gets worse — visible a day later, if at all.
 
-The stack directory on the host still splits its configuration in two: `.env`
-for the Compose variables and `.app.env` for the application. This manifest
-expects one `.env` holding both, the way every other stack in the family does.
-Merge them at the first deploy from GHCR — the keys do not collide — and retire
-`.app.env` in the same step, since a manifest naming a file that is gone stops
-the stack.
+The manifest reads one `.env` in the stack directory, which holds both the
+Compose variables (`QUOTO_IMAGE`, `QUOTO_CORE_PASSWORD`) and the application's
+settings, the way every other stack in the family does.
 
 The retired local `db` service still exists in the stack directory as a rollback
 anchor for the 0.9.0 core consolidation. It is not part of the deployment and
@@ -227,19 +259,24 @@ ws04 container inspect quoto-bot     # includes the image digest
 ```
 
 The bot also reports its own version — from the About card in Telegram, and from
-its health endpoint where it has one. Those two and `docker inspect` should
-agree; if they do not, something was deployed by hand.
+`/healthz` (`ws04 container inspect` shows the health status; the endpoint is
+on the container's port 8080). Those and `docker inspect` should agree; if they
+do not, something was deployed by hand.
 
 ## Verification
 
 ```sh
-python -m pytest -q tests
+gofmt -l .
+go vet ./...
+go test -race ./...
 docker build -t quoto:ci .
-docker compose config
+docker compose -f deploy/ws04/compose.yaml config
 ```
 
-CI additionally applies the migrations against a real PostgreSQL 17, steps one
-back down and up again, and refuses a branched alembic history.
+CI additionally runs the database tests against a real PostgreSQL 17 (the
+migrations up, one step down and up again, adoption of an Alembic database),
+scans the dependencies with `govulncheck`, and refuses a `replace` directive in
+`go.mod`.
 
 For `beta`, `rc`, and stable: the `/start` panel and one full daily quote run
 against a live group, including the boring-day path.

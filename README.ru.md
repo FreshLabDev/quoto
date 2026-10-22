@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/FreshLabDev/quoto/releases"><img src="https://img.shields.io/github/v/release/FreshLabDev/quoto?include_prereleases&sort=semver&style=for-the-badge&label=latest&labelColor=0f172a&color=3F3160" alt="последняя версия"></a>
-  <a href="Dockerfile"><img src="https://img.shields.io/badge/python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white&labelColor=0f172a" alt="версия python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-334155?style=for-the-badge&labelColor=0f172a" alt="лицензия"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white&labelColor=0f172a" alt="версия go"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-334155?style=for-the-badge&labelColor=0f172a" alt="лицензия"></a>
   <a href="https://t.me/quototbot"><img src="https://img.shields.io/badge/telegram-%40quototbot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white&labelColor=0f172a" alt="бот в telegram"></a>
 </p>
 
@@ -47,8 +47,8 @@ Quoto намеренно узкий:
 
 | Канал | Версия | Что это |
 |:--|:--|:--|
-| Stable | `v0.11.0` | Текст чата уходит только к моделям без хранения данных |
-| Next | `Unreleased` | Совместимые исправления и улучшения копятся в `dev` |
+| Stable | `v0.11.1` | Python. День оценивает Claude, OpenRouter запасной |
+| Next | `Unreleased` | Переписывание на Go: тот же продукт, один бинарник, во много раз меньше памяти |
 
 Бот публичный: [@quototbot](https://t.me/quototbot). До `v1.0.0` контракт для
 оператора (переменные окружения, схема, контракт `core`) может меняться между
@@ -74,7 +74,7 @@ Quoto намеренно узкий:
 
 ## Как это работает
 
-Quoto — один сервис на Python. Он сохраняет сообщения и реакции по мере
+Quoto — один сервис на Go. Он сохраняет сообщения и реакции по мере
 поступления и раз в минуту проверяет, не закончился ли день у какой-нибудь
 группы.
 
@@ -119,11 +119,16 @@ Quoto читает весь групповой чат, поэтому этот �
   ничего не хранят и не обучают на данных модели. Если у модели таких
   эндпоинтов нет, запрос уходит на запасную модель, а не к поставщику, который
   хранит данные.
-- Пока администратор не примет соглашение версии 1.2, первой, где назван
-  Anthropic, ничего из группы туда не попадает. Группа, принявшая 1.1, до этого
-  ничего не публикует, а её картинки по-прежнему идут только в OpenRouter.
-- После обработки дня его сообщения удаляются. Опубликованная цитата, её
-  контекст и баллы остаются: из них строятся статистика и экран «Подробнее».
+- Пока администратор не примет соглашение версии 1.2, первой, где названы
+  Anthropic и OpenRouter, ничего из группы ни к одному из них не попадает. До
+  этого Quoto ничего не публикует, а фото, видео и голосовые описываются только
+  по метаданным. Медиа, пришедшее до принятия соглашения, потом не анализируется.
+- После обработки дня его сообщения удаляются. Сообщения дня, который так и не
+  обработали (группа не приняла соглашение, долгий простой), удаляются, когда им
+  исполняется 72 часа. Опубликованная цитата, её контекст и баллы остаются: из
+  них строятся статистика и экран «Подробнее». Копии имён авторов, текста,
+  подписей и описаний медиа, которые отчёт оценки хранит рядом с баллами,
+  обнуляются в том же возрасте.
 - Каждый запрос оценки и сырой ответ на него семь дней лежат на сервере в
   `logs/ai_audit.jsonl` для отладки. Там настоящий текст сообщений, и доступ к
   нему есть только у оператора.
@@ -136,56 +141,59 @@ Quoto читает весь групповой чат, поэтому этот �
 
 ## Настройка
 
-Полный список с комментариями в [`.env.example`](.env.example). Чаще всего
-нужны эти:
+Полный список с комментариями в [`.env.example`](.env.example). Бот читает 23
+переменные; всё, что никто не настраивает (время цитаты по умолчанию, лимиты
+конвейера медиа, настройки приватности OpenRouter), записано константами в коде.
+Переменные из версии на Python, которые больше ничего не делают, бот при старте
+перечисляет по именам одним предупреждением. Значение, которое бот не может
+использовать, останавливает запуск.
 
 | Переменная | Обязательна | По умолчанию | Что делает |
 |:--|:--:|:--|:--|
-| `BOT_TOKEN` | да | — | Токен бота от BotFather |
+| `BOT_TOKEN` | да | — | Токен бота от BotFather. Им же подписываются ссылки на цитаты: после смены токена уже опубликованные ссылки перестают открываться. |
 | `BOT_USERNAME` | да | — | Публичный юзернейм бота, из него строятся ссылки |
-| `DB_URL` | да | — | URL `postgresql+asyncpg://`; в проде общая база `core` под ролью `quoto_core` |
+| `DATABASE_URL` | да | — | URL `postgres://`; в проде общая база `core` под ролью `quoto_core`. Форма из Python `postgresql+asyncpg://` отклоняется. |
 | `TELEGRAM_BOT_API_BASE_URL` | нет | пусто | Свой сервер Bot API; пусто значит api.telegram.org, и соглашение показывается в HTML, а не в rich Markdown |
+| `BOT_API_FILES_DIR` | вместе с предыдущей | пусто | Каталог данных сервера Bot API так, как его видит этот процесс |
 | `ANTHROPIC_API_KEY` | один из двух ключей | пусто | Ключ Anthropic API; пусто значит оценка и картинки идут только в OpenRouter |
-| `ANTHROPIC_EVAL_MODEL` | нет | `claude-opus-5-5` | Модель, которая оценивает день; пусто значит без Claude |
+| `ANTHROPIC_EVAL_MODEL` | нет | `claude-opus-5-5` | Модель, которая оценивает день; пустая строка отключает Claude |
 | `ANTHROPIC_EVAL_EFFORT` | нет | `medium` | От `low` до `max`: сколько модель думает перед ответом |
 | `ANTHROPIC_MEDIA_MODEL` | нет | `claude-sonnet-5-5` | Модель, которая описывает фото, картинки и стикеры; пусто значит без Claude |
 | `ANTHROPIC_MEDIA_EFFORT` | нет | `medium` | То же для описания картинок |
 | `OPENROUTER_API_KEY` | один из двух ключей | — | Ключ OpenRouter: видео, аудио и запасной путь для всего остального |
 | `OPENROUTER_EVAL_MODEL` | нет | `openai/gpt-6-luna` | Оценивает день, когда Claude не справился |
 | `OPENROUTER_EVAL_FALLBACK_MODEL` | нет | `google/gemini-3.1-flash-lite` | Запасная модель оценки |
-| `OPENROUTER_MEDIA_MODEL` | нет | `google/gemini-2.5-flash-lite` | Описывает видео и аудио, а картинки, когда Claude не справился |
+| `OPENROUTER_EVAL_REASONING_EFFORT` | нет | `low` | От `none` до `xhigh` |
+| `OPENROUTER_MEDIA_MODEL` | нет | `google/gemini-3.5-flash-lite` | Описывает видео и аудио, а картинки, когда Claude не справился. У модели должен быть эндпоинт OpenRouter с нулевым хранением. |
 | `OPENROUTER_MEDIA_FALLBACK_MODEL` | нет | `google/gemini-3.1-flash-lite` | Запасная модель для медиа |
-| `OPENROUTER_DATA_COLLECTION` | нет | `deny` | `deny` не пускает запросы к поставщикам, которые обучают на данных |
-| `OPENROUTER_ZDR` | нет | `true` | Только эндпоинты с нулевым хранением; если выключить это или поставить `allow` выше, обещание из соглашения нарушится, и бот предупредит об этом при старте |
+| `OPENROUTER_MEDIA_REASONING_EFFORT` | нет | `medium` | От `none` до `xhigh` |
 | `MEDIA_ANALYSIS_ENABLED` | нет | `true` | Общий выключатель описания медиа |
-| `QUOTE_HOUR`, `QUOTE_MINUTE` | нет | `21`, `0` | Отсечка по умолчанию для новой группы |
-| `TIMEZONE` | нет | `Europe/Kyiv` | Часовой пояс по умолчанию для новой группы |
-| `MIN_MESSAGES_FOR_AUTO_REVIEW` | нет | `10` | Минимум сообщений, чтобы день оценивался |
-| `MAX_MESSAGES_PER_DAILY_EVAL` | нет | `1500` | Сколько последних сообщений дня уходит в ИИ |
-| `DEVELOPER_IDS`, `ENABLE_DEVELOPERS_NOTIFY` | нет | `[]`, `false` | Telegram id для служебных уведомлений и выключатель отправки |
+| `DEVELOPER_IDS` | нет | пусто | Telegram id для служебных уведомлений; пусто значит уведомлений нет. JSON-список или через запятую. |
+| `PREMIUM_CHAT_IDS` | нет | пусто | Группы, на которых не действует дневной лимит в 1 500 сообщений |
+| `AUDIT_LOG_DIR` | нет | `logs` | Куда пишется `ai_audit.jsonl` |
+| `HTTP_ADDR` | нет | `:8080` | Где слушает `/healthz` |
+| `LOG_LEVEL` | нет | `info` | `debug`, `info`, `warn` или `error` |
 
 ---
 
 ## Запуск
 
-Для локальной разработки Docker поднимает свой PostgreSQL с копией общей схемы
-`core` (`deploy/core-init.sql`), чтобы внешние ключи на `core.person` и
-`core.chat` сходились:
+Тестовый стек приносит свой PostgreSQL с копией общей схемы `core`, чтобы
+внешние ключи на `core.person` и `core.chat` сходились. Ему нужен отдельный
+токен бота и свои ключи API, с продом он ничего не делит:
 
 ```sh
 cp .env.example .env
 $EDITOR .env
-docker compose up --build
+docker compose -f deploy/ws04/compose.test.yaml up --build
 ```
 
-Контейнер выполняет `alembic upgrade head` перед запуском бота. Без Docker
-нужен Python 3.12:
+Сервис применяет миграции при старте. Без Docker нужны Go 1.26 или новее и база,
+в которой уже есть схема `core` и роль `quoto_core` (копия для разработки лежит в
+`internal/db/dbtest/core_stub.sql`):
 
 ```sh
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/alembic upgrade head
-.venv/bin/python main.py
+go run ./cmd/bot
 ```
 
 Прод работает из `/opt/stacks/quoto` на общем `core-postgres`. На хосте ничего
@@ -196,14 +204,23 @@ python -m venv .venv
 ## Тесты
 
 ```sh
-python -m pytest -q tests
+gofmt -l .
+go vet ./...
+go test -race ./...
 docker build -t quoto:ci .
-docker compose config
 ```
 
-Тесты подменяют базу. CI дополнительно применяет миграции к настоящему
-PostgreSQL 17, проверяет `requirements.txt` через `pip-audit` и следит, чтобы
-каждый пакет из `requirements.in` был закреплён.
+Тесты с базой помечены тегом `integration` и требуют PostgreSQL 17, который
+можно стереть. Каждый прогон удаляет и создаёт заново схему `quoto`, поэтому
+укажите одноразовую базу и запускайте пакеты по одному:
+
+```sh
+QUOTO_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/quoto_test \
+  go test -tags=integration -p 1 ./...
+```
+
+CI запускает то же на `postgres:17-alpine`, ищет известные уязвимости через
+`govulncheck`, собирает образ и проверяет оба compose-файла.
 
 ---
 
@@ -213,6 +230,7 @@ PostgreSQL 17, проверяет `requirements.txt` через `pip-audit` и �
 |:--|:--|
 | [Versioning](docs/versioning.md) | Что значат номера версий |
 | [Release process](docs/releases.md) | Changelog, GitHub Release, деплой и откат |
+| [Переписывание на Go](docs/go-rewrite.md) | Зачем сервис переписан, что осталось совместимым, что убрано |
 | [Changelog](CHANGELOG.md) | Что поменялось в каждом релизе |
 
 ---
@@ -220,7 +238,7 @@ PostgreSQL 17, проверяет `requirements.txt` через `pip-audit` и �
 <p align="center">
   <a href="https://github.com/FreshLabDev/quoto/releases">Релизы</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="LICENSE">GPL-3.0</a>
+  <a href="LICENSE">Apache-2.0</a>
 </p>
 
 <p align="center">
