@@ -28,6 +28,13 @@ services:
     # Longer than the bot's own 25 s shutdown grace, so Docker does not kill a
     # publish that is already half done.
     stop_grace_period: 30s
+    # The bot parses files that any member of a group can send (through ffmpeg),
+    # and needs no privilege of its own: no capabilities, no setuid escalation,
+    # and a cap on processes so a runaway ffmpeg cannot exhaust the host's table.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     env_file:
       - path: .env
         required: true
