@@ -606,7 +606,23 @@ config`, migrations on PostgreSQL 17, memory run.
 - **Container memory of ffmpeg** (section 2): measured on macOS only.
 - **pgx** `Exec` without arguments: read in v5.11.0, not in v5.9.2.
 - **Docker.** Not installed on this machine, so `docker build` and `docker compose
-  config` cannot be run here; they run in CI.
+  config` cannot be run here; they run in CI. That also means nothing was
+  measured in the Alpine image: the memory numbers (CHANGELOG, Operators) come
+  from macOS arm64 with Homebrew's ffmpeg 9.0.1, and `time/tzdata` and the
+  `-max_pixels` option are checked against that ffmpeg only.
+- **Live providers.** No request has gone to Anthropic or OpenRouter. The Claude
+  stream with the `server-side-fallback-2026-07-01` beta is parsed from the
+  documented event shapes (assumptions A1 to A5 in `internal/claude`), and the
+  OpenRouter video body (a streamed `data:` URI) and the `zdr` routing without a
+  404 are checked against a local server only. One real request each, from the
+  test stack, before a release.
+- **Production grants.** The owner of schema `quoto` and the rights of
+  `quoto_core` (section 5.5).
+- **Phase 5 reviews.** Four independent reviews ran against the tree: privacy and
+  security, data and migrations, behaviour against Python (differential tests on
+  about 3 million vectors, 0 differences in windows, menus, statistics, texts,
+  publication text, commands), and memory. Their findings and what was done about
+  them are in the commit log and the CHANGELOG.
 
 ## 14. Phases after approval
 
