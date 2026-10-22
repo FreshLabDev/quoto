@@ -1,13 +1,15 @@
-__pycache__/
-*/__pycache__
-/__pycache__/
 /logs
 /.vscode
-/.venv
 .env
 *.code-workspace
 .DS_Store
 **/.DS_Store
+
+# go build -o quoto, test binaries and profiles
+/quoto
+/bot
+*.test
+*.out
 
 # Promo cards and posts made for a release; kept outside git
 /outputs/

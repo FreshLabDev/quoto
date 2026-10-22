@@ -125,6 +125,11 @@ QUOTO_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/quoto_test \
 CI also runs `govulncheck`, refuses a `replace` directive in `go.mod`, and
 builds the image.
 
+A test comment such as `tests/test_scheduler.py::test_name` names the Python
+test, at tag `v0.11.1`, whose behaviour the Go test carries over. The Python
+sources are gone from the tree; `git show v0.11.1:tests/test_scheduler.py` reads
+them.
+
 ## Release Checklist
 
 - The migrations apply cleanly on a copy of the shared database, and again on a
