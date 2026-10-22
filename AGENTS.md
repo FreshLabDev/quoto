@@ -5,50 +5,57 @@ default, and production-minded.
 
 ## Project Shape
 
-- Quoto is one Python service (aiogram, SQLAlchemy, APScheduler).
+- Quoto is one Go service (`cmd/bot`, packages under `internal/`). The layout and
+  the reasons for it are in [`docs/go-rewrite.md`](docs/go-rewrite.md), section 3.
 - PostgreSQL is the only durable store. Domain tables live in the `quoto`
-  schema on the shared `core-postgres`, reached as `quoto_core` with the role's
-  default `search_path=quoto,core`. Telegram identity, chats and language are
-  delegated to shared `core` through `core.touch` / `core.set_language` /
+  schema on the shared `core-postgres`, reached as `quoto_core`; the bot sets
+  `search_path=quoto` on its connections and writes `core.` explicitly.
+  Telegram identity, chats and language are delegated to shared `core` through
+  `core.touch` / `core.set_language` / `core.clear_language` /
   `core.effective_language` -- never by writing `core.*` tables directly.
 - Quoto's tables reference `core.person` and `core.chat` by the Telegram natural
   keys. There is no per-bot users or groups table.
-- Migrations are Alembic, under `alembic/versions/`. `alembic upgrade head` must
-  apply cleanly on the shared database before the bot boots.
-- AI scoring goes to Claude through the Anthropic API (the `anthropic` SDK),
-  then down the OpenRouter chain when Claude fails. Claude also describes
-  photos, images and stickers; video and audio go only through OpenRouter,
-  because Claude takes neither. Every eval request body and raw response, from
-  either provider, is written to `logs/ai_audit.jsonl` and kept for seven days.
-- Every Claude request goes through `ai._claude_message()` with
-  `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): a safety
-  decline is re-run in the same call on the model Anthropic recommends, and
-  `actual_model` names the one that answered. A cyber decline goes from
-  Opus 5.5 to Claude Opus 4.8 and from Sonnet 5.5 to Claude Sonnet 5, both
-  covered by the agreement; check where the fallback goes before switching
-  either model.
-- A group's data reaches Claude only once the group accepted agreement 1.2 or
-  later: `agreement.MIN_ACCEPTED_VERSION`, checked against
-  `group_settings.agreement_version`. Raise it only for a change that needs
-  fresh consent, because every group then publishes nothing until an admin
-  accepts again.
+- Migrations are embedded SQL files in `migrations/`, applied by `internal/db`
+  at start under an advisory lock and recorded in `schema_migrations`. A
+  database that Alembic last touched (revision `20261018_01`) is adopted after a
+  catalog check; `alembic_version` is left alone until a stable Go release has
+  run. Column drops only in a late migration, never in the release that
+  introduces Go.
+- The Telegram client is `github.com/FreshLabDev/tg`. What only Quoto needs
+  (silent send, pin, outcome classification) lives in `internal/telegram`.
+- AI scoring goes to Claude through the Anthropic Messages API (`internal/claude`,
+  plain `net/http`), then down the OpenRouter chain when Claude fails. Claude
+  also describes photos, images and stickers; video and audio go only through
+  OpenRouter, because Claude takes neither. Every eval request body and raw
+  response, from either provider, is written to `logs/ai_audit.jsonl` and kept
+  for seven days.
+- Every Claude request carries `fallbacks: "default"` (beta
+  `server-side-fallback-2026-07-01`): a safety decline is re-run in the same
+  call on the model Anthropic recommends, and `actual_model` names the one that
+  answered. A cyber decline goes from Opus 5.5 to Claude Opus 4.8 and from
+  Sonnet 5.5 to Claude Sonnet 5, both covered by the agreement; check where the
+  fallback goes before switching either model.
+- A group's data reaches Claude or OpenRouter only once the group accepted
+  agreement 1.2 or later: `agreement.MIN_ACCEPTED_VERSION`, checked against
+  `group_settings.agreement_version`. Until then media is described from
+  metadata, as when analysis is off, and a day is not published. Raise the
+  version only for a change that needs fresh consent, because every group then
+  publishes nothing until an admin accepts again.
 - The agreement says Anthropic does not train on API data and deletes it
   within 30 days, longer only for what its safety systems flag. Changing the
   Claude setup in a way that breaks that (the Batch or Files API, a Fable or
   Mythos model) means changing the agreement first.
 - Structured outputs on the Anthropic API reject numeric and length bounds and
-  `maxItems`. `ai._claude_schema()` strips them from Claude's copy of each
-  schema; the parsers clamp the values themselves.
-- Every OpenRouter request carries `provider` routing built by
-  `ai._openrouter_provider()`: `data_collection: deny` and `zdr: true` by default
-  (`OPENROUTER_DATA_COLLECTION`, `OPENROUTER_ZDR`), so chat text only reaches
-  endpoints that neither keep it nor train on it. The user agreement promises
-  exactly that. A new model must have a ZDR endpoint on OpenRouter
-  (`/api/v1/endpoints/zdr`), and a new request, the bench scripts included,
-  must carry the same field.
+  `maxItems`. `internal/claude` strips them from Claude's copy of each schema;
+  the parsers in `internal/ai` clamp the values themselves.
+- Every OpenRouter request carries `provider: {data_collection: "deny", zdr:
+  true}`; both are constants in `internal/openrouter` because the user agreement
+  promises exactly that. A new model must have a ZDR endpoint on OpenRouter
+  (`/api/v1/endpoints/zdr`). `google/gemini-2.5-flash-lite` has none, which was
+  the hourly 404 before the rewrite.
 - `TELEGRAM_BOT_API_BASE_URL` points the bot at our own Bot API server. Empty
   means api.telegram.org, and then the Bot API 10.3 methods do not exist: the
-  user agreement drops from rich Markdown to HTML. `app/richmd.py` probes
+  user agreement drops from rich Markdown to HTML. `internal/bot` probes
   `sendRichMessage` at startup and says which one it got.
 
 ## Product Boundaries
@@ -59,19 +66,25 @@ default, and production-minded.
 - Fewer than ten messages in a day is skipped silently, never announced.
 - A day the AI judges unremarkable gets a boring-day notice, not a weak quote.
   Do not add a fallback that forces a quote out of a flat day.
-- Interface languages are the sixteen in `app/i18n.py` `SUPPORTED_LANGUAGES`.
-  A group with no saved language gets one chosen once by the daily AI run.
+- Interface languages are the sixteen in `internal/i18n`. A group with no saved
+  language gets one chosen once by the daily AI run.
 
 ## Data And Security
 
-- Never log `BOT_TOKEN`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, or a database URL with its
-  password. Alerts redact the password before sending.
-- Quote deep links are signed; only published quote details are exposed, and
-  legacy links require Telegram membership verification before they resolve.
-- The AI audit log holds real message text. It is operator-only and expires.
-- Media descriptions are cached by perceptual hash plus
-  `MEDIA_CACHE_PROMPT_VERSION`. Changing the prompt without bumping that version
+- Never log `BOT_TOKEN`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, or a database
+  URL with its password. `internal/log` has one redactor fed from
+  `config.Secrets()`; a new secret goes there.
+- Quote deep links are signed (`internal/deeplink`); only published quote details
+  are exposed, and legacy links require Telegram membership verification before
+  they resolve.
+- The AI audit log holds real message text. It is operator-only (mode 0600) and
+  expires.
+- Media descriptions are cached by perceptual hash plus the prompt version
+  constant in `internal/ai`. Changing a prompt without bumping that version
   silently reuses descriptions written by the old prompt.
+- `callback_data` formats and the deep link format are a contract with panels
+  and links that are already in chats. Do not change them without keeping the
+  old form working.
 
 ## Versioning
 
@@ -92,20 +105,30 @@ default, and production-minded.
 ## Verification
 
 ```sh
-python -m pytest -q tests
+gofmt -l .
+go vet ./...
+go test -race ./...
+go build ./...
 docker build -t quoto:ci .
-docker compose config
+docker compose -f deploy/ws04/compose.yaml config
 ```
 
-The suite mocks the database; `tests/__init__.py` supplies the settings the app
-validates at import time. CI additionally applies the migrations against a real
-PostgreSQL 17, steps one back down and up again, refuses a branched alembic
-history, and checks that every package in `requirements.in` is pinned into
-`requirements.txt`.
+The unit tests need no database or network. Tests that need PostgreSQL carry the
+`integration` build tag and read `QUOTO_TEST_DATABASE_URL`; they drop and
+recreate schema `quoto` in that database, so run them with `-p 1`:
+
+```sh
+QUOTO_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/quoto_test \
+  go test -tags=integration -race -p 1 ./...
+```
+
+CI also runs `govulncheck`, refuses a `replace` directive in `go.mod`, and
+builds the image.
 
 ## Release Checklist
 
-- `alembic upgrade head` applies cleanly against a copy of the shared database.
+- The migrations apply cleanly on a copy of the shared database, and again on a
+  database with the Alembic tables of the previous release (adoption).
 - The `/start` panel opens in DM and in a group, and both reach the agreement
   and About tabs.
 - The user agreement renders as rich Markdown against our Bot API server, and
@@ -120,12 +143,16 @@ history, and checks that every package in `requirements.in` is pinned into
 - A group that accepted an older agreement version gets the "agreement
   changed" notice, publishes nothing, and works again right after an admin
   accepts the current version.
+- Idle memory stays under 60 MB and a 50 MB video peaks under 200 MB, ffmpeg
+  included.
 
 ## License
 
-GPL-3.0, unlike the rest of the family, which is Apache-2.0. See
-[LICENSE](LICENSE). `app/version.py` holds the name the About card and the
-agreement show.
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Every `.go`, `.sql`,
+YAML file, `go.mod` and the `Dockerfile` starts with
+`SPDX-License-Identifier: Apache-2.0`. The name the About card shows comes from
+`internal/buildinfo`. Releases before the Go rewrite (up to `v0.11.1`) were
+published under GPL-3.0 and stay so.
 
 ## Deploying
 
