@@ -11,6 +11,63 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+## v1.0.0 - 2026-10-22
+
+Quoto now runs on Go. Groups get the same daily quote; the service behind it is
+a single binary that uses a fraction of the memory, and about twenty bugs found
+while porting are fixed.
+
+### In numbers
+
+Measured on ws04 on 2026-10-22: the Python bot in production, the Go bot on the
+test stack after a full day with photos, a sticker, a GIF and a Claude pick.
+
+| | v0.11.1 (Python) | v1.0.0 (Go) |
+|:--|--:|--:|
+| Container memory | 428 to 640 MiB | 8 to 10 MiB |
+| Image on disk | 1.05 GB | 223 MB (61 MB to download) |
+| Dependencies | 13 packages, 51 pinned | 4 Go modules |
+| Settings read from env | 65 | 23 |
+| Test functions | 300 | 645 |
+| Media model answering | 404 every hour, then the fallback | first try |
+
+On the test stack the quote went out 10 seconds after the cutoff; a photo or a
+sticker took about 5 seconds to describe, a GIF 2.3.
+
+### What changed for groups
+
+- **Anonymous reactions count.** Python read a field the reaction-count update
+  does not have, so the totals of anonymous reactions were never stored.
+- **Media of a group that has not accepted the agreement goes to no AI
+  provider.** It is kept as file type, size and duration until an admin accepts.
+- **Messages older than 72 hours are deleted**, and the message text copied into
+  the evaluation report is blanked at the same age. Before, days that were never
+  processed stayed forever.
+- **A new Russian-speaking group starts in Europe/Kyiv**, not Europe/Moscow.
+  Admins still pick any zone in the settings.
+- **The welcome message shows the group's real cutoff** instead of 21:00, and the
+  dashboard shows the real media-analysis state instead of always "on".
+- **Voice messages are described in full.** Python's silence filter cut a voice
+  note at its first pause.
+- **Joins, leaves, pins, dice and locations are not stored** and no longer count
+  towards the ten-message threshold.
+- **The Details card drops the Reactions and Length bars.** Neither one affected
+  the pick.
+
+### What changed for operators
+
+- New compose manifest, `DATABASE_URL` instead of `DB_URL`, `/healthz` instead
+  of a heartbeat file. Rolling back to Python means its old compose file and its
+  old digest together.
+- Migrations are embedded and run at start; the Alembic database is adopted
+  after its tables and columns are checked, and the bot refuses to start if they
+  differ.
+- The first night after the deploy re-describes media once (prompt `v2` to `v3`).
+- License: Apache-2.0 from this release. Releases up to v0.11.1 stay GPL-3.0.
+
+Every change, with the reason for it, is in the `v1.0.0-alpha.1` section below
+and in [`docs/go-rewrite.md`](docs/go-rewrite.md).
+
 ## v1.0.0-alpha.1 - 2026-10-22
 
 Quoto is rewritten in Go. For the people in the chats it does what it did, with

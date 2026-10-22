@@ -858,7 +858,7 @@ func TestLanguageDetection(t *testing.T) {
 	})
 
 	t.Run("zone by language", func(t *testing.T) {
-		for lang, want := range map[string]string{"ru": "Europe/Moscow", "en": "UTC", "de": "Europe/Berlin", "uk": "Europe/Kyiv", "pl": "Europe/Kyiv"} {
+		for lang, want := range map[string]string{"ru": "Europe/Kyiv", "en": "UTC", "de": "Europe/Berlin", "uk": "Europe/Kyiv", "pl": "Europe/Kyiv"} {
 			h := newHarness(t)
 			g := h.addGroup(chatA, func(g *domain.GroupSettings) { g.Language = "" })
 			h.fill(chatA, 10)

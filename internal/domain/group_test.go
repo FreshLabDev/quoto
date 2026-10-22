@@ -100,7 +100,7 @@ func TestQuoteTimeArithmetic(t *testing.T) {
 }
 
 func TestDefaultTimezoneForLanguage(t *testing.T) {
-	want := map[string]string{"ru": "Europe/Moscow", "uk": "Europe/Kyiv", "en": "UTC", "de": "Europe/Berlin", "fr": "Europe/Kyiv", "ja": "Europe/Kyiv"}
+	want := map[string]string{"ru": "Europe/Kyiv", "uk": "Europe/Kyiv", "en": "UTC", "de": "Europe/Berlin", "fr": "Europe/Kyiv", "ja": "Europe/Kyiv"}
 	for lang, tz := range want {
 		if got := DefaultTimezoneForLanguage(lang); got != tz {
 			t.Errorf("%s -> %s, want %s", lang, got, tz)
