@@ -65,3 +65,22 @@ func TestLevelFilter(t *testing.T) {
 		t.Errorf("warn lost: %s", buf.String())
 	}
 }
+
+// Secrets that travel percent-encoded, and whole connection URLs, are removed
+// as well (review SEC-6).
+func TestScrubEncodedFormsAndDatabaseURLs(t *testing.T) {
+	r := NewRedactor([]string{"p@ss/word:1", "p%40ss%2Fword%3A1"})
+	for _, in := range []string{
+		"connect postgres://quoto_core:p@ss/word:1@core-postgres:5432/core failed",
+		"connect postgres://quoto_core:p%40ss%2Fword%3A1@core-postgres:5432/core failed",
+		"connect postgresql://quoto_core:anything-at-all@core-postgres/core failed",
+	} {
+		out := r.Scrub(in)
+		if strings.Contains(out, "word") || strings.Contains(out, "anything-at-all") || strings.Contains(out, "p@ss") {
+			t.Errorf("password survived: %q", out)
+		}
+		if !strings.Contains(out, "core-postgres") {
+			t.Errorf("the host should stay: %q", out)
+		}
+	}
+}

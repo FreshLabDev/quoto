@@ -547,3 +547,20 @@ func TestErrorsDoNotCarryTheKey(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// The request body is the day's chat text; a redirect must not carry it to
+// another address (review SEC-3).
+func TestDoDoesNotFollowRedirects(t *testing.T) {
+	var elsewhere int
+	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { elsewhere++ }))
+	t.Cleanup(target.Close)
+	path, _ := writeFile(t, 10)
+	c := server(t, http.StatusTemporaryRedirect, "", http.Header{"Location": {target.URL}}, nil)
+	resp, err := c.Do(context.Background(), mustBody(t, imageRequest(path)), 5*time.Second)
+	if elsewhere != 0 {
+		t.Fatalf("the redirect was followed %d time(s)", elsewhere)
+	}
+	if err == nil && resp.Status == 200 {
+		t.Fatal("a redirect was treated as success")
+	}
+}

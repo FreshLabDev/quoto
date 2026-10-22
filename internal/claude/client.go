@@ -68,7 +68,7 @@ func NewClient(apiKey string) *Client {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: time.Second,
-		}},
+		}, CheckRedirect: noRedirect},
 		Sleep: sleep,
 		Rand:  rand.Float64,
 	}
@@ -309,3 +309,8 @@ func (r *idleReader) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
+
+// noRedirect refuses to follow a redirect. Go drops Authorization on a change of
+// host but not x-api-key, and a redirect would carry the day's chat text along
+// with it. The API has no legitimate redirects.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }

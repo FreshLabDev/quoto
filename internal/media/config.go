@@ -44,8 +44,14 @@ var (
 	// A cloud Bot API stops at 20 MB anyway; a local server does not.
 	maxDownloadBytes int64 = 100 << 20
 	// maxImagePixels is the largest picture decoded (doc section 2). A Telegram
-	// photo is at most 1280 px and never gets near it.
-	maxImagePixels = 40_000_000
+	// photo is at most 1280 px and never gets near it; a document can be anything.
+	// A progressive JPEG of 40 million pixels took 850 MB to decode in the review,
+	// and 16 million is a 4000x4000 picture, which keeps every camera photo.
+	maxImagePixels = 16_000_000
+
+	// maxVideoPixels is the largest frame ffmpeg is asked to read: 4096x2304.
+	// An 8K clip of two megabytes took 470 MB.
+	maxVideoPixels = 4096 * 2304
 
 	phashMaxDistance = 5
 

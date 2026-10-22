@@ -48,9 +48,13 @@ func NewClient(key, referer string) *Client {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: time.Second,
-		}},
+		}, CheckRedirect: noRedirect},
 	}
 }
+
+// noRedirect refuses to follow a redirect: the request body is the day's chat
+// text, and the API has no legitimate redirects.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // Response is a successful (2xx) answer.
 type Response struct {

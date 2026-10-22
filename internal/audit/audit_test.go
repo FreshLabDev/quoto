@@ -405,3 +405,25 @@ func TestConcurrentWritesStayWholeLines(t *testing.T) {
 		}
 	}
 }
+
+// Prune is for the start of the process: expired lines go even if nothing is
+// written afterwards (review SEC-7).
+func TestPruneDropsExpiredLinesWithoutAWrite(t *testing.T) {
+	l, clock, _ := newTestLog(t, t0)
+	if err := l.Write(map[string]any{"text": "old"}); err != nil {
+		t.Fatal(err)
+	}
+	*clock = t0.Add(Retention + time.Hour)
+	l.Prune()
+	if lines := readLines(t, l.Path()); len(lines) != 0 {
+		t.Fatalf("expired line kept: %v", lines)
+	}
+}
+
+func TestPruneOfAMissingFileIsQuiet(t *testing.T) {
+	l, _, logs := newTestLog(t, t0)
+	l.Prune()
+	if got := logs.joined(); got != "" {
+		t.Fatalf("logged %q", got)
+	}
+}

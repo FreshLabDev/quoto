@@ -25,6 +25,8 @@ var (
 	openRouter   = regexp.MustCompile(`sk-or-[A-Za-z0-9_\-]+`)
 	bearer       = regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._\-]+`)
 	botToken     = regexp.MustCompile(`\d{6,}:[A-Za-z0-9_\-]{30,}`)
+	// A connection URL carries its password; the host after the @ stays.
+	dbURL = regexp.MustCompile(`(postgres(?:ql)?://[^:@/\s]*):[^@\s]+@`)
 )
 
 // Redactor removes secrets from strings. The zero value removes only
@@ -64,6 +66,7 @@ func (r *Redactor) Scrub(s string) string {
 	s = anthropicKey.ReplaceAllString(s, placeholder)
 	s = openRouter.ReplaceAllString(s, placeholder)
 	s = bearer.ReplaceAllString(s, "Bearer "+placeholder)
+	s = dbURL.ReplaceAllString(s, "${1}:"+placeholder+"@")
 	return botToken.ReplaceAllString(s, placeholder)
 }
 

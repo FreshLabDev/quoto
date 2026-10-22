@@ -200,6 +200,9 @@ func (p *Pipeline) phashFile(ctx context.Context, path string) (string, error) {
 // duration cap) and the memory rules of doc section 2 (one ffmpeg thread).
 func (p *Pipeline) normalizeVideo(ctx context.Context, src domain.MediaSource, raw, dir string) (Normalized, error) {
 	out := filepath.Join(dir, "normalized.mp4")
+	if w, h, ok := p.probeFrameSize(ctx, raw); ok && int64(w)*int64(h) > int64(maxVideoPixels) {
+		return Normalized{}, fmt.Errorf("%w: %dx%d, the limit is %d pixels", errVideoTooLarge, w, h, maxVideoPixels)
+	}
 	duration := p.probeDuration(ctx, raw)
 	if duration <= 0 {
 		duration = src.Duration
@@ -213,6 +216,11 @@ func (p *Pipeline) normalizeVideo(ctx context.Context, src domain.MediaSource, r
 	}
 	return Normalized{Path: out, Mime: "video/mp4", SHA256: sum, Phash: p.videoPhash(ctx, out, dir)}, nil
 }
+
+// errVideoTooLarge is returned for a clip whose frames are bigger than
+// maxVideoPixels. ffmpeg decodes at full size whatever it is asked to write, and
+// a few megabytes of 8K video cost hundreds of megabytes of memory.
+var errVideoTooLarge = errors.New("video frames are too large")
 
 // videoSeconds is how much of the video is kept: its length truncated to whole
 // seconds, at least 1, at most videoMaxSeconds. An unknown length keeps the
@@ -236,7 +244,9 @@ func ffmpegArgs(inputOpts []string, input string, outputOpts []string, output st
 	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-nostats", "-y",
 		"-threads", "1", "-filter_threads", "1"}
 	args = append(args, inputOpts...)
-	args = append(args, "-i", input)
+	// The input is a file we wrote. A playlist or a concat script inside it must
+	// not make ffmpeg open anything else.
+	args = append(args, "-protocol_whitelist", "file", "-i", input)
 	args = append(args, outputOpts...)
 	return append(args, "-threads", "1", output)
 }
@@ -314,8 +324,8 @@ func (p *Pipeline) videoPhash(ctx context.Context, video, dir string) string {
 
 // probeDuration is the length in seconds ffprobe reports, 0 when it cannot say.
 func (p *Pipeline) probeDuration(ctx context.Context, path string) float64 {
-	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-show_entries", "format=duration",
-		"-of", "default=noprint_wrappers=1:nokey=1", path)
+	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-protocol_whitelist", "file",
+		"-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
 	if err != nil {
 		return 0
 	}
@@ -324,6 +334,26 @@ func (p *Pipeline) probeDuration(ctx context.Context, path string) float64 {
 		return 0
 	}
 	return v
+}
+
+// probeFrameSize is the width and height of the first video stream, ok false
+// when ffprobe cannot say (the caller then goes on, and ffmpeg decides).
+func (p *Pipeline) probeFrameSize(ctx context.Context, path string) (width, height int, ok bool) {
+	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-protocol_whitelist", "file", "-select_streams", "v:0",
+		"-show_entries", "stream=width,height", "-of", "csv=p=0", path)
+	if err != nil {
+		return 0, 0, false
+	}
+	w, h, found := strings.Cut(strings.TrimSpace(string(out)), ",")
+	if !found {
+		return 0, 0, false
+	}
+	width, errW := strconv.Atoi(strings.TrimSpace(w))
+	height, errH := strconv.Atoi(strings.TrimSpace(h))
+	if errW != nil || errH != nil || width <= 0 || height <= 0 {
+		return 0, 0, false
+	}
+	return width, height, true
 }
 
 // sha256File hashes a file without reading it into memory.

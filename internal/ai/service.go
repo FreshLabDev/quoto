@@ -137,7 +137,9 @@ func New(cfg Config, redact func(string) string, log *slog.Logger) *Service {
 		s.router, s.orURL = c, c.URL
 	}
 	if cfg.AuditDir != "" {
-		s.audit = audit.New(cfg.AuditDir, s.log)
+		log := audit.New(cfg.AuditDir, s.log)
+		log.Prune()
+		s.audit = log
 	} else {
 		s.log.Warn("ai audit log is off: no audit directory is configured")
 	}

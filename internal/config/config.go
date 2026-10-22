@@ -67,9 +67,12 @@ func (c Config) Secrets() []string {
 	out := []string{c.BotToken, c.AnthropicKey, c.OpenRouterKey}
 	if u, err := url.Parse(c.DatabaseURL); err == nil && u.User != nil {
 		if pw, ok := u.User.Password(); ok {
-			out = append(out, pw)
+			// The password also travels percent-encoded, as it was written in the URL.
+			out = append(out, pw, url.QueryEscape(pw), url.PathEscape(pw), u.User.String())
 		}
 	}
+	// A token in a URL has its colon encoded by some proxies.
+	out = append(out, strings.ReplaceAll(c.BotToken, ":", "%3A"))
 	return out
 }
 

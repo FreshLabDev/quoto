@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -19,8 +20,9 @@ type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (stdout []byte, err error)
 }
 
-// execRunner is the Runner that starts real processes.
-type execRunner struct{}
+// execRunner is the Runner that starts real processes. They get a small
+// environment of their own; extraEnv is added to it, for tests.
+type execRunner struct{ extraEnv []string }
 
 // Output limits. ffmpeg is run with -loglevel error, so its stderr is short; the
 // tail is kept for the message of a failure. Python kept the last 1000
@@ -30,7 +32,7 @@ const (
 	stdoutCap  = 64 << 10
 )
 
-func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+func (r execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	bin, err := exec.LookPath(name)
 	if err != nil {
 		return nil, fmt.Errorf("%s is not installed", name)
@@ -43,6 +45,9 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 	cmd := exec.CommandContext(cmdCtx, bin, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	// ffmpeg parses files that any member of a group can send. It gets what it
+	// needs to run and none of the bot's secrets.
+	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH"), "TMPDIR=" + os.TempDir(), "LC_ALL=C"}, r.extraEnv...)
 	// A killed ffmpeg must not keep the job waiting on its pipes.
 	cmd.WaitDelay = 5 * time.Second
 

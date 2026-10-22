@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -464,7 +465,7 @@ func TestProbeDuration(t *testing.T) {
 	// The command line is the one Python used.
 	r := newRig(t)
 	r.p.probeDuration(context.Background(), "x.mp4")
-	want := []string{"ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "x.mp4"}
+	want := []string{"ffprobe", "-v", "error", "-protocol_whitelist", "file", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "x.mp4"}
 	if got := r.run.calls[0]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("ffprobe call %q, want %q", got, want)
 	}
@@ -549,6 +550,70 @@ func TestNormalizeRouting(t *testing.T) {
 		}
 		if filepath.Base(n.Path) != tt.want {
 			t.Errorf("%s %s: output %s, want %s", tt.src.Kind, tt.src.MimeType, filepath.Base(n.Path), tt.want)
+		}
+	}
+}
+
+// A clip with frames over maxVideoPixels is refused before ffmpeg is started:
+// ffmpeg decodes at full size whatever it writes (review SEC-1).
+func TestVideoFramesTooLargeAreRefused(t *testing.T) {
+	tests := []struct {
+		name   string
+		probe  string
+		refuse bool
+	}{
+		{"8K", "7680,4320\n", true},
+		{"4K UHD is the largest allowed", "3840,2160\n", false},
+		{"unreadable answer goes on", "N/A\n", false},
+		{"no answer goes on", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newRig(t)
+			r.run.duration = "5"
+			r.run.fn = func(_ context.Context, name string, args []string) ([]byte, error) {
+				if strings.HasSuffix(name, "ffprobe") && slices.Contains(args, "stream=width,height") {
+					return []byte(tt.probe), nil
+				}
+				return nil, nil
+			}
+			_, err := r.p.normalizeVideo(context.Background(), domain.MediaSource{Kind: domain.ContentVideo}, writeTemp(t, "r.mp4", []byte("v")), t.TempDir())
+			ffmpegRan := false
+			for _, c := range r.run.calls {
+				if strings.HasSuffix(c[0], "ffmpeg") {
+					ffmpegRan = true
+				}
+			}
+			if tt.refuse {
+				if !errors.Is(err, errVideoTooLarge) || ffmpegRan {
+					t.Fatalf("err %v, ffmpeg ran %t", err, ffmpegRan)
+				}
+				return
+			}
+			if err != nil || !ffmpegRan {
+				t.Fatalf("err %v, ffmpeg ran %t", err, ffmpegRan)
+			}
+		})
+	}
+}
+
+// Every ffmpeg and ffprobe call refuses protocols other than file.
+func TestToolsAreRestrictedToLocalFiles(t *testing.T) {
+	r := newRig(t)
+	r.run.duration = "5"
+	if _, err := r.p.normalizeVideo(context.Background(), domain.MediaSource{Kind: domain.ContentVideo}, writeTemp(t, "r.mp4", []byte("v")), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.p.normalizeAudio(context.Background(), writeTemp(t, "r.ogg", []byte("a")), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.run.calls) == 0 {
+		t.Fatal("nothing ran")
+	}
+	for _, c := range r.run.calls {
+		i := slices.Index(c, "-protocol_whitelist")
+		if i < 0 || i+1 >= len(c) || c[i+1] != "file" {
+			t.Fatalf("call without a protocol whitelist: %q", c)
 		}
 	}
 }

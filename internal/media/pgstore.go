@@ -95,10 +95,14 @@ func nullablePositive(n int) any {
 // Python wrote the condition as (pending and free) or (processing and free); the
 // two branches are the same test on a different status, so it is one here. A
 // processing row whose lease has run out is claimable again: its worker died.
+// That claim costs an attempt (retry_count + 1), so a file that kills the
+// process every time it is tried is given up on after retryMaxAttempts starts
+// instead of being picked up again after every restart.
 func (s *PGStore) Claim(ctx context.Context, messageDBID, itemID int64, now time.Time, lease time.Duration) (Item, bool, error) {
 	row := s.pool.QueryRow(ctx, `
 		UPDATE message_media
-		SET analysis_status = '`+domain.MediaProcessing+`', next_retry_at = $4
+		SET analysis_status = '`+domain.MediaProcessing+`', next_retry_at = $4,
+		    retry_count = retry_count + CASE WHEN analysis_status = '`+domain.MediaProcessing+`' THEN 1 ELSE 0 END
 		WHERE message_db_id = $1
 		  AND id = COALESCE(NULLIF($2::bigint, 0), (SELECT id FROM message_media WHERE message_db_id = $1 ORDER BY id LIMIT 1))
 		  AND analysis_status IN ('`+domain.MediaPending+`', '`+domain.MediaProcessing+`')

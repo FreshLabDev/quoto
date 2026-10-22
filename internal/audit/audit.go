@@ -61,6 +61,19 @@ func New(dir string, log *slog.Logger) *Log {
 	return &Log{dir: dir, path: filepath.Join(dir, FileName), log: log, now: time.Now}
 }
 
+// Prune drops expired lines now. The log does it on its first write and then at
+// most once an hour while it is written to; the process calls this at start, so
+// a bot that has not called a model for a week still keeps its promise.
+func (l *Log) Prune() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.now().UTC()
+	l.lastPrune = now
+	if err := l.prune(now); err != nil {
+		l.log.Error("audit log cleanup failed", "path", l.path, "err", err)
+	}
+}
+
 // Path is the file the log writes to.
 func (l *Log) Path() string { return l.path }
 

@@ -279,6 +279,25 @@ func (p *Pipeline) process(ctx context.Context, j job) {
 	src := item.Source()
 	started := p.now()
 
+	// Claiming a lease that had run out counted as an attempt. A row that has
+	// used them all was claimed by workers that never finished it, which means
+	// this file takes the process down; it is not tried again.
+	if tries := max(1, retryMaxAttempts); item.RetryCount >= tries {
+		count := item.RetryCount
+		res := Result{
+			Status:      domain.MediaFailed,
+			Description: domain.MetadataDescription(src),
+			Error:       "analysis never finished: the worker stopped every time this file was tried",
+			RetryCount:  &count,
+		}
+		p.log.Warn("media analysis given up: earlier workers did not finish this file",
+			"message_db_id", item.MessageDBID, "attempts", count)
+		if err := p.store.Finish(ctx, item, res); err != nil && ctx.Err() == nil {
+			p.log.Error("media result not stored", "message_db_id", item.MessageDBID, "status", res.Status, "error", err)
+		}
+		return
+	}
+
 	jobCtx, cancel := context.WithTimeout(ctx, itemTimeout)
 	res, err := p.analyse(jobCtx, item, src)
 	timedOut := jobCtx.Err() != nil && ctx.Err() == nil

@@ -116,6 +116,9 @@ func (s *fakeStore) Claim(_ context.Context, messageDBID, itemID int64, now time
 		s.mu.Unlock()
 		return Item{}, false, nil
 	}
+	if it.Status == domain.MediaProcessing {
+		it.RetryCount++
+	}
 	it.Status = domain.MediaProcessing
 	got := *it
 	s.claimed = append(s.claimed, messageDBID)

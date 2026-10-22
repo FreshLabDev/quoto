@@ -918,3 +918,24 @@ func TestPGPipelineRun(t *testing.T) {
 
 	waitFor(t, "the row to be analysed", func() bool { return e.media(item).Status == domain.MediaAnalyzed })
 }
+
+// A claim of a lease that ran out costs an attempt, so a file that kills the
+// process is given up on; a pending row costs nothing (review SEC-1).
+func TestPGClaimOfAnExpiredLeaseCountsAnAttempt(t *testing.T) {
+	e := newPGEnv(t)
+	msg, item := e.photo("lease-count")
+	e.state(item, domain.MediaPending, nil)
+	if _, ok, err := e.pg.Claim(pgCtx, msg, item, pgNoon, time.Minute); err != nil || !ok {
+		t.Fatalf("first claim: %v %v", ok, err)
+	}
+	if r := e.media(item); r.Retries != 0 {
+		t.Fatalf("claiming a pending row cost an attempt: retry_count %d", r.Retries)
+	}
+	got, ok, err := e.pg.Claim(pgCtx, msg, item, pgNoon.Add(2*time.Minute), time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("second claim: %v %v", ok, err)
+	}
+	if got.RetryCount != 1 || e.media(item).Retries != 1 {
+		t.Fatalf("a claim of an expired lease must cost one attempt: returned %d, stored %d", got.RetryCount, e.media(item).Retries)
+	}
+}

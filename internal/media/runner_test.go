@@ -33,15 +33,20 @@ func TestHelperProcess(t *testing.T) {
 			fmt.Println("0123456789012345678901234567890123456789")
 			fmt.Fprintln(os.Stderr, "progress line")
 		}
+	case "env":
+		fmt.Print(os.Getenv("BOT_TOKEN") + "|" + os.Getenv("ANTHROPIC_API_KEY") + "|" + os.Getenv("DATABASE_URL"))
 	case "sleep":
 		time.Sleep(time.Minute)
 	}
 	os.Exit(0)
 }
 
+// helperRunner starts the test binary with the helper switch on. The runner gives
+// its children a minimal environment, so the switch has to be passed explicitly.
+var helperRunner = execRunner{extraEnv: []string{"QUOTO_MEDIA_HELPER=1"}}
+
 func helper(t *testing.T, mode string, args ...string) (name string, argv []string) {
 	t.Helper()
-	t.Setenv("QUOTO_MEDIA_HELPER", "1")
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +56,7 @@ func helper(t *testing.T, mode string, args ...string) (name string, argv []stri
 
 func TestExecRunnerOutput(t *testing.T) {
 	name, args := helper(t, "print", "12.5")
-	out, err := execRunner{}.Run(context.Background(), name, args...)
+	out, err := helperRunner.Run(context.Background(), name, args...)
 	if err != nil || string(out) != "12.5" {
 		t.Fatalf("out %q err %v", out, err)
 	}
@@ -62,7 +67,7 @@ func TestExecRunnerOutput(t *testing.T) {
 // characters of it.
 func TestExecRunnerFailureCarriesStderr(t *testing.T) {
 	name, args := helper(t, "fail")
-	_, err := execRunner{}.Run(context.Background(), name, args...)
+	_, err := helperRunner.Run(context.Background(), name, args...)
 	if err == nil {
 		t.Fatal("no error")
 	}
@@ -80,7 +85,7 @@ func TestExecRunnerTimeout(t *testing.T) {
 	shorten(t, &commandTimeout, 200*time.Millisecond)
 	name, args := helper(t, "sleep")
 	started := time.Now()
-	_, err := execRunner{}.Run(context.Background(), name, args...)
+	_, err := helperRunner.Run(context.Background(), name, args...)
 	if err == nil || !strings.Contains(err.Error(), "timed out after 200ms") {
 		t.Fatalf("err = %v", err)
 	}
@@ -95,14 +100,14 @@ func TestExecRunnerStopsWithTheJob(t *testing.T) {
 	name, args := helper(t, "sleep")
 	ctx, cancel := context.WithCancel(context.Background())
 	go cancel()
-	_, err := execRunner{}.Run(ctx, name, args...)
+	_, err := helperRunner.Run(ctx, name, args...)
 	if err == nil || !strings.Contains(err.Error(), "stopped") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestExecRunnerMissingBinary(t *testing.T) {
-	_, err := execRunner{}.Run(context.Background(), "definitely-not-ffmpeg-binary")
+	_, err := helperRunner.Run(context.Background(), "definitely-not-ffmpeg-binary")
 	if err == nil || !strings.Contains(err.Error(), "definitely-not-ffmpeg-binary is not installed") {
 		t.Fatalf("err = %v", err)
 	}
@@ -112,7 +117,7 @@ func TestExecRunnerMissingBinary(t *testing.T) {
 // bounded, however much the process writes.
 func TestExecRunnerBoundsOutput(t *testing.T) {
 	name, args := helper(t, "noisy")
-	out, err := execRunner{}.Run(context.Background(), name, args...)
+	out, err := helperRunner.Run(context.Background(), name, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,5 +138,21 @@ func TestTailBuffer(t *testing.T) {
 	}
 	if len(b.buf) > 2*b.limit {
 		t.Fatalf("buffer grew to %d", len(b.buf))
+	}
+}
+
+// ffmpeg parses files from strangers, so it does not see the bot's secrets
+// (review SEC-4).
+func TestExecRunnerHidesTheEnvironment(t *testing.T) {
+	t.Setenv("BOT_TOKEN", "123:secret-token")
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-secret")
+	t.Setenv("DATABASE_URL", "postgres://u:secret@h/db")
+	name, args := helper(t, "env")
+	out, err := helperRunner.Run(context.Background(), name, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "||" {
+		t.Fatalf("the child saw %q", out)
 	}
 }

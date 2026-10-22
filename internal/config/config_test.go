@@ -197,3 +197,21 @@ func TestSecretsIncludeDatabasePassword(t *testing.T) {
 		t.Errorf("secrets %v lack the database password", c.Secrets())
 	}
 }
+
+func TestSecretsIncludeEncodedForms(t *testing.T) {
+	env := base()
+	env["DATABASE_URL"] = "postgres://quoto_core:p%40ss%2Fw@core-postgres:5432/core"
+	c, err := load(lookupFrom(env), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, s := range c.Secrets() {
+		have[s] = true
+	}
+	for _, want := range []string{"p@ss/w", "p%40ss%2Fw"} {
+		if !have[want] {
+			t.Errorf("secrets lack %q: %v", want, c.Secrets())
+		}
+	}
+}

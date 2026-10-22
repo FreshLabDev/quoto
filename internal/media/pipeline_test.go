@@ -405,7 +405,7 @@ func TestRetrySchedule(t *testing.T) {
 		{"third", 2, retryable("busy", 0, true), domain.MediaPending, 3, 1200 * time.Second, true},
 		{"fourth", 3, retryable("busy", 0, true), domain.MediaPending, 4, 2400 * time.Second, true},
 		{"MED-10 fifth is the last", 4, retryable("busy", 0, true), domain.MediaFailed, 5, 0, true},
-		{"already past the limit", 7, retryable("busy", 0, true), domain.MediaFailed, 8, 0, true},
+		{"already past the limit: given up without a try", 7, retryable("busy", 0, true), domain.MediaFailed, 7, 0, true},
 		{"MED-11 cooldown keeps the count", 2, retryable("cooldown", 900*time.Second, false), domain.MediaPending, 2, 900 * time.Second, true},
 		{"cooldown at the limit is still pending", 4, retryable("cooldown", 900*time.Second, false), domain.MediaPending, 4, 2400 * time.Second, true},
 		{"cooldown on a fresh row waits at least the base", 0, retryable("cooldown", 0, false), domain.MediaPending, 0, 300 * time.Second, true},
