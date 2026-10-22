@@ -13,7 +13,7 @@ updates:
     groups:
       github_actions:
         patterns: ["*"]
-  - package-ecosystem: pip
+  - package-ecosystem: gomod
     directory: "/"
     target-branch: dev
     schedule:
@@ -22,7 +22,7 @@ updates:
     commit-message:
       prefix: deps
     groups:
-      pip:
+      gomod:
         patterns: ["*"]
   - package-ecosystem: docker
     directory: "/"
