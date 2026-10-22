@@ -11,6 +11,126 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+Quoto is rewritten in Go. For the people in the chats it does what it did, with
+the changes listed below; what moves is the service around it: one static binary
+and `ffmpeg` instead of a Python interpreter and its packages, far less memory,
+and a license that matches the rest of the family. The design, the compatibility contract and every decision are in
+[`docs/go-rewrite.md`](docs/go-rewrite.md).
+
+### Operators
+
+Read this part before deploying.
+
+- **The new image does not run under the old manifest, and the old image does not
+  run under the new one.** `deploy/ws04/compose.yaml` renames the service from
+  `app` to `bot` (the container is still `quoto-bot`), builds the database URL
+  with a `postgres://` scheme, and checks `/healthz` instead of the heartbeat
+  file. To go back to a Python release, deploy that release's `compose.yaml`
+  together with its image digest; setting only `QUOTO_IMAGE` back fails the health
+  check and `ws04 deploy` rolls back again. The database needs nothing for that.
+- **Renamed**: `DB_URL` is now `DATABASE_URL` and must be a `postgres://` URL
+  (`postgresql+asyncpg://` is refused at start); `LOGS_PATH` is now
+  `AUDIT_LOG_DIR`. The production manifest sets both, so the host `.env` is not
+  touched. `BOT_TOKEN` and `BOT_USERNAME` keep their names.
+- **New**: `BOT_API_FILES_DIR` (required only together with
+  `TELEGRAM_BOT_API_BASE_URL`), `HTTP_ADDR` (`:8080`, serves `/healthz`) and
+  `LOG_LEVEL` (`info`).
+- **No longer read**: `QUOTE_HOUR`, `QUOTE_MINUTE`, `QUOTE_MINUTE_JITTER`,
+  `TIMEZONE`, `MIN_MESSAGES_FOR_AUTO_REVIEW`, `MAX_MESSAGES_PER_DAILY_EVAL`,
+  `SCHEDULER_CONCURRENCY`, `WEIGHT_*`, `COLORS`, `EMOJIS`, `LENGTH_OPTIMAL_*`,
+  `ENABLE_DEVELOPERS_NOTIFY`, `HEARTBEAT_FILE`, the `MEDIA_*` tuning variables,
+  `OPENROUTER_DATA_COLLECTION`, `OPENROUTER_ZDR`, `OPENROUTER_BASE_URL`,
+  `OPENROUTER_APP_TITLE`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_MEDIA_{IMAGE,VIDEO,AUDIO}_MODEL`
+  and the `*_MAX_TOKENS` ceilings. Their old defaults are constants now. A name
+  that is still set is listed once at start (never its value) and does nothing.
+  The production `.env` sets only values equal to those defaults, so nothing
+  changes there. Alerts stay on while `DEVELOPER_IDS` is not empty.
+- **Migrations are embedded in the binary and applied at every start**, under an
+  advisory lock, and recorded in `schema_migrations`. A database that Alembic
+  last touched (`20261018_01`) is adopted after its tables and columns are
+  compared with what the Go version expects; if they differ, the bot refuses to
+  start and names the table or column. `alembic_version` stays. `002_indexes`
+  adds two indexes. No column is dropped in this release.
+- **Core contract unchanged**: app key `quoto`, `core.touch`, `core.set_language`,
+  `core.clear_language`, `core.effective_language`; no direct writes to `core.*`.
+  A new database (not production) also needs `GRANT REFERENCES ON core.person,
+  core.chat TO quoto_core`, which core grants to other bots' roles but not to this
+  one yet.
+- **The image runs as uid and gid 1000**, the owner of the host `logs/`
+  directory. The manifest has no `user:` line.
+- **The first night after the deploy costs more.** The media description prompt
+  moves from `v2` to `v3`, so the cache misses once and images and videos are
+  described again.
+- **The first retention run deletes every message older than 72 hours**, which
+  includes the messages of days that were never processed.
+
+### Changed
+
+- **Media of a group that has not accepted the agreement goes nowhere.** Until an
+  admin accepts version 1.2, a photo, video or voice message reaches neither
+  Claude nor OpenRouter; it is described from its metadata, as when media
+  analysis is off. Before, only the Claude path was gated and OpenRouter still
+  received the media. Media that arrived before acceptance is not analysed
+  afterwards.
+- **The media model default is `google/gemini-3.5-flash-lite`**, with
+  `google/gemini-3.1-flash-lite` behind it. `google/gemini-2.5-flash-lite` has no
+  zero-data-retention endpoint on OpenRouter, so every request carrying
+  `zdr: true` was refused with `404` once an hour and fell through to the
+  fallback.
+- **The Details card drops the Reactions and Length bars.** Neither affected the
+  pick (the score is the AI's); the heart count stays. The columns stay and hold 0.
+- **Media**: video is never scaled up (a 320x240 clip stayed 960x720 before) and
+  has one duration cap of an hour; audio is trimmed only at the start, where a
+  pause in the middle used to cut a voice message to its first phrase; a file
+  over 100 MiB is not downloaded and keeps its metadata description; a network
+  error while downloading is retried like other temporary errors.
+- **A day that cannot be closed waits 15 minutes before the next try** instead of
+  trying and paying for the AI every minute for two hours. A day with no eligible
+  message is closed without another call. A run that is still in progress is not
+  started a second time by the catch-up after the agreement is accepted, and
+  that catch-up only runs once the day's cutoff has passed.
+- **A day verdict that does not parse sends the day to the next model** instead of
+  publishing nothing for that run.
+- **Messages are deleted after 72 hours** even when their day was never processed
+  (a group that did not accept the agreement, an outage, an `*_unknown` day).
+- **Logs are JSON on stdout.** The per-module files and the emoji console format
+  are gone; `logs/ai_audit.jsonl` stays, with its seven days and mode 0600.
+- **About shows "Scoring: Claude, OpenRouter"** instead of the stale
+  "OpenRouter".
+- **License: Apache-2.0** from this release, like the other Asterfield bots.
+  `v0.11.1` and earlier stay GPL-3.0. The user agreement and its version are
+  unchanged; the license appears in About only.
+
+### Fixed
+
+- **Anonymous reaction totals are counted.** The handler read a field the update
+  does not have, so every `message_reaction_count` update failed.
+- **Unblocking the bot in a private chat no longer creates a group.** It created a
+  `group_settings` row for the user id, and the scheduler then posted agreement
+  reminders into that chat.
+- **The `sendRichMessage` probe survives a network error, `429`, `5xx` and `409`**
+  by staying on HTML, and rich Markdown is switched off only when the method is
+  really gone, not by a deleted panel or a message that cannot be edited.
+- **A failing `getChatMember` answers the button with an alert** instead of
+  leaving it spinning.
+- **The agreement reminder is marked done only after it was sent**, as the
+  `v0.10.2` changelog said.
+- **The welcome message shows the group's real cutoff** (it printed 21:00 for a
+  group whose minute is between 21:00 and 21:10), and the group dashboard shows
+  the real media-analysis state.
+- **Editing a media message keeps its stored description.**
+- **A person without a name is shown as "Anonymous" in the viewer's language**
+  instead of a hard-coded Russian word.
+- **Equal-win authors in the statistics come out in a stable order.**
+
+### Removed
+
+- `scripts/bench_web.py`, `bench_web_ui.html`, `compare_eval_models.py`,
+  `try_media_model.py` and their tests: they imported the Python modules. They stay
+  in git history and at tag `v0.11.1`.
+- The Python service: `app/`, `alembic/`, `requirements*`, `tests/`,
+  `healthcheck.py`, `docker-entrypoint.sh`, `main.py`.
+
 ## v0.11.1 - 2026-10-20
 
 Claude Opus 5.5 picks the quote of the day and Claude Sonnet 5.5 describes
