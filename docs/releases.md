@@ -218,7 +218,7 @@ place.
 | | |
 |:--|:--|
 | Stack | `quoto` — `/opt/stacks/quoto` |
-| Manifest | [`deploy/ws04/compose.yaml`](deploy/ws04/compose.yaml) in this repository |
+| Manifest | [`deploy/ws04/compose.yaml`](../deploy/ws04/compose.yaml) in this repository |
 | Env file | `.env` on the host, never in git |
 | Networks | `core_net` (core-postgres), `telegram_bot_api_net` (the self-hosted Bot API server) |
 
