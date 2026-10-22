@@ -104,6 +104,7 @@ jobs:
       - name: Validate Compose
         run: |
           cp .env.example .env
+          cp .env.example deploy/ws04/.env
           QUOTO_IMAGE=ghcr.io/freshlabdev/quoto:test \
             QUOTO_CORE_PASSWORD=ci-validation-only \
             docker compose -f deploy/ws04/compose.yaml config >/dev/null

@@ -365,7 +365,7 @@ func TestMigrateAsRuntimeRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	u, _ := url.Parse(testURL(t))
-	u.User = url.User("quoto_core")
+	u.User = url.UserPassword("quoto_core", "quoto_core")
 	s, err := Connect(ctx, u.String(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -391,7 +391,7 @@ func TestMigrateWithoutSchemaPrivilege(t *testing.T) {
 	}
 	t.Cleanup(func() { _, _ = a.Exec(ctx, `GRANT CREATE ON DATABASE quoto_test TO PUBLIC`) })
 	u, _ := url.Parse(testURL(t))
-	u.User = url.User("quoto_core")
+	u.User = url.UserPassword("quoto_core", "quoto_core")
 	s, err := Connect(ctx, u.String(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -407,7 +407,7 @@ func TestMigrateWithoutSchemaPrivilege(t *testing.T) {
 func runtimeStore(t *testing.T) *Store {
 	t.Helper()
 	u, _ := url.Parse(testURL(t))
-	u.User = url.User("quoto_core")
+	u.User = url.UserPassword("quoto_core", "quoto_core")
 	s, err := Connect(context.Background(), u.String(), nil)
 	if err != nil {
 		t.Fatal(err)

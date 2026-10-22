@@ -329,6 +329,9 @@ $$;
 -- core 002/012/013: what quoto_core holds. Reads, and execute on the API; no
 -- table writes, and no rekey_chat.
 DO $$ BEGIN CREATE ROLE quoto_core LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- A test-only password: CI's PostgreSQL asks for one over TCP, a local trust
+-- setup ignores it. the integration tests connect with it.
+ALTER ROLE quoto_core PASSWORD 'quoto_core';
 GRANT USAGE ON SCHEMA core TO quoto_core;
 GRANT SELECT ON ALL TABLES IN SCHEMA core TO quoto_core;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA core TO quoto_core;
