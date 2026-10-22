@@ -13,9 +13,9 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 Quoto is rewritten in Go. For the people in the chats it does what it did, with
 the changes listed below; what moves is the service around it: one static binary
-and `ffmpeg` instead of a Python interpreter and its packages, far less memory,
-and a license that matches the rest of the family. The design, the compatibility contract and every decision are in
-[`docs/go-rewrite.md`](docs/go-rewrite.md).
+and `ffmpeg` instead of a Python interpreter and its packages, and a license
+that matches the rest of the family. The design, the compatibility contract and
+every decision are in [`docs/go-rewrite.md`](docs/go-rewrite.md).
 
 ### Operators
 
@@ -62,7 +62,17 @@ Read this part before deploying.
   moves from `v2` to `v3`, so the cache misses once and images and videos are
   described again.
 - **The first retention run deletes every message older than 72 hours**, which
-  includes the messages of days that were never processed.
+  includes the messages of days that were never processed, and it cannot be
+  undone by going back to Python. Take `pg_dump -n quoto` before the first start.
+- **The first start needs more privileges than a restart.** It creates
+  `schema_migrations` and the two indexes of `002`, so the role needs `CREATE` on
+  schema `quoto` and ownership of `messages` and `message_ai_scores`. Python's
+  Alembic changed those tables as the same role, so it very likely has both; if
+  not, the start stops with `permission denied` and names the `GRANT`, and the
+  data is untouched. Later starts need neither. The catalog queries that check it
+  are in `docs/go-rewrite.md` section 5.5.
+- **The manifest is hardened**: `cap_drop: [ALL]`, `no-new-privileges` and
+  `pids_limit: 256`. The test stack publishes its port on loopback only.
 
 ### Changed
 
@@ -84,6 +94,16 @@ Read this part before deploying.
   pause in the middle used to cut a voice message to its first phrase; a file
   over 100 MiB is not downloaded and keeps its metadata description; a network
   error while downloading is retried like other temporary errors.
+- **The per-message copies in the evaluation report are blanked after 72 hours.**
+  `message_ai_scores` kept the author name, text, caption and media description
+  of every scored message, and `ai_evaluation_runs` the model's reason text,
+  indefinitely, although the messages themselves are deleted. Scores, ranks, token
+  counts and media metadata stay.
+- **Oversized files are refused before they are decoded.** An image above 16
+  megapixels or a video with frames above 4096x2304 keeps its metadata
+  description instead of being decoded, and a file that makes the process crash
+  is given up after five tries instead of being claimed again every ten minutes.
+  ffmpeg runs with a minimal environment and may open files only.
 - **A day that cannot be closed waits 15 minutes before the next try** instead of
   trying and paying for the AI every minute for two hours. A day with no eligible
   message is closed without another call. A run that is still in progress is not
@@ -93,6 +113,11 @@ Read this part before deploying.
   publishing nothing for that run.
 - **Messages are deleted after 72 hours** even when their day was never processed
   (a group that did not accept the agreement, an outage, an `*_unknown` day).
+- **Secrets are scrubbed in more forms.** The redactor also removes
+  percent-encoded passwords and whole `postgres://` URLs, the Claude and
+  OpenRouter clients no longer follow redirects (the key and the day's text would
+  go to the new address), and the audit log is pruned at start as well as on
+  write.
 - **Logs are JSON on stdout.** The per-module files and the emoji console format
   are gone; `logs/ai_audit.jsonl` stays, with its seven days and mode 0600.
 - **About shows "Scoring: Claude, OpenRouter"** instead of the stale
