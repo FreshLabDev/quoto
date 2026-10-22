@@ -71,8 +71,15 @@ Read this part before deploying.
   not, the start stops with `permission denied` and names the `GRANT`, and the
   data is untouched. Later starts need neither. The catalog queries that check it
   are in `docs/go-rewrite.md` section 5.5.
-- **The manifest is hardened**: `cap_drop: [ALL]`, `no-new-privileges` and
-  `pids_limit: 256`. The test stack publishes its port on loopback only.
+- **The manifest is hardened**: `cap_drop: [ALL]`, `no-new-privileges`,
+  `pids_limit: 256` and `mem_limit: 512m`. The test stack publishes its port on
+  loopback only.
+- **Memory**, measured on macOS arm64 against the real binary and pipeline (the
+  Alpine image and a container were not measured; no Docker was available):
+  idle 8 to 20 MB, a day of 1500 messages 29 MB, a 50 MB video 135 to 145 MB for
+  the bot and ffmpeg together (the bot 20 to 26 MB), no growth over 30 videos in a
+  row. Python used 640 MiB in the container. A 16-megapixel picture sent as a
+  file takes 125 to 145 MB, a progressive 4:4:4 JPEG of that size up to 300 MB.
 
 ### Changed
 
@@ -100,10 +107,12 @@ Read this part before deploying.
   indefinitely, although the messages themselves are deleted. Scores, ranks, token
   counts and media metadata stay.
 - **Oversized files are refused before they are decoded.** An image above 16
-  megapixels or a video with frames above 4096x2304 keeps its metadata
+  megapixels or a video with frames above 2560x1440 keeps its metadata
   description instead of being decoded, and a file that makes the process crash
   is given up after five tries instead of being claimed again every ten minutes.
-  ffmpeg runs with a minimal environment and may open files only.
+  ffmpeg runs with a minimal environment, may open files only and refuses
+  oversized frames itself. A large picture and a video are never processed at
+  the same time.
 - **A message with no text, caption or file is not stored.** A join, a leave, a
   pin, a poll, a dice or a location was stored as `<type>: сообщение без текста`,
   counted towards the day's minimum and sent to the model as noise, so a quiet

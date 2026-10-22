@@ -61,6 +61,7 @@ type Pipeline struct {
 
 	slots    *semaphore.Weighted // running jobs, maxConcurrent
 	decoding *semaphore.Weighted // one picture decode at a time
+	heavy    *semaphore.Weighted // one memory-heavy job at a time: a video in ffmpeg or a large picture
 	flight   singleflight.Group  // one model call per file
 
 	mu     sync.Mutex
@@ -105,6 +106,7 @@ func New(cfg Config, deps Deps) *Pipeline {
 		video:     make(chan job, queueSize),
 		slots:     semaphore.NewWeighted(maxConcurrent),
 		decoding:  semaphore.NewWeighted(1),
+		heavy:     semaphore.NewWeighted(1),
 		queued:    map[int64]struct{}{},
 	}
 }

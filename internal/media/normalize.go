@@ -15,6 +15,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -98,6 +99,16 @@ func (p *Pipeline) decodeSlot(ctx context.Context, fn func() error) error {
 // JPEG quality 82, then the hash of the result.
 func (p *Pipeline) normalizeImage(ctx context.Context, raw, dir string) (Normalized, error) {
 	out := filepath.Join(dir, "normalized.jpg")
+	// A large picture and ffmpeg are the two things that cost more than a few
+	// tens of megabytes; they do not run together (doc section 2: 200 MB for the
+	// container, ffmpeg included).
+	if bigImage(raw) {
+		if err := p.heavy.Acquire(ctx, 1); err != nil {
+			return Normalized{}, err
+		}
+		defer p.heavy.Release(1)
+		defer debug.FreeOSMemory() // hand the decoded picture back to the OS now, not after minutes
+	}
 	if err := p.decodeSlot(ctx, func() error { return shrinkToJPEG(raw, out) }); err != nil {
 		return Normalized{}, err
 	}
@@ -110,6 +121,21 @@ func (p *Pipeline) normalizeImage(ctx context.Context, raw, dir string) (Normali
 		return Normalized{}, err
 	}
 	return Normalized{Path: out, Mime: "image/jpeg", SHA256: sum, Phash: hash}, nil
+}
+
+// bigImagePixels is the size from which a picture counts as heavy.
+const bigImagePixels = 6_000_000
+
+// bigImage reads the header of raw and says whether the picture is heavy. A file
+// that cannot be read is not: shrinkToJPEG reports the error.
+func bigImage(raw string) bool {
+	f, err := os.Open(raw)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	return err == nil && int64(cfg.Width)*int64(cfg.Height) > bigImagePixels
 }
 
 // shrinkToJPEG decodes raw, scales it to fit imageMaxSide (never up) and writes
@@ -159,8 +185,34 @@ func fitWithin(img image.Image, limit int) image.Image {
 	nw, nh := scaledSize(w, h, limit)
 	dst := image.NewRGBA(image.Rect(0, 0, nw, nh))
 	// Catmull-Rom is the cubic of Pillow's BICUBIC (a = -0.5).
-	draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
+	scaleCatmullRom(dst, img)
 	return dst
+}
+
+// scaleBand is how many rows (pass 1) or columns (pass 2) are scaled at a time.
+const scaleBand = 16
+
+// scaleCatmullRom is draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(),
+// draw.Src, nil) done in two exact passes. A single call allocates a scratch
+// buffer of dst width x src height x 32 bytes ([4]float64 per pixel): 123 MB for
+// a 12 MP photo, 205 MB for 40 MP. Catmull-Rom is separable and the kernel is 1
+// at distance 0 and 0 at distance 1, so scaling only the width of a band of rows,
+// then only the height of a band of columns, gives the same picture up to the
+// rounding of the 8-bit middle image, with a scratch buffer of one band.
+func scaleCatmullRom(dst *image.RGBA, src image.Image) {
+	sb := src.Bounds()
+	sw, sh := sb.Dx(), sb.Dy()
+	dw, dh := dst.Bounds().Dx(), dst.Bounds().Dy()
+	mid := image.NewRGBA64(image.Rect(0, 0, dw, sh))
+	for y := 0; y < sh; y += scaleBand {
+		y1 := min(y+scaleBand, sh)
+		draw.CatmullRom.Scale(mid, image.Rect(0, y, dw, y1), src,
+			image.Rect(sb.Min.X, sb.Min.Y+y, sb.Min.X+sw, sb.Min.Y+y1), draw.Src, nil)
+	}
+	for x := 0; x < dw; x += scaleBand {
+		x1 := min(x+scaleBand, dw)
+		draw.CatmullRom.Scale(dst, image.Rect(x, 0, x1, dh), mid, image.Rect(x, 0, x1, sh), draw.Src, nil)
+	}
 }
 
 // scaledSize is the size Image.thumbnail picks: the longer side becomes limit,
@@ -200,6 +252,10 @@ func (p *Pipeline) phashFile(ctx context.Context, path string) (string, error) {
 // duration cap) and the memory rules of doc section 2 (one ffmpeg thread).
 func (p *Pipeline) normalizeVideo(ctx context.Context, src domain.MediaSource, raw, dir string) (Normalized, error) {
 	out := filepath.Join(dir, "normalized.mp4")
+	if err := p.heavy.Acquire(ctx, 1); err != nil {
+		return Normalized{}, err
+	}
+	defer p.heavy.Release(1)
 	if w, h, ok := p.probeFrameSize(ctx, raw); ok && int64(w)*int64(h) > int64(maxVideoPixels) {
 		return Normalized{}, fmt.Errorf("%w: %dx%d, the limit is %d pixels", errVideoTooLarge, w, h, maxVideoPixels)
 	}
@@ -245,8 +301,10 @@ func ffmpegArgs(inputOpts []string, input string, outputOpts []string, output st
 		"-threads", "1", "-filter_threads", "1"}
 	args = append(args, inputOpts...)
 	// The input is a file we wrote. A playlist or a concat script inside it must
-	// not make ffmpeg open anything else.
-	args = append(args, "-protocol_whitelist", "file", "-i", input)
+	// not make ffmpeg open anything else. -max_pixels makes the decoder refuse
+	// frames over maxVideoPixels whatever the container claims: a 400 KB H.264 file
+	// of 16384x8192 frames took 800 MB in ffmpeg and 335 MB in ffprobe.
+	args = append(args, "-protocol_whitelist", "file", "-max_pixels", strconv.Itoa(maxVideoPixels), "-i", input)
 	args = append(args, outputOpts...)
 	return append(args, "-threads", "1", output)
 }
@@ -324,7 +382,7 @@ func (p *Pipeline) videoPhash(ctx context.Context, video, dir string) string {
 
 // probeDuration is the length in seconds ffprobe reports, 0 when it cannot say.
 func (p *Pipeline) probeDuration(ctx context.Context, path string) float64 {
-	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-protocol_whitelist", "file",
+	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-protocol_whitelist", "file", "-max_pixels", strconv.Itoa(maxVideoPixels),
 		"-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
 	if err != nil {
 		return 0
@@ -339,7 +397,7 @@ func (p *Pipeline) probeDuration(ctx context.Context, path string) float64 {
 // probeFrameSize is the width and height of the first video stream, ok false
 // when ffprobe cannot say (the caller then goes on, and ffmpeg decides).
 func (p *Pipeline) probeFrameSize(ctx context.Context, path string) (width, height int, ok bool) {
-	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-protocol_whitelist", "file", "-select_streams", "v:0",
+	out, err := p.run.Run(ctx, p.ffprobe, "-v", "error", "-protocol_whitelist", "file", "-max_pixels", strconv.Itoa(maxVideoPixels), "-select_streams", "v:0",
 		"-show_entries", "stream=width,height", "-of", "csv=p=0", path)
 	if err != nil {
 		return 0, 0, false

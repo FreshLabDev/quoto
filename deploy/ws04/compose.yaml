@@ -35,6 +35,10 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
+    # A 50 MB video measured 135-190 MB for the bot and ffmpeg together; the worst
+    # picture a group can send, 255-300 MB. Python needed 640 MiB. This is the
+    # ceiling, not the expectation, and it was not measured in a container yet.
+    mem_limit: 512m
     env_file:
       - path: .env
         required: true

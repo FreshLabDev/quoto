@@ -49,9 +49,12 @@ var (
 	// and 16 million is a 4000x4000 picture, which keeps every camera photo.
 	maxImagePixels = 16_000_000
 
-	// maxVideoPixels is the largest frame ffmpeg is asked to read: 4096x2304.
-	// An 8K clip of two megabytes took 470 MB.
-	maxVideoPixels = 4096 * 2304
+	// maxVideoPixels is the largest frame ffmpeg is asked to read: 2560x1440. The
+	// pipeline writes 720p whatever it reads, but ffmpeg decodes at full size: an
+	// 8K clip of two megabytes took 470 MB, and a 50 MB 4096x2304 one came to
+	// 180-190 MB for the process and ffmpeg together on the review's machine,
+	// against 150 MB at 2560x1440. The owner's ceiling is 200 MB.
+	maxVideoPixels = 2560 * 1440
 
 	phashMaxDistance = 5
 

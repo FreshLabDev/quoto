@@ -465,7 +465,7 @@ func TestProbeDuration(t *testing.T) {
 	// The command line is the one Python used.
 	r := newRig(t)
 	r.p.probeDuration(context.Background(), "x.mp4")
-	want := []string{"ffprobe", "-v", "error", "-protocol_whitelist", "file", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "x.mp4"}
+	want := []string{"ffprobe", "-v", "error", "-protocol_whitelist", "file", "-max_pixels", "3686400", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "x.mp4"}
 	if got := r.run.calls[0]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("ffprobe call %q, want %q", got, want)
 	}
@@ -563,7 +563,9 @@ func TestVideoFramesTooLargeAreRefused(t *testing.T) {
 		refuse bool
 	}{
 		{"8K", "7680,4320\n", true},
-		{"4K UHD is the largest allowed", "3840,2160\n", false},
+		{"4K UHD", "3840,2160\n", true},
+		{"1440p is the largest allowed", "2560,1440\n", false},
+		{"1080p", "1920,1080\n", false},
 		{"unreadable answer goes on", "N/A\n", false},
 		{"no answer goes on", "", false},
 	}
@@ -614,6 +616,9 @@ func TestToolsAreRestrictedToLocalFiles(t *testing.T) {
 		i := slices.Index(c, "-protocol_whitelist")
 		if i < 0 || i+1 >= len(c) || c[i+1] != "file" {
 			t.Fatalf("call without a protocol whitelist: %q", c)
+		}
+		if !containsPair(c, "-max_pixels", strconv.Itoa(maxVideoPixels)) {
+			t.Fatalf("call without a decoder pixel limit: %q", c)
 		}
 	}
 }
