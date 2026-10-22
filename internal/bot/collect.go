@@ -52,8 +52,9 @@ const (
 )
 
 // onGroupMessage stores a message of the day. Everything that passes the filters
-// is stored, whether or not the group has accepted the agreement and whatever it
-// contains: stickers, polls and service messages get a placeholder text.
+// and has text, a caption or a file is stored, whether or not the group has
+// accepted the agreement. The group is recorded either way, as a join or a pin
+// is a sign of life too.
 func (b *Bot) onGroupMessage(ctx context.Context, m *tg.Message) error {
 	if !collectable(m) {
 		return nil
@@ -61,6 +62,9 @@ func (b *Bot) onGroupMessage(ctx context.Context, m *tg.Message) error {
 	g, err := b.d.Groups.Ensure(ctx, personFrom(m.From), chatInfo(m.Chat))
 	if err != nil {
 		return fmt.Errorf("record group %d: %w", m.Chat.ID, err)
+	}
+	if !hasContent(m, sourceFromMessage(m)) {
+		return nil
 	}
 	nm := newMessage(m, b.now().UTC())
 	id, inserted, ok := b.save(ctx, nm)
@@ -102,7 +106,7 @@ func (b *Bot) save(ctx context.Context, nm domain.NewMessage) (id int64, inserte
 // onEditedMessage applies an edit to a stored message. An edit that makes a
 // message a bare link is ignored, so the stored version stays.
 func (b *Bot) onEditedMessage(ctx context.Context, m *tg.Message) error {
-	if !isGroupChat(m.Chat) || !collectable(m) {
+	if !isGroupChat(m.Chat) || !collectable(m) || !hasContent(m, sourceFromMessage(m)) {
 		return nil
 	}
 	if err := b.d.Messages.Edit(ctx, messageEdit(m)); err != nil {

@@ -104,6 +104,11 @@ Read this part before deploying.
   description instead of being decoded, and a file that makes the process crash
   is given up after five tries instead of being claimed again every ten minutes.
   ffmpeg runs with a minimal environment and may open files only.
+- **A message with no text, caption or file is not stored.** A join, a leave, a
+  pin, a poll, a dice or a location was stored as `<type>: сообщение без текста`,
+  counted towards the day's minimum and sent to the model as noise, so a quiet
+  day with a few joins cost an AI call. The group is still recorded. Rows already
+  stored go with the 72-hour retention.
 - **A day that cannot be closed waits 15 minutes before the next try** instead of
   trying and paying for the AI every minute for two hours. A day with no eligible
   message is closed without another call. A run that is still in progress is not
@@ -128,6 +133,10 @@ Read this part before deploying.
 
 ### Fixed
 
+- **Every group runs in its own time zone.** The zone database is embedded in the
+  binary, because the image has none; without it the cutoff and the day window
+  would have been computed in UTC. The bot checks the zones it names itself at
+  start.
 - **Anonymous reaction totals are counted.** The handler read a field the update
   does not have, so every `message_reaction_count` update failed.
 - **Unblocking the bot in a private chat no longer creates a group.** It created a

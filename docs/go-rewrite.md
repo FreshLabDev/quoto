@@ -377,6 +377,7 @@ Default if unanswered: keep the Python behaviour.
 | F11 | Editing a media message keeps its stored description. | `update_message` overwrites `messages.text` with the placeholder. | yes |
 | F12 | A person without a name shows `common.anonymous` in the viewer's language. Snapshots use the group language. | Hard-coded Russian `Аноним` shows in all locales. AI payloads keep `Unknown`. | yes |
 | F13 | About shows "Scoring: Claude, OpenRouter as fallback". | `EVALUATOR = "OpenRouter"` has been stale since v0.11.1. | yes |
+| F14 | A message with no text, caption or file (a join, leave, pin, poll, dice, location) is not stored. Added after the phase 5 behaviour review; not in the owner's list, taken as a cleanup decision. | Python stored them as `<type>: сообщение без текста`, counted them towards the day's minimum and sent the placeholders to the model, so a quiet day with a few joins cost an AI call. Old rows go with the 72-hour retention. | yes (flagged in the final report) |
 | C1 | Config checks: start fails if both AI keys are empty. | Today it logs critical and runs a bot that cannot publish. | yes |
 
 ### 7.3 Media (yes or no each)
@@ -396,7 +397,7 @@ Default if unanswered: keep the Python behaviour.
 | R1 | Delete `messages` (and by cascade reactions and media rows) older than 72 hours. | Messages of days that never got processed stay forever: groups that never accepted the agreement, downtime over 2 h, `*_unknown` days. A window is at most 25 hours and the catch-up 2 hours, so nothing older than about 27 hours can still be used. Privacy-relevant: it is chat text. The first run on prod deletes everything stale. | yes |
 | R2 | Retention for `ai_evaluation_runs` and `message_ai_scores`. | Nothing in the app reads them and nothing prunes them. | dropped: 51 and 6 008 rows on prod, not worth a job |
 | R3 | A late migration that drops: `quotes.forced_by_admin` (never read or written), `quotes.context_message_ids` (written, never read), `group_settings.is_premium` (read, never written; `PREMIUM_CHAT_IDS` covers it, to be checked on prod first), `chat_id` in the two report tables (equal to `group_id`), `message_ai_scores.ai_score_raw` (always `ai_score * 10`), `media_cache.phash_algo` (written, never read). | Dead weight. Only after Go has run on prod. | list now, run later |
-| R4 | Media of a group without the accepted agreement goes nowhere: metadata description only (see 7.0). | Today only the Claude path is gated by the agreement; OpenRouter still receives the media. | yes (owner changed this from "keep") |
+| R4 | Media of a group without the accepted agreement goes nowhere: metadata description only (see 7.0). | Today only the Claude path is gated by the agreement; OpenRouter still receives the media. | yes (owner changed this from "keep"). Consequence: media sent before an admin accepts the agreement stays on its metadata description after the acceptance, so that day's quote is built with it as it is; at most one day of one group. |
 | R5 | `media_cache` is never pruned. | Same as today. | keep |
 
 ### 7.5 Interface and operations (yes or no each)

@@ -104,26 +104,27 @@ func orElse(s, fallback string) string {
 	return s
 }
 
-// contentTypes are the names aiogram's Message.content_type returns, in the order
-// it tests them. A message that carries no file is stored under the first of
-// these that it has, so a service message ("new_chat_members", "pinned_message")
-// keeps the same content_type it had when the Python bot stored it.
+// contentTypes are the names aiogram's Message.content_type returns (aiogram
+// 3.31.0, 79 of them), in the order it tests them. A message with a caption but
+// no file the bot knows is stored under the first of these that it has, so its
+// content_type is the one the Python bot stored.
 var contentTypes = []string{
-	"text", "audio", "animation", "document", "game", "photo", "sticker", "video", "video_note", "voice",
-	"checklist", "contact", "venue", "location", "new_chat_members", "left_chat_member", "chat_owner_left",
-	"chat_owner_changed", "invoice", "successful_payment", "users_shared", "connected_website",
-	"migrate_from_chat_id", "migrate_to_chat_id", "pinned_message", "new_chat_title", "new_chat_photo",
-	"delete_chat_photo", "group_chat_created", "supergroup_chat_created", "channel_chat_created", "paid_media",
-	"passport_data", "proximity_alert_triggered", "poll", "dice", "message_auto_delete_timer_changed",
-	"forum_topic_created", "forum_topic_edited", "forum_topic_closed", "forum_topic_reopened",
-	"general_forum_topic_hidden", "general_forum_topic_unhidden", "giveaway_created", "giveaway",
-	"giveaway_completed", "giveaway_winners", "video_chat_scheduled", "video_chat_started", "video_chat_ended",
-	"video_chat_participants_invited", "web_app_data", "user_shared", "chat_shared", "story",
-	"write_access_allowed", "chat_background_set", "boost_added", "checklist_tasks_done",
+	"text", "audio", "animation", "document", "game", "live_photo", "photo", "sticker", "video", "video_note",
+	"voice", "checklist", "contact", "venue", "location", "new_chat_members", "left_chat_member",
+	"chat_owner_left", "chat_owner_changed", "invoice", "successful_payment", "users_shared",
+	"connected_website", "migrate_from_chat_id", "migrate_to_chat_id", "pinned_message", "new_chat_title",
+	"new_chat_photo", "delete_chat_photo", "group_chat_created", "supergroup_chat_created",
+	"channel_chat_created", "paid_media", "passport_data", "proximity_alert_triggered", "poll", "dice",
+	"message_auto_delete_timer_changed", "forum_topic_created", "forum_topic_edited", "forum_topic_closed",
+	"forum_topic_reopened", "general_forum_topic_hidden", "general_forum_topic_unhidden", "giveaway_created",
+	"giveaway", "giveaway_completed", "giveaway_winners", "video_chat_scheduled", "video_chat_started",
+	"video_chat_ended", "video_chat_participants_invited", "web_app_data", "user_shared", "chat_shared",
+	"story", "write_access_allowed", "chat_background_set", "boost_added", "checklist_tasks_done",
 	"checklist_tasks_added", "direct_message_price_changed", "refunded_payment", "gift", "unique_gift",
 	"gift_upgrade_sent", "paid_message_price_changed", "suggested_post_approved",
 	"suggested_post_approval_failed", "suggested_post_declined", "suggested_post_paid",
-	"suggested_post_refunded", "managed_bot_created", "poll_option_added", "poll_option_deleted", "live_photo",
+	"suggested_post_refunded", "managed_bot_created", "poll_option_added", "poll_option_deleted",
+	"rich_message", "community_chat_added", "community_chat_removed", "community_chat_joined",
 }
 
 // rawContentType finds the first of contentTypes present in the message as
@@ -163,9 +164,9 @@ func contentType(m *tg.Message, src *domain.MediaSource) string {
 func caption(m *tg.Message) string { return domain.PyStrip(m.Caption) }
 
 // initialText is messages.text when a message is stored or edited: the text; else
-// for a file, its caption and a description from its metadata; else the caption;
-// else a placeholder that says what the message was. The placeholders reach the
-// model, so they stay as Python wrote them.
+// for a file, its caption and a description from its metadata; else the caption.
+// A message with none of them is not stored (see hasContent), so the result is
+// empty only for a message nobody keeps.
 func initialText(m *tg.Message, src *domain.MediaSource) string {
 	if text := domain.PyStrip(m.Text); text != "" {
 		return text
@@ -174,10 +175,16 @@ func initialText(m *tg.Message, src *domain.MediaSource) string {
 	if src != nil {
 		return domain.CanonicalText(src.Kind, capt, domain.MetadataDescription(*src))
 	}
-	if capt != "" {
-		return capt
-	}
-	return domain.EmptyMediaText(contentType(m, src))
+	return capt
+}
+
+// hasContent says whether a message has anything to quote: text, a caption or a
+// file. A join, a leave, a pin, a poll or a dice has none. The Python bot stored
+// those with a placeholder text, counted them towards the day's minimum and sent
+// the placeholders to the model; a quiet day with a few joins then cost an AI
+// call (doc 7.2 F14).
+func hasContent(m *tg.Message, src *domain.MediaSource) bool {
+	return src != nil || domain.PyStrip(m.Text) != "" || caption(m) != ""
 }
 
 func replyTo(m *tg.Message) int64 {

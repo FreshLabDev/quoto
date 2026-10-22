@@ -82,6 +82,67 @@ func TestCollectFilters(t *testing.T) {
 	}
 }
 
+// Doc 7.2 F14: a message with no text, caption or file is not stored. The Python
+// bot stored joins, leaves, pins, polls and dice with a placeholder text, counted
+// them towards the day's minimum and sent the placeholders to the model. The
+// group is still recorded: the sender was there.
+func TestCollectSkipsMessagesWithNothingToQuote(t *testing.T) {
+	user := person(ownerID, "en")
+	raw := func(js string) tg.Message {
+		m := groupText(user, 5, "")
+		m.Raw = json.RawMessage(js)
+		return m
+	}
+	skipped := map[string]tg.Message{
+		"a join":     raw(`{"message_id":5,"new_chat_members":[{"id":9}]}`),
+		"a leave":    raw(`{"message_id":5,"left_chat_member":{"id":9}}`),
+		"a pin":      raw(`{"message_id":5,"pinned_message":{"message_id":3}}`),
+		"a poll":     raw(`{"message_id":5,"poll":{"id":"1"}}`),
+		"a dice":     raw(`{"message_id":5,"dice":{"emoji":"x","value":3}}`),
+		"a location": raw(`{"message_id":5,"location":{"latitude":1,"longitude":2}}`),
+		"blank text": groupText(user, 5, " \n "),
+		"empty":      groupText(user, 5, ""),
+	}
+	for name, m := range skipped {
+		t.Run("skipped: "+name, func(t *testing.T) {
+			h := newHarness(t)
+			h.message(m)
+			if len(h.store.saved) != 0 {
+				t.Fatalf("stored %+v", h.store.saved)
+			}
+			if len(h.store.ensures) != 1 {
+				t.Fatalf("the group was recorded %d times, want 1", len(h.store.ensures))
+			}
+			h.deliver(tg.Update{UpdateID: 2, EditedMessage: &m})
+			if len(h.store.edits) != 0 {
+				t.Fatalf("an edit was applied: %+v", h.store.edits)
+			}
+		})
+	}
+
+	kept := map[string]tg.Message{
+		"a caption on an unmodelled type": func() tg.Message {
+			m := raw(`{"message_id":5,"paid_media":{"x":1}}`)
+			m.Caption = "look"
+			return m
+		}(),
+		"a sticker": func() tg.Message {
+			m := groupText(user, 5, "")
+			m.Sticker = &tg.Sticker{FileID: "f", FileUniqueID: "u"}
+			return m
+		}(),
+	}
+	for name, m := range kept {
+		t.Run("kept: "+name, func(t *testing.T) {
+			h := newHarness(t)
+			h.message(m)
+			if len(h.store.saved) != 1 {
+				t.Fatalf("stored %d messages, want 1", len(h.store.saved))
+			}
+		})
+	}
+}
+
 // What is stored for a text message: the stripped text, the time Telegram gave,
 // the reply, and the group recorded once (messages.save in Python).
 func TestCollectStoresTheMessage(t *testing.T) {
@@ -293,19 +354,22 @@ func TestInitialTextAndContentType(t *testing.T) {
 		{"a blank text is a text by type and no text by content", tg.Message{Text: "  \n", Photo: photo},
 			"photo: Файл: photo, mime=image/jpeg, size=9", "text"},
 		{"a caption alone", tg.Message{Caption: "  just a caption  "}, "just a caption", "unknown"},
+		// Nothing to quote: these are not stored (hasContent), so the text is empty;
+		// the content type is still what aiogram would say.
 		{"a service message keeps aiogram's content type", tg.Message{Raw: json.RawMessage(`{"message_id":1,"new_chat_members":[{"id":5}]}`)},
-			"new_chat_members: сообщение без текста", "new_chat_members"},
-		{"a poll", tg.Message{Raw: json.RawMessage(`{"poll":{"id":"1"}}`)}, "poll: сообщение без текста", "poll"},
-		{"a pinned message", tg.Message{Raw: json.RawMessage(`{"pinned_message":{"message_id":3}}`)},
-			"pinned_message: сообщение без текста", "pinned_message"},
+			"", "new_chat_members"},
+		{"a poll", tg.Message{Raw: json.RawMessage(`{"poll":{"id":"1"}}`)}, "", "poll"},
+		{"a pinned message", tg.Message{Raw: json.RawMessage(`{"pinned_message":{"message_id":3}}`)}, "", "pinned_message"},
+		{"a rich message, new in aiogram 3.31", tg.Message{Raw: json.RawMessage(`{"rich_message":{"x":1}}`)}, "", "rich_message"},
 		{"aiogram's order decides when two are set", tg.Message{Raw: json.RawMessage(`{"location":{"latitude":1},"contact":{"phone_number":"1"}}`)},
-			"contact: сообщение без текста", "contact"},
+			"", "contact"},
 		{"false and empty fields do not count", tg.Message{Raw: json.RawMessage(`{"text":"","poll":null,"dice":false,"contact":{"a":1}}`)},
-			"contact: сообщение без текста", "contact"},
-		{"no raw message", tg.Message{}, "unknown: сообщение без текста", "unknown"},
-		{"a raw message that is not an object", tg.Message{Raw: json.RawMessage(`[1]`)}, "unknown: сообщение без текста", "unknown"},
-		{"nothing known in the raw message", tg.Message{Raw: json.RawMessage(`{"message_id":1,"date":2}`)},
-			"unknown: сообщение без текста", "unknown"},
+			"", "contact"},
+		{"no raw message", tg.Message{}, "", "unknown"},
+		{"a raw message that is not an object", tg.Message{Raw: json.RawMessage(`[1]`)}, "", "unknown"},
+		{"nothing known in the raw message", tg.Message{Raw: json.RawMessage(`{"message_id":1,"date":2}`)}, "", "unknown"},
+		{"a caption on a type the bot does not model", tg.Message{Caption: "look", Raw: json.RawMessage(`{"paid_media":{"x":1}}`)},
+			"look", "paid_media"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -320,11 +384,12 @@ func TestInitialTextAndContentType(t *testing.T) {
 	}
 }
 
-// aiogram's content_type tests the names in this order; the list has 75 names
-// (aiogram 3.31) and starts with the ones every message can be.
+// aiogram's content_type tests the names in this order; the list has 79 names
+// (aiogram 3.31.0, read out of Message.content_type with inspect.getsource) and
+// starts with the ones every message can be.
 func TestContentTypeList(t *testing.T) {
-	if len(contentTypes) != 75 {
-		t.Fatalf("%d content types, want 75", len(contentTypes))
+	if len(contentTypes) != 79 {
+		t.Fatalf("%d content types, want 79", len(contentTypes))
 	}
 	seen := map[string]bool{}
 	for _, name := range contentTypes {
@@ -333,8 +398,16 @@ func TestContentTypeList(t *testing.T) {
 		}
 		seen[name] = true
 	}
-	if contentTypes[0] != "text" || contentTypes[len(contentTypes)-1] != "live_photo" {
+	if contentTypes[0] != "text" || contentTypes[len(contentTypes)-1] != "community_chat_joined" {
 		t.Errorf("first %q, last %q", contentTypes[0], contentTypes[len(contentTypes)-1])
+	}
+	// live_photo is tested before photo, so a message with both is a live photo.
+	idx := map[string]int{}
+	for i, name := range contentTypes {
+		idx[name] = i
+	}
+	if idx["live_photo"] > idx["photo"] {
+		t.Errorf("live_photo (%d) must come before photo (%d)", idx["live_photo"], idx["photo"])
 	}
 }
 
