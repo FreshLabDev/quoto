@@ -205,7 +205,13 @@ place.
   prompt version moved from `v2` to `v3`), so images and videos are described
   again at OpenRouter's and Anthropic's price.
 - The first retention run deletes every message older than 72 hours, including
-  those of days that were never processed.
+  those of days that were never processed. Going back to Python does not bring
+  them back, so take `pg_dump -n quoto` before the first start.
+- The first start needs `CREATE` on schema `quoto` (for `schema_migrations`) and
+  ownership of `messages` and `message_ai_scores` (for the two indexes). Check
+  with the catalog queries in `docs/go-rewrite.md` section 5.5. If the role lacks
+  one, the start stops with `permission denied` and names the `GRANT`; nothing is
+  changed. Later starts need neither.
 
 ### What this stack needs to exist
 
