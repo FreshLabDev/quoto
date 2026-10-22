@@ -138,14 +138,14 @@ ever be true of either.
 
 ## Quoto today
 
-Quoto is pre-`v1.0.0`, on the `v0.11.x` line.
+Quoto is on the `v1.0.0` pre-release line: the Go rewrite.
 
 ```text
 v0.10.0         shared-core migration and operational hardening
 v0.10.3         per-kind media models with a common-model fallback chain
 v0.11.1         Claude picks the quote, user agreement 1.2; the last Python release
-next            the Go rewrite, Apache-2.0 (earlier tags stay GPL-3.0)
-v1.0.0          after real production history and a stable behavior contract
+v1.0.0-alpha.1  the Go rewrite, Apache-2.0 (earlier tags stay GPL-3.0)
+v1.0.0          after the Go service has run in production for real
 ```
 
 Tags of the form `v2026.07.01` are historical. They predate this scheme and are

@@ -11,6 +11,8 @@ See [`docs/versioning.md`](docs/versioning.md) for what the numbers mean and
 
 ## Unreleased
 
+## v1.0.0-alpha.1 - 2026-10-22
+
 Quoto is rewritten in Go. For the people in the chats it does what it did, with
 the changes listed below; what moves is the service around it: one static binary
 and `ffmpeg` instead of a Python interpreter and its packages, and a license
