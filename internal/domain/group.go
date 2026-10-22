@@ -240,9 +240,10 @@ func NormalizeQuoteTime(hour, minute int) (int, int) {
 
 // LanguageTimezones maps the language an AI run detected for a new group to the
 // time zone it most likely lives in; any other language gets DefaultTimezone.
-// The mapping is a guess kept from the Python version.
+// The mapping is a guess kept from the Python version, except "ru", which
+// moved from Europe/Moscow to Europe/Kyiv in v1.0.0 by the owner's decision.
 var LanguageTimezones = map[string]string{
-	"ru": "Europe/Moscow",
+	"ru": "Europe/Kyiv",
 	"uk": "Europe/Kyiv",
 	"en": "UTC",
 	"de": "Europe/Berlin",

@@ -442,8 +442,8 @@ only `compare_eval_models.py` now as `cmd/evalbench`. You decide.
 
 ### 7.8 Product behaviour kept, flagged for a conscious yes
 
-- Automatic time zone for a group by language: `ru` Moscow, `uk` Kyiv, `en` UTC,
-  `de` Berlin, the other twelve Kyiv. Looks arbitrary, kept.
+- Automatic time zone for a group by language: `uk` and `ru` Kyiv, `en` UTC,
+  `de` Berlin, the other twelve Kyiv. `ru` was Moscow until v1.0.0.
 - Windows are not merged when a group changes its cutoff time.
 - `QUOTE_MINUTE_JITTER` shifts only the minute, never the hour.
 
