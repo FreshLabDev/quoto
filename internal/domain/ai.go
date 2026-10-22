@@ -95,9 +95,10 @@ type Evaluator interface {
 type MediaDescribeRequest struct {
 	Path     string // file on disk; the ai package streams it, never loads it whole
 	MimeType string
-	// Kind is the analysis kind: image, video, audio (or photo, as the cache
-	// stores it). Photos, images and stickers may go to Claude; video and audio
-	// only to OpenRouter.
+	// Kind is the exact analysis kind (AnalysisKind): photo, image, sticker,
+	// video, animation, video_note, voice or audio. Photos, images and stickers
+	// may go to Claude; the rest only to OpenRouter. MimeType is image/jpeg,
+	// video/mp4 or audio/mpeg, whatever the kind.
 	Kind string
 }
 

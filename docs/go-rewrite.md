@@ -56,7 +56,7 @@ Module `github.com/FreshLabDev/quoto`, Go 1.26.10, `cmd/bot` plus `internal/`.
 | `internal/config` | Reads env, applies defaults, fails the start on a bad value. Returns a plain struct, no globals. |
 | `internal/log` | `slog` JSON logger and the single secret redactor, fed with every secret from config. |
 | `internal/domain` | Types and string constants shared across packages: quote statuses, media statuses, content types, reason codes. No I/O. |
-| `internal/db` | pgx pool, `search_path`, migration runner, and one store type per area (groups, messages, reactions, quotes, media, reports, stats, core). SQL sits next to the method. Consumers declare the narrow interface they need. |
+| `internal/db` | pgx pool, `search_path`, migration runner, and one `Store` with a method group per area (groups, messages, reactions, quotes, stats, core); the media and report stores sit in their own packages (below). SQL sits next to the method. Consumers declare the narrow interface they need. |
 | `internal/i18n` | `translations.json` via `go:embed`, `T(lang, key, pairs...)`, language normalisation and aliases, date formatting. |
 | `internal/window` | Cutoff, closed window and "due" logic in a group's time zone, with DST rules. Pure functions. |
 | `internal/scoring` | Picks the quote from AI scores: `#quoto` filter, truncation, context selection, stars. Pure functions. |
@@ -70,11 +70,17 @@ Module `github.com/FreshLabDev/quoto`, Go 1.26.10, `cmd/bot` plus `internal/`.
 | `internal/bot` | Update loop, handlers, deep links, rich-Markdown capability state with HTML fallback. |
 | `internal/menu` | `callback_data` codec and panel builders. |
 | `internal/agreement` | Document structure, version gate, Markdown and HTML renderers. |
-| `internal/stats` | Group and user statistics (published quotes only) and the evaluation report snapshot written after each run. |
 | `internal/health` | `/healthz`: database, Telegram polling freshness, scheduler freshness. |
 
 `app/core.py` (1 239 lines mixing group settings, messages, reactions, quotes
 and statistics) becomes the store types in `internal/db`, one file each.
+
+A store that only one package uses lives in that package and takes the pool from
+`db.Store.Pool()`: `media.PGStore` (cache and queue) and `scheduler.PGReports`
+(the evaluation report). That keeps the SQL next to the only code that knows what
+it means, and `internal/db` limited to what several packages share. The group
+and user statistics are in `internal/db` (`stats.go`) behind `domain.StatsReader`,
+because the bot reads them for two panels.
 
 ## 4. Environment
 
