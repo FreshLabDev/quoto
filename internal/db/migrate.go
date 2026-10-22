@@ -13,8 +13,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// insufficientPrivilege is SQLSTATE 42501.
+const insufficientPrivilege = "42501"
 
 const (
 	// migrateLockKey serialises starts: two instances of the bot (a rolling
@@ -64,13 +68,8 @@ func (s *Store) Migrate(ctx context.Context, fsys fs.FS) (err error) {
 	if err := ensureSchema(ctx, conn); err != nil {
 		return err
 	}
-	if _, err := conn.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version integer PRIMARY KEY,
-			name text NOT NULL,
-			applied_at timestamptz NOT NULL DEFAULT now()
-		)`); err != nil {
-		return fmt.Errorf("create migration ledger: %w", err)
+	if err := ensureLedger(ctx, conn); err != nil {
+		return err
 	}
 	if err := adoptAlembic(ctx, conn, s.utcNow()); err != nil {
 		return err
@@ -89,7 +88,7 @@ func (s *Store) Migrate(ctx context.Context, fsys fs.FS) (err error) {
 			return fmt.Errorf("read migration %s: %w", m.name, err)
 		}
 		if err := applyOne(ctx, conn, m, string(sql)); err != nil {
-			return fmt.Errorf("apply migration %s: %w", m.name, err)
+			return fmt.Errorf("apply migration %s: %w%s", m.name, err, ownershipHint(err))
 		}
 		s.log.Info("migration applied", "migration", m.name)
 	}
@@ -162,6 +161,43 @@ func appliedVersions(ctx context.Context, conn *pgxpool.Conn) (map[int]bool, err
 	return applied, rows.Err()
 }
 
+// ensureLedger creates schema_migrations when it is missing. PostgreSQL checks
+// the CREATE privilege on the schema before it looks at IF NOT EXISTS, so
+// running the statement on every start would make a role with only USAGE fail
+// on a database that is long since migrated. The table is looked up first.
+func ensureLedger(ctx context.Context, conn *pgxpool.Conn) error {
+	var regclass *string
+	if err := conn.QueryRow(ctx, `SELECT to_regclass($1)::text`, Schema+".schema_migrations").Scan(&regclass); err != nil {
+		return fmt.Errorf("look for the migration ledger: %w", err)
+	}
+	if regclass != nil {
+		return nil
+	}
+	if _, err := conn.Exec(ctx, `
+		CREATE TABLE schema_migrations (
+			version integer PRIMARY KEY,
+			name text NOT NULL,
+			applied_at timestamptz NOT NULL DEFAULT now()
+		)`); err != nil {
+		return fmt.Errorf("create migration ledger: %w%s", err, ownershipHint(err))
+	}
+	return nil
+}
+
+// ownershipHint says what to change when a migration failed for lack of
+// privileges. The Python version needed CREATE on schema quoto and ownership of
+// its tables too (Alembic altered them), so a database it ran on has both; one
+// provisioned by hand may not.
+func ownershipHint(err error) string {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != insufficientPrivilege {
+		return ""
+	}
+	return fmt.Sprintf(" (the database role needs CREATE on schema %s on the first start, and to own the tables the migration changes; "+
+		"as the schema owner: GRANT CREATE ON SCHEMA %s TO <role>, or run the migration files by hand and add them to schema_migrations)",
+		Schema, Schema)
+}
+
 // ensureSchema creates schema quoto when it is missing. The runtime role
 // usually cannot (it has no CREATE on the database), so the error names the
 // fix: whoever provisions the database creates the schema once.
@@ -220,6 +256,9 @@ func adoptAlembic(ctx context.Context, conn *pgxpool.Conn, now time.Time) error 
 			return fmt.Errorf("record adopted baseline: %w", err)
 		}
 		return nil
+	case hasAlembic && len(revisions) == 1 && revisions[0] > alembicHead:
+		return fmt.Errorf("database is at Alembic revision %s, newer than the %s this version knows: run a newer release of this bot",
+			revisions[0], alembicHead)
 	case hasAlembic && len(revisions) > 0:
 		return fmt.Errorf("database is at Alembic revision %s, this version expects %s: upgrade it with the Python release first",
 			strings.Join(revisions, ", "), alembicHead)

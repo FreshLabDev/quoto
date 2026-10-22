@@ -235,6 +235,33 @@ to `makeitmd_core` (003) and `voicy_core` (011) but not to `quoto_core`, whose
 tables predate the grant. Production never runs `001`, so this only matters for
 a new test stack; it goes in the final report as a follow-up for core.
 
+### 5.5 First start on production
+
+Three things to do before the first Go start. The first is read-only, the second
+is a backup.
+
+1. **Privileges.** The first start creates `schema_migrations` in schema `quoto`
+   and applies `002`, which makes two indexes. That needs `CREATE` on the schema
+   and ownership of `messages` and `message_ai_scores`. Python's Alembic changed
+   those tables under the same role, so it very likely has both; this is not
+   checked. A restart afterwards needs neither: the ledger is looked up before it
+   is created. Check (catalog only, no rows):
+
+   ```sql
+   SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'quoto';
+   SELECT has_schema_privilege('quoto_core', 'quoto', 'CREATE');
+   SELECT tablename, tableowner FROM pg_tables WHERE schemaname = 'quoto';
+   ```
+
+   If the role lacks either, the start stops with `permission denied` and a
+   message that names the `GRANT`. The data is untouched.
+2. **Backup.** `pg_dump -n quoto` before the first start. Retention (R1) deletes
+   every message older than 72 hours in the first hour, and a rollback to Python
+   does not bring them back.
+3. **Rollback.** Old compose file plus the old image digest (section 11). Python
+   runs against the schema Go leaves: `alembic upgrade head` is a no-op and the
+   extra table and indexes do no harm.
+
 ## 6. Compatibility contract
 
 Every line below gets a test before the Go version is allowed near prod.
@@ -568,7 +595,8 @@ config`, migrations on PostgreSQL 17, memory run.
 - **Production schema.** Read by the parent session on 2026-10-22, with the
   owner's permission; I did not run any statement against prod myself. What I
   know about prod comes from that snapshot (catalog and counts, no row contents).
-  Not covered: who owns schema `quoto`, and the grants of `quoto_core`.
+  Not covered: who owns schema `quoto`, and the grants of `quoto_core` (the
+  queries are in 5.5).
 - **Host `.env`.** I did not read it. The parent session passed me the key names
   and the non-secret values (7.0).
 - **The 404 body** in `ws04 logs` (7.6).

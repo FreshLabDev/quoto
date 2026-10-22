@@ -293,7 +293,8 @@ func TestAdoptRefusals(t *testing.T) {
 		mutate   string
 		want     string
 	}{
-		{"other revision", "20260901_01", "", "Alembic revision 20260901_01"},
+		{"other revision", "20260901_01", "", "upgrade it with the Python release"},
+		{"newer revision", "20270101_01", "", "run a newer release of this bot"},
 		{"missing column", alembicHead, "ALTER TABLE quotes DROP COLUMN decision_reason", "quotes.decision_reason"},
 		{"retyped column", alembicHead, "ALTER TABLE messages ALTER COLUMN text TYPE varchar(20)", "messages.text"},
 		{"nullability", alembicHead, "ALTER TABLE group_settings ALTER COLUMN quote_hour SET NOT NULL", "group_settings.quote_hour"},
@@ -399,5 +400,78 @@ func TestMigrateWithoutSchemaPrivilege(t *testing.T) {
 	err = s.Migrate(ctx, migrations.FS)
 	if err == nil || !strings.Contains(err.Error(), "cannot be created") {
 		t.Fatalf("error %v", err)
+	}
+}
+
+// runtimeStore is a store connected as quoto_core.
+func runtimeStore(t *testing.T) *Store {
+	t.Helper()
+	u, _ := url.Parse(testURL(t))
+	u.User = url.User("quoto_core")
+	s, err := Connect(context.Background(), u.String(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	return s
+}
+
+// A schema owned by someone else, where quoto_core can use and write the tables
+// but not create in the schema: a restart of a migrated database must not need
+// CREATE (review D-1).
+func TestRestartNeedsNoCreatePrivilege(t *testing.T) {
+	migratedStore(t) // as the owner, schema quoto owned by the test user
+	a := admin(t)
+	ctx := context.Background()
+	for _, stmt := range []string{
+		`GRANT USAGE ON SCHEMA quoto TO quoto_core`,
+		`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA quoto TO quoto_core`,
+		`GRANT USAGE ON ALL SEQUENCES IN SCHEMA quoto TO quoto_core`,
+	} {
+		if _, err := a.Exec(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := runtimeStore(t)
+	if err := s.Migrate(ctx, migrations.FS); err != nil {
+		t.Fatalf("restart as a role with USAGE only: %v", err)
+	}
+	if got := ledger(t, s); !equalInts(got, []int{1, 2}) {
+		t.Fatalf("ledger %v", got)
+	}
+}
+
+// The first start on a database whose schema the runtime role cannot create in
+// fails with a message that says what to grant.
+func TestFirstStartWithoutCreatePrivilegeSaysWhatToGrant(t *testing.T) {
+	pythonDatabase(t, alembicHead)
+	a := admin(t)
+	ctx := context.Background()
+	for _, stmt := range []string{
+		`GRANT USAGE ON SCHEMA quoto TO quoto_core`,
+		`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA quoto TO quoto_core`,
+	} {
+		if _, err := a.Exec(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := runtimeStore(t).Migrate(ctx, migrations.FS)
+	if err == nil || !strings.Contains(err.Error(), "GRANT CREATE ON SCHEMA quoto") {
+		t.Fatalf("error %v, want the grant to be named", err)
+	}
+}
+
+// An index someone made by hand must not stop the start (review D-2).
+func TestIndexCreatedByHandDoesNotStopMigration(t *testing.T) {
+	s := pythonDatabase(t, alembicHead)
+	ctx := context.Background()
+	if _, err := s.pool.Exec(ctx, `CREATE INDEX ix_messages_chat_created ON messages (chat_id, created_at)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Migrate(ctx, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	if got := ledger(t, s); !equalInts(got, []int{1, 2}) {
+		t.Fatalf("ledger %v", got)
 	}
 }
