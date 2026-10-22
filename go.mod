@@ -4,7 +4,7 @@ module github.com/FreshLabDev/quoto
 
 go 1.26.10
 
-require github.com/jackc/pgx/v5 v5.10.0
+require github.com/jackc/pgx/v5 v5.11.0
 
 require golang.org/x/image v0.47.0
 
