@@ -75,6 +75,12 @@ func (s *Store) Close() {
 	}
 }
 
+// Pool is the connection pool, for stores that live in the package that owns
+// the table (media, evaluation reports) rather than in this one. Such a store
+// takes the same search_path, so it names its own tables unqualified and core's
+// with their schema.
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
 // Ping is the database half of /healthz.
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 

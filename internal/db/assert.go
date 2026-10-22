@@ -12,3 +12,5 @@ var (
 	_ domain.Reactions = (*Store)(nil)
 	_ domain.Quotes    = (*Store)(nil)
 )
+
+var _ domain.StatsReader = (*Store)(nil)

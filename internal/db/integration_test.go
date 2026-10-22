@@ -51,7 +51,7 @@ func resetDatabase(t *testing.T, create bool) {
 	t.Helper()
 	ctx := context.Background()
 	a := admin(t)
-	stub, err := os.ReadFile("testdata/core_stub.sql")
+	stub, err := os.ReadFile("dbtest/core_stub.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

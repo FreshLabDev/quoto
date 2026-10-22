@@ -465,3 +465,69 @@ func TestMigrateChatID(t *testing.T) {
 		t.Fatal("migrated twice")
 	}
 }
+
+func TestStats(t *testing.T) {
+	s := migratedStore(t)
+	ensureGroup(t, s)
+	bob := domain.Person{ID: 12, FirstName: "Bob"}
+	carol := domain.Person{ID: 13, Username: "carol"}
+	for _, p := range []domain.Person{bob, carol} {
+		if err := s.TouchUser(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if st, err := s.Chat(ctx, -555); err != nil || st != nil {
+		t.Fatalf("unknown group: %+v %v", st, err)
+	}
+	empty, err := s.Chat(ctx, group.ID)
+	if err != nil || empty == nil || empty.TotalQuotes != 0 || empty.GroupName != "Club" {
+		t.Fatalf("empty chat: %+v %v", empty, err)
+	}
+	if u, err := s.User(ctx, group.ID, alice.ID); err != nil || u == nil || u.Wins != 0 || u.UserName != "Alice A" {
+		t.Fatalf("user without wins: %+v %v", u, err)
+	}
+
+	add := func(day int, author int64, score float64, status string) {
+		q := newQuote(day0.AddDate(0, 0, day), "line")
+		q.AuthorID, q.Score, q.DecisionStatus = author, score, status
+		q.Text = "line " + string(rune('a'+day))
+		if _, _, err := s.Create(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(0, alice.ID, 0.9, domain.StatusPublished)
+	add(1, alice.ID, 0.7, domain.StatusPublished)
+	add(2, bob.ID, 0.8, domain.StatusPublished)
+	add(3, bob.ID, 0.6, domain.StatusPublished)
+	add(4, carol.ID, 0.95, domain.StatusPublished)
+	add(5, carol.ID, 1.0, domain.StatusPublishFailed) // never counts
+	add(6, carol.ID, 1.0, domain.StatusSkippedBoring) // never counts
+
+	st, err := s.Chat(ctx, group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.TotalQuotes != 5 || st.UniqueAuthors != 3 || len(st.TopAuthors) != 3 {
+		t.Fatalf("chat %+v", st)
+	}
+	// alice and bob both have two wins: alice's average is higher.
+	if st.TopAuthors[0].Name != "Alice A" || st.TopAuthors[1].Name != "Bob" || st.TopAuthors[2].Name != "carol" {
+		t.Fatalf("top %+v", st.TopAuthors)
+	}
+	if st.Best == nil || st.Best.Score != 0.95 || st.Best.Author != "carol" || st.Best.Text != "line e" {
+		t.Fatalf("best %+v", st.Best)
+	}
+
+	// Equal wins share a rank, like the Python query (1 + authors with more).
+	u, err := s.User(ctx, group.ID, bob.ID)
+	if err != nil || u.Wins != 2 || u.Rank != 1 || u.TotalParticipants != 3 || u.Best == nil || u.Best.Score != 0.8 {
+		t.Fatalf("bob %+v %v", u, err)
+	}
+	if u, _ := s.User(ctx, group.ID, carol.ID); u.Rank != 3 || u.Wins != 1 {
+		t.Fatalf("carol %+v", u)
+	}
+	if u, _ := s.User(ctx, group.ID, alice.ID); u.Rank != 1 {
+		t.Fatalf("alice %+v", u)
+	}
+}
