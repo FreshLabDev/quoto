@@ -138,33 +138,38 @@ ever be true of either.
 
 ## Quoto today
 
-Quoto is pre-`v1.0.0`, on the `v0.10.x` line.
+Quoto is pre-`v1.0.0`, on the `v0.11.x` line.
 
 ```text
 v0.10.0         shared-core migration and operational hardening
 v0.10.3         per-kind media models with a common-model fallback chain
+v0.11.1         Claude picks the quote, user agreement 1.2; the last Python release
+next            the Go rewrite, Apache-2.0 (earlier tags stay GPL-3.0)
 v1.0.0          after real production history and a stable behavior contract
 ```
 
 Tags of the form `v2026.07.01` are historical. They predate this scheme and are
 kept only so old releases resolve; nothing new uses that shape.
 
-Quoto has no test bot, and it is the repository that would benefit most from
-one: the daily quote pipeline runs once per group per day, so a bad cut is not
-visible for up to twenty-four hours. Ask for one before changing scoring, the
-scheduler, or the AI prompt chain.
+Quoto has no test bot yet, and it is the repository that would benefit most
+from one: the daily quote pipeline runs once per group per day, so a bad cut is
+not visible for up to twenty-four hours. `deploy/ws04/compose.test.yaml` is the
+stack for it, with a PostgreSQL of its own; it needs a bot token and test API
+keys. Ask for one before changing scoring, the scheduler, or the AI prompt
+chain.
 
 ## Breaking-sensitive surface
 
 A change is breaking — and needs a `Breaking` changelog entry — when it affects:
 
-- required environment variables (`BOT_TOKEN`, `DB_URL`, `ANTHROPIC_API_KEY`
+- required environment variables (`BOT_TOKEN`, `DATABASE_URL`, `ANTHROPIC_API_KEY`
   and `OPENROUTER_API_KEY`, the `ANTHROPIC_*` and `OPENROUTER_*` model
   settings, and the scheduler / limit settings)
 - the shared `core-postgres` contract: the `quoto` schema, the `quoto_core`
   role, `search_path=quoto,core`, and the `core.person` / `core.chat` tables and
   `core.touch` / `core.set_language` functions quoto depends on
-- Alembic migration requirements — `alembic upgrade head` must apply cleanly on
-  the shared database before the bot boots
-- Docker Compose or deployment assumptions (the bundled local Postgres seeded
-  from `deploy/core-init.sql`, the container healthcheck, and container env)
+- migration requirements — the SQL files in `migrations/` are applied at every
+  start and must apply cleanly on the shared database, including one that Alembic
+  last touched (revision `20261018_01`)
+- Docker Compose or deployment assumptions (the test stack's PostgreSQL seeded
+  from `internal/db/dbtest/core_stub.sql`, the container healthcheck, and container env)

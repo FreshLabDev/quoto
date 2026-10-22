@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Version updates open against dev, like every other change; they reach main
 # with the next release. One grouped PR per ecosystem keeps the queue short.
 version: 2
@@ -13,7 +14,7 @@ updates:
     groups:
       github_actions:
         patterns: ["*"]
-  - package-ecosystem: pip
+  - package-ecosystem: gomod
     directory: "/"
     target-branch: dev
     schedule:
@@ -22,7 +23,7 @@ updates:
     commit-message:
       prefix: deps
     groups:
-      pip:
+      gomod:
         patterns: ["*"]
   - package-ecosystem: docker
     directory: "/"

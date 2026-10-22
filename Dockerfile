@@ -1,36 +1,55 @@
-FROM python:3.12-slim-bookworm
+# SPDX-License-Identifier: Apache-2.0
+FROM golang:1.26.10-alpine AS build
 
-# No real default: the release workflow passes the tag. A version baked in
-# here goes stale the moment it is not bumped, and then the image reports a
-# release it is not.
-ARG QUOTO_VERSION=dev
-ARG QUOTO_REVISION=unknown
+WORKDIR /src
 
-LABEL org.opencontainers.image.title="Quoto" \
-      org.opencontainers.image.version="${QUOTO_VERSION}" \
-      org.opencontainers.image.revision="${QUOTO_REVISION}"
-
-ENV QUOTO_VERSION=${QUOTO_VERSION}
-
-WORKDIR /app
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# go.mod must not carry a `replace` line here: the path it points at does not
+# exist inside the build context. CI refuses such a commit.
+COPY go.mod go.sum ./
+RUN go mod download
 
 COPY . .
 
-# Run as a non-root user; own /app (incl. the logs dir backing the volume).
-RUN useradd --create-home --uid 1000 quoto \
+ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE=unknown
+
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-s -w \
+      -X github.com/FreshLabDev/quoto/internal/buildinfo.Version=${VERSION} \
+      -X github.com/FreshLabDev/quoto/internal/buildinfo.Commit=${COMMIT} \
+      -X github.com/FreshLabDev/quoto/internal/buildinfo.Date=${DATE}" \
+    -o /out/quoto ./cmd/bot
+
+FROM alpine:3.24
+
+# ffmpeg and ffprobe shrink video and audio before they go to OpenRouter.
+RUN apk add --no-cache ca-certificates ffmpeg \
+    && addgroup -g 1000 quoto \
+    && adduser -D -H -u 1000 -G quoto quoto \
     && mkdir -p /app/logs \
-    && chown -R quoto:quoto /app
+    && chown quoto:quoto /app/logs
+
+WORKDIR /app
+
+COPY --from=build /out/quoto /app/quoto
+
+# A soft limit for the Go heap only; ffmpeg runs as a child process and is not
+# counted. It keeps the collector working before the container limit is near.
+ENV GOMEMLIMIT=128MiB
+
+# docker inspect answers which build is running without starting it.
+ARG VERSION=dev
+ARG COMMIT=none
+LABEL org.opencontainers.image.title="Quoto" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.source="https://github.com/FreshLabDev/quoto" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+# uid/gid 1000 own the host's ./logs directory that the stack mounts.
 USER quoto
 
-# Liveness: heartbeat is refreshed by the scheduler; stale => loop is wedged.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD ["python", "/app/healthcheck.py"]
+EXPOSE 8080
 
-CMD ["sh", "/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/quoto"]

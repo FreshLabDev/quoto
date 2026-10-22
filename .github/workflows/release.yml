@@ -72,6 +72,7 @@ jobs:
             exit 1
           fi
           echo "commit=${commit}" >>"$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$GITHUB_OUTPUT"
           echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >>"$GITHUB_OUTPUT"
 
       - name: Extract changelog section
@@ -82,7 +83,7 @@ jobs:
             printf '> **Published without CI.** %s\n\n' "${SKIP_REASON}" >"${notes_file}"
           fi
           # Match the heading by literal prefix AND a boundary (space or
-          # end-of-line) so e.g. "## v0.10.3" does not capture "## v0.10.3-alpha.1".
+          # end-of-line) so e.g. "## v1.0.0" does not capture "## v1.0.0-alpha.1".
           section="$(mktemp)"
           awk -v ver="## ${TAG}" '
             index($0, ver) == 1 && (length($0) == length(ver) || substr($0, length(ver) + 1, 1) == " ") { capture=1; next }
@@ -116,9 +117,13 @@ jobs:
           push: true
           tags: |
             ${{ steps.meta.outputs.image }}:${{ env.TAG }}
+            ${{ steps.meta.outputs.image }}:sha-${{ steps.meta.outputs.commit }}
+          provenance: mode=max
+          sbom: true
           build-args: |
-            QUOTO_VERSION=${{ env.TAG }}
-            QUOTO_REVISION=${{ steps.meta.outputs.commit }}
+            VERSION=${{ env.TAG }}
+            COMMIT=${{ steps.meta.outputs.commit }}
+            DATE=${{ steps.meta.outputs.date }}
 
       - name: Record the image digest
         # docs/releases.md tells the operator to pin this digest; the notes are

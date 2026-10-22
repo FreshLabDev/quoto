@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: Apache-2.0
+# Test stack: a separate bot token, a PostgreSQL of its own seeded with a copy of
+# the shared core schema, and an image built from this working copy. It shares
+# nothing with production, so a test run cannot touch production data.
+#
+#   cp .env.example .env     # test bot token, BOT_USERNAME, API keys
+#   docker compose -f deploy/ws04/compose.test.yaml up --build
+#
+# DATABASE_URL is set here and overrides whatever .env says.
+name: quoto-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: core
+    volumes:
+      - quoto-test-postgres:/var/lib/postgresql/data
+      # core's schema and the quoto_core role, as the integration tests use them.
+      - ../../internal/db/dbtest/core_stub.sql:/docker-entrypoint-initdb.d/00-core.sql:ro
+      - ../test-init.sql:/docker-entrypoint-initdb.d/10-quoto.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d core"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  bot:
+    build:
+      context: ../..
+      args:
+        VERSION: ${BUILD_VERSION:-dev}
+        COMMIT: ${BUILD_COMMIT:-none}
+        DATE: ${BUILD_DATE:-unknown}
+    restart: unless-stopped
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://quoto_core:quoto@postgres:5432/core?sslmode=disable
+      AUDIT_LOG_DIR: /app/logs
+      HTTP_ADDR: :8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - quoto-test-logs:/app/logs
+    stop_grace_period: 30s
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    # A 50 MB video measured 135-190 MB for the bot and ffmpeg together; the worst
+    # picture a group can send, 255-300 MB. Python needed 640 MiB. This is the
+    # ceiling, not the expectation, and it was not measured in a container yet.
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+volumes:
+  quoto-test-postgres:
+  quoto-test-logs:
