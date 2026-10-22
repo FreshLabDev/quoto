@@ -498,3 +498,47 @@ func TestReportConcurrentSavesWriteOnce(t *testing.T) {
 		t.Errorf("%d score rows", n)
 	}
 }
+
+// The report tables copy the day's chat text; the hourly retention job blanks
+// the copies once the messages themselves are gone, and keeps the numbers.
+func TestScrubSnapshotsBlanksTextAndKeepsNumbers(t *testing.T) {
+	f := newReportFixture(t)
+	f.reports.SaveEvaluationReport(ictx, f.report())
+
+	// Reports newer than the cut are untouched.
+	if n, err := f.reports.ScrubSnapshotsOlderThan(ictx, inow.Add(-time.Hour)); err != nil || n != 0 {
+		t.Fatalf("scrub before the report: n=%d err=%v", n, err)
+	}
+	if got := f.scores(t); got[0].Text == "" || got[0].Author == "" {
+		t.Fatalf("a report newer than the cut lost its text: %+v", got[0])
+	}
+
+	n, err := f.reports.ScrubSnapshotsOlderThan(ictx, inow.Add(time.Hour))
+	if err != nil || n != 2 {
+		t.Fatalf("scrub: n=%d err=%v, want 2 rows", n, err)
+	}
+	scores := f.scores(t)
+	if len(scores) != 2 {
+		t.Fatalf("%d score rows, want 2", len(scores))
+	}
+	for _, s := range scores {
+		if s.Author != "" || s.Text != "" || s.Caption != nil || s.MediaDesc != nil {
+			t.Errorf("text survived: %+v", s)
+		}
+		if s.Rank == 0 || s.AIScore == 0 || s.ContentType == "" || s.TelegramID == 0 {
+			t.Errorf("numbers were lost: %+v", s)
+		}
+	}
+	runs := f.runs(t)
+	if len(runs) != 1 || runs[0].ReasonText != nil {
+		t.Fatalf("run reason text survived: %+v", runs)
+	}
+	if *runs[0].ReasonCode != "worthy" || *runs[0].Total != 1310 {
+		t.Errorf("run numbers were lost: %+v", runs[0])
+	}
+
+	// Nothing is left to rewrite on the next hour.
+	if n, err := f.reports.ScrubSnapshotsOlderThan(ictx, inow.Add(2*time.Hour)); err != nil || n != 0 {
+		t.Errorf("second scrub: n=%d err=%v, want 0", n, err)
+	}
+}

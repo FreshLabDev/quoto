@@ -100,6 +100,9 @@ type Core interface {
 // quote. *PGReports implements it.
 type Reports interface {
 	SaveEvaluationReport(ctx context.Context, report domain.EvaluationReport)
+	// ScrubSnapshotsOlderThan blanks the chat text copied into the reports
+	// created before the given time and returns how many rows it changed.
+	ScrubSnapshotsOlderThan(ctx context.Context, before time.Time) (int64, error)
 }
 
 // Deps are the scheduler's collaborators. Groups, Messages, Quotes and Core are
@@ -387,17 +390,25 @@ func (s *Scheduler) startRetention(ctx context.Context) {
 	}()
 }
 
-// retain deletes messages older than messageRetention.
+// retain deletes messages older than messageRetention, and the copies of their
+// text in the evaluation reports. The two are independent: one failing does not
+// skip the other.
 func (s *Scheduler) retain(ctx context.Context) {
 	before := s.now().Add(-messageRetention)
-	n, err := s.d.Messages.DeleteOlderThan(ctx, before)
-	if err != nil {
+	if n, err := s.d.Messages.DeleteOlderThan(ctx, before); err != nil {
 		if ctx.Err() == nil {
 			s.log.Error("delete old messages", "error", err, "older_than", before)
 		}
-		return
+	} else {
+		s.log.Info("old messages deleted", "count", n, "older_than", before)
 	}
-	s.log.Info("old messages deleted", "count", n, "older_than", before)
+	if n, err := s.d.Reports.ScrubSnapshotsOlderThan(ctx, before); err != nil {
+		if ctx.Err() == nil {
+			s.log.Error("scrub report snapshots", "error", err, "older_than", before)
+		}
+	} else {
+		s.log.Info("report snapshots scrubbed", "count", n, "older_than", before)
+	}
 }
 
 // commitContext is the context of the part of a run that must not be cut off

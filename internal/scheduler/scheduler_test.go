@@ -1703,8 +1703,26 @@ func TestRetentionDeletesMessagesOlderThanSeventyTwoHours(t *testing.T) {
 		t.Errorf("deleted before %v, want %v", got, want)
 	}
 
-	// An error is logged, not raised.
+	// The reports lose their copies of the text at the same cut.
+	h.reports.mu.Lock()
+	scrubs := slices.Clone(h.reports.scrubs)
+	h.reports.mu.Unlock()
+	if len(scrubs) != 1 || !scrubs[0].Equal(want) {
+		t.Errorf("snapshots scrubbed before %v, want %v", scrubs, want)
+	}
+
+	// An error is logged, not raised, and one failing does not skip the other.
 	h.store.fail("DeleteOlderThan", errors.New("boom"))
+	h.sched.retain(context.Background())
+	h.reports.mu.Lock()
+	n := len(h.reports.scrubs)
+	h.reports.mu.Unlock()
+	if n != 2 {
+		t.Errorf("scrub ran %d times, want 2 (a failed delete must not skip it)", n)
+	}
+	h.reports.mu.Lock()
+	h.reports.scrubErr = errors.New("boom")
+	h.reports.mu.Unlock()
 	h.sched.retain(context.Background())
 }
 

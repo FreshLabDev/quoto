@@ -126,7 +126,9 @@ Quoto reads a whole group chat, so this part matters most.
 - After a day is processed its messages are deleted. Messages of a day that was
   never processed (a group that did not accept the agreement, a long outage) are
   deleted once they are 72 hours old. The published quote, its context and the
-  scores stay, because the stats and the "Details" view are built from them.
+  scores stay, because the stats and the "Details" view are built from them. The
+  copies of author names, text, captions and media descriptions that the
+  evaluation report keeps next to the scores are blanked at the same age.
 - Every evaluation request and raw response is written to
   `logs/ai_audit.jsonl` on the server for seven days, for debugging. It holds
   real message text and is readable only by the operator.

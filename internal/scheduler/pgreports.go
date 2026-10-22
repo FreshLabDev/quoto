@@ -65,6 +65,46 @@ func NewPGReports(pool *pgxpool.Pool, opts ...ReportsOption) *PGReports {
 	return r
 }
 
+// scrubSnapshotsSQL blanks the message text copied into the report tables. The
+// numbers stay: scores, ranks, token counts and the media metadata. Rows that
+// are already blank are skipped, so an hourly run rewrites nothing once it has
+// caught up.
+const scrubSnapshotsSQL = `
+UPDATE message_ai_scores
+SET author_name_snapshot = '', text_snapshot = '', caption_snapshot = NULL, media_description_snapshot = NULL
+WHERE created_at < $1
+  AND (author_name_snapshot <> '' OR text_snapshot <> '' OR caption_snapshot IS NOT NULL
+       OR media_description_snapshot IS NOT NULL)`
+
+const scrubReasonsSQL = `
+UPDATE ai_evaluation_runs SET day_reason_text = NULL
+WHERE created_at < $1 AND day_reason_text IS NOT NULL`
+
+// ScrubSnapshotsOlderThan removes the chat text that SaveEvaluationReport copied
+// into message_ai_scores (author name, text, caption, media description) and the
+// model's reason text on ai_evaluation_runs, for reports created before the
+// given time. Nothing in the bot reads those columns; they would otherwise keep
+// the day's messages after the messages table has dropped them. It returns the
+// number of score rows blanked.
+func (r *PGReports) ScrubSnapshotsOlderThan(ctx context.Context, before time.Time) (int64, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("scrub snapshots: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, scrubSnapshotsSQL, before)
+	if err != nil {
+		return 0, fmt.Errorf("scrub message_ai_scores: %w", err)
+	}
+	if _, err := tx.Exec(ctx, scrubReasonsSQL, before); err != nil {
+		return 0, fmt.Errorf("scrub ai_evaluation_runs: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("scrub snapshots: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // reportOutcome says what SaveEvaluationReport did with the day.
 type reportOutcome int
 

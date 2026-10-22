@@ -661,8 +661,17 @@ func (e *fakeEvaluator) set(r domain.EvalResult) {
 
 // fakeReports records the reports.
 type fakeReports struct {
-	mu      sync.Mutex
-	reports []domain.EvaluationReport
+	mu       sync.Mutex
+	reports  []domain.EvaluationReport
+	scrubs   []time.Time
+	scrubErr error
+}
+
+func (r *fakeReports) ScrubSnapshotsOlderThan(_ context.Context, before time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.scrubs = append(r.scrubs, before)
+	return 0, r.scrubErr
 }
 
 func (r *fakeReports) SaveEvaluationReport(_ context.Context, rep domain.EvaluationReport) {
