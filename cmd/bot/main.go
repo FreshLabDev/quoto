@@ -14,15 +14,24 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/FreshLabDev/tg"
+
+	"github.com/FreshLabDev/quoto/internal/ai"
+	"github.com/FreshLabDev/quoto/internal/bot"
 	"github.com/FreshLabDev/quoto/internal/buildinfo"
 	"github.com/FreshLabDev/quoto/internal/config"
 	"github.com/FreshLabDev/quoto/internal/db"
+	"github.com/FreshLabDev/quoto/internal/deeplink"
 	"github.com/FreshLabDev/quoto/internal/health"
 	qlog "github.com/FreshLabDev/quoto/internal/log"
+	"github.com/FreshLabDev/quoto/internal/media"
+	"github.com/FreshLabDev/quoto/internal/scheduler"
+	"github.com/FreshLabDev/quoto/internal/telegram"
 	"github.com/FreshLabDev/quoto/migrations"
 )
 
@@ -61,9 +70,92 @@ func run(cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 
+	redactor := qlog.NewRedactor(cfg.Secrets())
+
+	tgOpts := []tg.Option{tg.WithLogger(log), tg.WithAllowedUpdates(bot.AllowedUpdates...)}
+	if cfg.TelegramAPIBase != "" {
+		tgOpts = append(tgOpts, tg.WithAPIBase(cfg.TelegramAPIBase), tg.WithLocalFiles(cfg.BotAPIFilesDir))
+	}
+	tgClient := tg.New(cfg.BotToken, tgOpts...)
+	// sendRichMessage is not required: the bot probes it itself and falls back
+	// to HTML, which is what an api.telegram.org deployment always gets.
+	me, err := tgClient.Preflight(ctx, tg.Needs{Files: tgClient.IsLocalServer(), Wait: 30 * time.Second})
+	if err != nil {
+		return fmt.Errorf("telegram: %w", err)
+	}
+	if !strings.EqualFold(me.Username, cfg.BotUsername) {
+		log.Warn("BOT_USERNAME differs from the bot's real username; deep links will point at the wrong bot",
+			"configured", cfg.BotUsername, "actual", me.Username)
+	}
+	log.Info("telegram connected", "bot", me.Username, "self_hosted", tgClient.IsLocalServer())
+
+	adapter := telegram.New(tgClient, telegram.Config{DeveloperIDs: cfg.DeveloperIDs, Redact: redactor.Scrub}, log)
+	signer := deeplink.NewSigner(cfg.BotToken)
+
+	aiService := ai.New(ai.Config{
+		AnthropicKey:            cfg.AnthropicKey,
+		AnthropicEvalModel:      cfg.AnthropicEvalModel,
+		AnthropicEvalEffort:     cfg.AnthropicEvalEffort,
+		AnthropicMediaModel:     cfg.AnthropicMediaModel,
+		AnthropicMediaEffort:    cfg.AnthropicMediaEffort,
+		OpenRouterKey:           cfg.OpenRouterKey,
+		OpenRouterEvalModel:     cfg.OpenRouterEvalModel,
+		OpenRouterEvalFallback:  cfg.OpenRouterEvalFallback,
+		OpenRouterMediaModel:    cfg.OpenRouterMediaModel,
+		OpenRouterMediaFallback: cfg.OpenRouterMediaFallback,
+		OpenRouterEvalEffort:    cfg.OpenRouterEvalEffort,
+		OpenRouterMediaEffort:   cfg.OpenRouterMediaEffort,
+		BotUsername:             cfg.BotUsername,
+		AuditDir:                cfg.AuditLogDir,
+	}, redactor.Scrub, log)
+
+	mediaPipeline := media.New(media.Config{AnalysisEnabled: cfg.MediaAnalysis}, media.Deps{
+		Store:     media.NewPGStore(store.Pool()),
+		Files:     tgClient,
+		Describer: aiService,
+		Log:       log,
+	})
+
+	// The report names the OpenRouter evaluation model when a failed run has no
+	// model of its own to record.
+	sched := scheduler.New(scheduler.Config{BotUsername: cfg.BotUsername, PremiumChats: cfg.PremiumChatIDs}, scheduler.Deps{
+		Groups:    store,
+		Messages:  store,
+		Quotes:    store,
+		Core:      store,
+		Reports:   scheduler.NewPGReports(store.Pool(), scheduler.WithFallbackModel(cfg.OpenRouterEvalModel), scheduler.WithReportsLogger(log)),
+		Evaluator: aiService,
+		Sender:    adapter,
+		Signer:    signer,
+		Log:       log,
+	})
+
+	telegramBot := bot.New(bot.Config{
+		BotUsername:          cfg.BotUsername,
+		MediaAnalysisEnabled: cfg.MediaAnalysis,
+		SelfHosted:           tgClient.IsLocalServer(),
+		Version:              buildinfo.Version,
+	}, bot.Deps{
+		TG:        tgClient,
+		Adapter:   adapter,
+		Core:      store,
+		Groups:    store,
+		Messages:  store,
+		Reactions: store,
+		Quotes:    store,
+		Stats:     store,
+		Media:     mediaPipeline,
+		CatchUp:   sched,
+		Signer:    signer,
+		Log:       log,
+	})
+
+	startedAt := time.Now()
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", health.New(
 		health.Func("db", store.Ping),
+		health.Fresh("polling", telegramBot.LastPoll, 2*time.Minute, startedAt),
+		health.Fresh("scheduler", sched.LastTick, 3*time.Minute, startedAt),
 	))
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -111,6 +203,10 @@ func run(cfg config.Config, log *slog.Logger) error {
 		}
 		return nil
 	})
+
+	start("bot", telegramBot.Run)
+	start("scheduler", sched.Run)
+	start("media", mediaPipeline.Run)
 
 	<-runCtx.Done()
 	waited := make(chan struct{})

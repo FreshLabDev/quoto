@@ -478,16 +478,6 @@ func TestAboutCard(t *testing.T) {
 	}
 }
 
-// doc §7.2 F13: the scoring row reads from the locale when the key exists.
-func TestAboutScoringRowPrefersTheLocaleKey(t *testing.T) {
-	if i18n.Value("en", evalKey) != nil {
-		t.Skip("the locale now has " + evalKey + "; the fallback is no longer reachable")
-	}
-	if got := evalValue("ru"); got != evalFallback {
-		t.Errorf("fallback %q", got)
-	}
-}
-
 // tests/test_menu.py::AboutTests::test_about_tab_has_no_source_button_duplicating_the_link (MEN-17)
 // tests/test_menu.py::AboutTests::test_about_tab_navigation_follows_the_scope (MEN-18)
 func TestAboutTabHasOnlyNavigation(t *testing.T) {
