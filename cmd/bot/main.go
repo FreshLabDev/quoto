@@ -27,6 +27,7 @@ import (
 	"github.com/FreshLabDev/quoto/internal/config"
 	"github.com/FreshLabDev/quoto/internal/db"
 	"github.com/FreshLabDev/quoto/internal/deeplink"
+	"github.com/FreshLabDev/quoto/internal/domain"
 	"github.com/FreshLabDev/quoto/internal/health"
 	qlog "github.com/FreshLabDev/quoto/internal/log"
 	"github.com/FreshLabDev/quoto/internal/media"
@@ -61,6 +62,9 @@ func run(cfg config.Config, log *slog.Logger) error {
 		log.Warn("environment variables from the Python version are ignored; remove them", "names", cfg.Obsolete)
 	}
 
+	if err := domain.CheckZones(); err != nil {
+		return err
+	}
 	store, err := connect(ctx, cfg.DatabaseURL, log)
 	if err != nil {
 		return err

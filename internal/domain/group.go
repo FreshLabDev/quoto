@@ -3,9 +3,15 @@
 package domain
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
+	// The runtime image has no zoneinfo, and every group's cutoff and day window
+	// are computed in its own zone. Without the embedded database
+	// time.LoadLocation fails, Location() falls back to UTC without a word, and
+	// the zone picker refuses every name.
+	_ "time/tzdata"
 )
 
 // Defaults for a group that has not chosen a value. NULL in group_settings
@@ -117,6 +123,22 @@ func (g GroupSettings) Location() *time.Location {
 		return time.UTC
 	}
 	return loc
+}
+
+// CheckZones loads every zone the code names itself (the default and the
+// per-language guesses). The bot calls it at start: a build that cannot load
+// them would treat every group as UTC.
+func CheckZones() error {
+	names := []string{DefaultTimezone}
+	for _, tz := range LanguageTimezones {
+		names = append(names, tz)
+	}
+	for _, name := range names {
+		if _, err := time.LoadLocation(name); err != nil {
+			return fmt.Errorf("time zone %s is not available: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // ValidTimezone reports whether name is an IANA zone this build knows.

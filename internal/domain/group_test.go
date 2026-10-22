@@ -133,3 +133,9 @@ func TestContextCodecRoundTripAndTolerance(t *testing.T) {
 		t.Errorf("tolerant read: %+v", got)
 	}
 }
+
+func TestCheckZones(t *testing.T) {
+	if err := CheckZones(); err != nil {
+		t.Fatal(err)
+	}
+}
